@@ -1,0 +1,249 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// 市場別，US=美股版，TW=台股版；共用 stocks/sector_mapping/daily_trend_signals，用這個欄位區分
+enum Market {
+  US
+  TW
+}
+
+/// 板塊/產業對照表，供板塊選擇器使用（US 用 GICS，TW 用證交所產業分類，各自一套 sectorCode）
+model SectorMapping {
+  id           Int      @id @default(autoincrement())
+  market       Market   @default(US)
+  sectorCode   String   @map("sector_code")
+  sectorName   String   @map("sector_name")
+  sectorNameZh String?  @map("sector_name_zh")
+  displayOrder Int      @default(0) @map("display_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  stocks Stock[]
+
+  @@unique([market, sectorCode])
+  @@map("sector_mapping")
+}
+
+/// 股票主檔（US + TW 共用）
+model Stock {
+  id          Int      @id @default(autoincrement())
+  market      Market   @default(US)
+  ticker      String
+  companyName String   @map("company_name")
+  sectorId    Int      @map("sector_id")
+  industry    String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  sector               SectorMapping             @relation(fields: [sectorId], references: [id])
+  signals              DailyTrendSignal[]
+  themes               StockTheme[]
+  institutionalTrading TwInstitutionalTrading[]
+  brokerBranchFlow     TwBrokerBranchFlow[]
+  dailyPrices          TwDailyPrice[]
+  fundamentals         TwStockFundamentals[]
+
+  @@unique([market, ticker])
+  @@index([sectorId])
+  @@map("stocks")
+}
+
+/// 跨板塊的題材標籤（例如 AI infra、散熱、被動元件、CPO、PCB），一檔股票可以有多個
+model Theme {
+  id           Int      @id @default(autoincrement())
+  themeCode    String   @unique @map("theme_code")
+  themeName    String   @map("theme_name")
+  themeNameZh  String?  @map("theme_name_zh")
+  displayOrder Int      @default(0) @map("display_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  stocks StockTheme[]
+
+  @@map("themes")
+}
+
+/// Stock <-> Theme 多對多關聯表
+model StockTheme {
+  stockId Int @map("stock_id")
+  themeId Int @map("theme_id")
+
+  stock Stock @relation(fields: [stockId], references: [id])
+  theme Theme @relation(fields: [themeId], references: [id])
+
+  @@id([stockId, themeId])
+  @@map("stock_themes")
+}
+
+/// 三段式戰術狀態：反轉雷達 / 蓄勢待發 / 趨勢穩健 / limitMove（台股觸及漲跌停±10%的特殊狀態，不套用一般分類邏輯）
+enum TrendStatus {
+  reversal
+  pullback
+  bullish
+  limitMove
+}
+
+/// 籌碼集中度動態訊號：轉強 / 持平 / 轉弱（docs/wolftrack-tw-spec.md 3.6）
+enum ChipMomentum {
+  strengthening
+  neutral
+  weakening
+}
+
+/// 技術面 vs 籌碼面交叉驗證徽章（docs/wolftrack-tw-spec.md 3.6）
+enum ChipBadge {
+  confirmed
+  divergence
+}
+
+/// 每股每日一筆的 Core Score + 三段分類計算結果（US + TW 共用，TW 專屬欄位皆為 nullable）
+model DailyTrendSignal {
+  id        BigInt   @id @default(autoincrement())
+  stockId   Int      @map("stock_id")
+  tradeDate DateTime @map("trade_date") @db.Date
+
+  // 當日原始行情與技術指標（計算 Core Score / 分類邏輯所需，也供個股頁未來畫圖用）
+  // TW 版這裡存的是還原股價後的值（見 adjustPrice()），不是原始收盤價
+  closePrice   Decimal  @map("close_price") @db.Decimal(12, 4)
+  volume       BigInt?
+  ma20         Decimal? @db.Decimal(12, 4)
+  ma50         Decimal? @db.Decimal(12, 4)
+  ma200        Decimal? @db.Decimal(12, 4)
+  rsi14        Decimal? @db.Decimal(6, 2)
+  adx14        Decimal? @db.Decimal(6, 2)
+  macdHist     Decimal? @map("macd_hist") @db.Decimal(12, 6)
+  avgVolume20d Decimal? @map("avg_volume_20d") @db.Decimal(16, 2)
+
+  // Core Score（0-100）與五個子分數，子分數保留供之後除錯/調權重用
+  // US：coreScore = 5 因子加權；TW：coreScore = 0.5*technicalScore + 0.5*chipScore（technicalScore 才是 5 因子加權）
+  coreScore        Decimal  @map("core_score") @db.Decimal(5, 2)
+  maScore          Decimal? @map("ma_score") @db.Decimal(5, 2)
+  momentumScore    Decimal? @map("momentum_score") @db.Decimal(5, 2)
+  adxScore         Decimal? @map("adx_score") @db.Decimal(5, 2)
+  relStrengthScore Decimal? @map("rel_strength_score") @db.Decimal(5, 2)
+  volumeScore      Decimal? @map("volume_score") @db.Decimal(5, 2)
+
+  // TW 版籌碼面（docs/wolftrack-tw-spec.md 第三章），US 版永遠是 null
+  technicalScore    Decimal?      @map("technical_score") @db.Decimal(5, 2)
+  chipScore         Decimal?      @map("chip_score") @db.Decimal(5, 2)
+  chipConcentration5  Decimal?    @map("chip_concentration_5") @db.Decimal(6, 2)
+  chipConcentration10 Decimal?    @map("chip_concentration_10") @db.Decimal(6, 2)
+  chipConcentration20 Decimal?    @map("chip_concentration_20") @db.Decimal(6, 2)
+  chipMomentum      ChipMomentum? @map("chip_momentum")
+  chipBadge         ChipBadge?    @map("chip_badge")
+
+  // 三段分類結果
+  status TrendStatus
+
+  // 反轉錨點：最近一次 MA20/50 黃金(死亡)交叉日期與當日收盤價
+  // 用來算「趨勢變化後漲跌幅」= (closePrice - priceAtSignal) / priceAtSignal
+  // 三種狀態下都會有值（不只是 reversal 狀態），代表目前這波趨勢是從哪天開始的
+  reversalPointDate DateTime? @map("reversal_point_date") @db.Date
+  priceAtSignal     Decimal?  @map("price_at_signal") @db.Decimal(12, 4)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  stock Stock @relation(fields: [stockId], references: [id])
+
+  @@unique([stockId, tradeDate])
+  @@index([tradeDate, status])
+  @@index([stockId, tradeDate])
+  @@map("daily_trend_signals")
+}
+
+/// 三大法人買賣超（docs/wolftrack-tw-spec.md 3.1），台股獨有
+/// 張數與金額都存：spec 3.1 算 Chip Score 時外資用金額、投信用張數；3.6 算籌碼集中度兩者都用張數，單位不統一，兩種都存避免事後用不明確的換算去猜
+model TwInstitutionalTrading {
+  id        BigInt   @id @default(autoincrement())
+  stockId   Int      @map("stock_id")
+  tradeDate DateTime @map("trade_date") @db.Date
+
+  foreignNetBuyShares     BigInt  @default(0) @map("foreign_net_buy_shares")
+  foreignNetBuyAmount     Decimal @default(0) @map("foreign_net_buy_amount") @db.Decimal(18, 0)
+  investTrustNetBuyShares BigInt  @default(0) @map("invest_trust_net_buy_shares")
+  investTrustNetBuyAmount Decimal @default(0) @map("invest_trust_net_buy_amount") @db.Decimal(18, 0)
+  dealerNetBuyShares      BigInt  @default(0) @map("dealer_net_buy_shares")
+  dealerNetBuyAmount      Decimal @default(0) @map("dealer_net_buy_amount") @db.Decimal(18, 0)
+
+  /// 當日總成交量（張），籌碼集中度公式的分母
+  totalVolumeShares BigInt @default(0) @map("total_volume_shares")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  stock Stock @relation(fields: [stockId], references: [id])
+
+  @@unique([stockId, tradeDate])
+  @@index([tradeDate])
+  @@map("tw_institutional_trading")
+}
+
+/// 台股原始日線（未還原股價），TWSE 個股歷史 API 是「一檔一個月」顆粒度、回填成本高，
+/// 這張表把抓過的價格快取下來，之後每日批次只要抓「今天」一天補進來、不用每次重新回填 2 年。
+/// adjustPrice() 還原股價在計算當下才做，這裡存的是原始未還原值（跟 limitMove 判斷需要原始價格的理由一致）。
+model TwDailyPrice {
+  id        BigInt   @id @default(autoincrement())
+  stockId   Int      @map("stock_id")
+  tradeDate DateTime @map("trade_date") @db.Date
+
+  open   Decimal @db.Decimal(12, 4)
+  high   Decimal @db.Decimal(12, 4)
+  low    Decimal @db.Decimal(12, 4)
+  close  Decimal @db.Decimal(12, 4)
+  volume BigInt
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  stock Stock @relation(fields: [stockId], references: [id])
+
+  @@unique([stockId, tradeDate])
+  @@index([stockId, tradeDate])
+  @@map("tw_daily_price")
+}
+
+/// 個股本益比/股價淨值比/殖利率快照（docs/wolftrack-tw-spec.md 第四章供應鏈估值比較用），台股獨有
+/// 只存「當下」快照，不需要像股價一樣回填歷史——Module C 的估值百分位比較只看目前的 PE/PB
+model TwStockFundamentals {
+  id        BigInt   @id @default(autoincrement())
+  stockId   Int      @map("stock_id")
+  tradeDate DateTime @map("trade_date") @db.Date
+
+  pe            Decimal? @db.Decimal(10, 2)
+  pb            Decimal? @db.Decimal(10, 2)
+  dividendYield Decimal? @map("dividend_yield") @db.Decimal(6, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  stock Stock @relation(fields: [stockId], references: [id])
+
+  @@unique([stockId, tradeDate])
+  @@map("tw_stock_fundamentals")
+}
+
+/// 券商分點進出（docs/wolftrack-tw-spec.md 3.4），台股獨有
+/// 這次先建表結構，「主力券商進駐」偵測邏輯之後再接（資料供應商尚未確認，見 spec 待確認清單第3項）
+model TwBrokerBranchFlow {
+  id         BigInt   @id @default(autoincrement())
+  stockId    Int      @map("stock_id")
+  tradeDate  DateTime @map("trade_date") @db.Date
+  brokerName String   @map("broker_name")
+
+  buyShares  BigInt @default(0) @map("buy_shares")
+  sellShares BigInt @default(0) @map("sell_shares")
+  netShares  BigInt @default(0) @map("net_shares")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  stock Stock @relation(fields: [stockId], references: [id])
+
+  @@unique([stockId, tradeDate, brokerName])
+  @@index([tradeDate])
+  @@map("tw_broker_branch_flow")
+}
