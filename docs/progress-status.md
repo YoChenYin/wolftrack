@@ -7,6 +7,29 @@
 
 ---
 
+## 零、部署與自動化（2026-07-04）
+
+**Git/GitHub**：專案已推到 https://github.com/YoChenYin/wolftrack（main branch），5 個邏輯 commit（US MVP / Polygon整合 / TW基礎+ModuleABC / TWSE真實資料 / 進度文件）+ 這次的部署準備 commit。
+
+**程式碼側已完成**：
+- `scripts/run-daily-batch.ts`（美股）、`scripts/tw-daily-batch.ts`、`scripts/tw-fetch-valuation.ts`（台股）的核心邏輯都抽成可 import 的函式（`src/lib/marketData/run*.ts`），CLI script 變成薄包裝
+- 新增 `scripts/tw-daily-update.ts` + `runTwDailyUpdate()`：**之前一直缺的「台股每日增量更新」**，只補「今天」一天（STOCK_DAY_ALL + T86 + TAIEX當月，3-4次API請求），不用重跑整包回填，已實測跑通
+- 兩支排程用 API：`POST /api/cron/us-batch`、`POST /api/cron/tw-daily`，用 `Authorization: Bearer <CRON_SECRET>` 驗證（`src/lib/cronAuth.ts`），採 fire-and-forget（立刻回 202，實際工作在背景跑完，因為美股批次要跑~25分鐘，遠超過一般 reverse proxy 的 HTTP timeout）
+- `.github/workflows/daily-batch.yml`：GitHub Actions 排程（美股約美東19:30、台股約台北17:00），用 `secrets.APP_URL` + `secrets.CRON_SECRET` 打上面兩支 API（Zeabur 沒有簡單的原生 cron 機制可以宣告式排程任意 script，改用這個平台無關的做法）
+- `package.json` 的 `start` 改成 `prisma migrate deploy && next start`，部署時自動套用 migration，不用手動一步
+- **修了一個部署前測出來的 bug**：`/` 和 `/tw` 被 Next.js 誤判成可以靜態預渲染（build time 凍結一份快照），即使它們都是直接查資料庫顯示每日訊號——已加 `export const dynamic = "force-dynamic"` 修正，並且已經跑過 `next build` + `next start` 確認 production build 正常
+
+**接下來只有你能做的（需要 Zeabur/GitHub 帳號權限）**：
+1. Zeabur 建立專案，新增 PostgreSQL 服務（Marketplace 裡的 addon）
+2. 從 GitHub repo 部署 Next.js 服務，連接 `YoChenYin/wolftrack`
+3. 在 Zeabur 服務的環境變數設定：`DATABASE_URL`（連到剛建的 Postgres，Zeabur 通常會自動注入或提供連線字串）、`POLYGON_API_KEY`、`CRON_SECRET`（自己產生一組亂數字串，例如 `openssl rand -hex 32`）
+4. 第一次部署成功後，**手動跑一次 seed**：把本地 `DATABASE_URL` 暫時指向 Zeabur 的 Postgres 連線字串，跑 `npx prisma db seed`（建立 sectors/stocks/themes，美股台股都會建，不含任何訊號資料）
+5. **手動跑一次台股歷史回填**（同樣把本地指向 production DB）：`npx tsx scripts/tw-backfill.ts`（62檔TWSE股票，30-40分鐘）；美股不用手動回填，靠排程自然每天累積
+6. 到 GitHub repo 的 Settings → Secrets and variables → Actions，新增兩個 repository secrets：`APP_URL`（Zeabur 部署後的網址）、`CRON_SECRET`（跟步驟3設定的同一組值）
+7. 之後排程會自動跑：美股每天更新 Polygon 資料、台股每天補一天+更新PE/PB
+
+---
+
 ## 一、美股版（WolfTrack）
 
 ### 1.1 MVP 核心（已完成）
