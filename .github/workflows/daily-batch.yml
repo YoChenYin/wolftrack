@@ -1,0 +1,30 @@
+name: Daily market data batch
+
+# 排程時間是 UTC，且不會自動跟著美股日光節約時間調整（EST/EDT 差1小時），
+# 這裡抓寬鬆一點的時間點，避免剛好卡在收盤資料還沒好的邊界。
+on:
+  schedule:
+    # 美股批次：約當美東 19:00-20:00（EDT: 23:00-00:00 UTC，EST: 00:00-01:00 UTC）
+    - cron: "30 23 * * 1-5"
+    # 台股每日更新：約當台北時間 17:00（UTC+8，無日光節約）
+    - cron: "0 9 * * 1-5"
+  workflow_dispatch: {}
+
+jobs:
+  us-batch:
+    if: github.event.schedule == '30 23 * * 1-5' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger US daily batch
+        run: |
+          curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/us-batch" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+  tw-daily:
+    if: github.event.schedule == '0 9 * * 1-5' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger TW daily update
+        run: |
+          curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/tw-daily" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

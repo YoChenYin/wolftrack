@@ -7,42 +7,12 @@
  */
 import "dotenv/config";
 import { prisma } from "../src/lib/prisma";
-import { fetchValuationAllToday } from "../src/lib/marketData/twseClient";
+import { fetchTwValuationSnapshot } from "../src/lib/marketData/fetchTwValuationSnapshot";
 
 async function main() {
-  const stocks = await prisma.stock.findMany({
-    where: { market: "TW", isActive: true, ticker: { not: "TAIEX" } },
-    select: { id: true, ticker: true },
-  });
-
   console.log("Fetching TWSE valuation snapshot (BWIBBU_ALL)...");
-  const valuationMap = await fetchValuationAllToday();
-
-  let written = 0;
-  let skipped = 0;
-
-  for (const stock of stocks) {
-    const valuation = valuationMap.get(stock.ticker);
-    if (!valuation) {
-      skipped++;
-      continue;
-    }
-
-    await prisma.twStockFundamentals.upsert({
-      where: { stockId_tradeDate: { stockId: stock.id, tradeDate: new Date(valuation.date) } },
-      update: { pe: valuation.pe, pb: valuation.pb, dividendYield: valuation.dividendYield },
-      create: {
-        stockId: stock.id,
-        tradeDate: new Date(valuation.date),
-        pe: valuation.pe,
-        pb: valuation.pb,
-        dividendYield: valuation.dividendYield,
-      },
-    });
-    written++;
-  }
-
-  console.log(`Done. wrote ${written} rows, skipped ${skipped} (not found in TWSE valuation snapshot, likely TPEx).`);
+  const result = await fetchTwValuationSnapshot();
+  console.log(`Done. wrote ${result.written} rows, skipped ${result.skipped} (not found in TWSE valuation snapshot, likely TPEx).`);
 }
 
 main()

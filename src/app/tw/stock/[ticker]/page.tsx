@@ -5,6 +5,8 @@ import { computeGroupValuation } from "@/lib/valuation/computeGroupValuation";
 import { CoreScoreBreakdown } from "@/components/tw/CoreScoreBreakdown";
 import { ValuationSidePanel } from "@/components/tw/ValuationSidePanel";
 
+export const dynamic = "force-dynamic";
+
 export default async function TwStockDetailPage({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker } = await params;
 

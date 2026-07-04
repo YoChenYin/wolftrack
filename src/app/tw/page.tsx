@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { fetchSectorTrendsGrouped } from "@/lib/trend/sectorTrendsQuery";
 import { SectorTrendsBoard } from "@/components/SectorTrendsBoard";
 
+// 這個頁面直接查資料庫顯示每日更新的訊號，不能被當成靜態頁面在 build time 凍結一份快照
+export const dynamic = "force-dynamic";
+
 export default async function HomeTw() {
   const [sectors, initialData] = await Promise.all([
     prisma.sectorMapping.findMany({
