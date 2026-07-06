@@ -19,14 +19,21 @@
 - `package.json` 的 `start` 改成 `prisma migrate deploy && next start`，部署時自動套用 migration，不用手動一步
 - **修了一個部署前測出來的 bug**：`/` 和 `/tw` 被 Next.js 誤判成可以靜態預渲染（build time 凍結一份快照），即使它們都是直接查資料庫顯示每日訊號——已加 `export const dynamic = "force-dynamic"` 修正，並且已經跑過 `next build` + `next start` 確認 production build 正常
 
+**部署狀態（2026-07-06）：已上線並跑通真實資料**
+- 正式站：https://wolftrack.zeabur.app （US 首頁 `/`、TW 版 `/tw`）
+- Production DB 已 migrate + seed + 美股批次（13檔真實分類）+ 台股全量回填（62檔TWSE股票，含PE/PB）都跑過，`/tw/stock/[ticker]` 的 Module C 供應鏈估值比較也在正式站驗證過正常
+
+**部署過程中抓到兩個真實 bug（都已修正並 push）**：
+1. **TWSE/Polygon 的 `fetch()` 沒設 timeout**：卡住的連線會讓 `await` 永遠不 resolve，且不會拋錯——production 的台股回填因此卡了整整兩天沒被發現（只能靠比對 process CPU 時間 vs log 檔案最後更新時間才抓出來）。已加 `AbortController` + 30 秒 timeout（`twseClient.ts`、`polygonClient.ts`）。
+2. **`STOCK_DAY_ALL`（每日更新用的「當日全市場」端點）比逐檔查詢的 `STOCK_DAY` 端點資料還舊**，實測差到 3 個交易日。因為 `/api/sector-trends` 用全域 `MAX(trade_date)` 篩選，只要有任何一檔股票的資料比較新，其他「稍微舊一點」但其實還在合理範圍的股票就會整批從面板消失。已把 `runTwDailyUpdate()` 改成逐檔用 `STOCK_DAY`（跟回填用同一個資料源），犧牲一點效率（62次請求~80秒 vs 1次請求）換取日期基準一致。
+
 **接下來只有你能做的（需要 Zeabur/GitHub 帳號權限）**：
-1. Zeabur 建立專案，新增 PostgreSQL 服務（Marketplace 裡的 addon）
-2. 從 GitHub repo 部署 Next.js 服務，連接 `YoChenYin/wolftrack`
-3. 在 Zeabur 服務的環境變數設定：`DATABASE_URL`（連到剛建的 Postgres，Zeabur 通常會自動注入或提供連線字串）、`POLYGON_API_KEY`、`CRON_SECRET`（自己產生一組亂數字串，例如 `openssl rand -hex 32`）
-4. 第一次部署成功後，**手動跑一次 seed**：把本地 `DATABASE_URL` 暫時指向 Zeabur 的 Postgres 連線字串，跑 `npx prisma db seed`（建立 sectors/stocks/themes，美股台股都會建，不含任何訊號資料）
-5. **手動跑一次台股歷史回填**（同樣把本地指向 production DB）：`npx tsx scripts/tw-backfill.ts`（62檔TWSE股票，30-40分鐘）；美股不用手動回填，靠排程自然每天累積
-6. 到 GitHub repo 的 Settings → Secrets and variables → Actions，新增兩個 repository secrets：`APP_URL`（Zeabur 部署後的網址）、`CRON_SECRET`（跟步驟3設定的同一組值）
-7. 之後排程會自動跑：美股每天更新 Polygon 資料、台股每天補一天+更新PE/PB
+1. ~~Zeabur 建立專案~~ ✅已完成
+2. ~~部署 Next.js 服務~~ ✅已完成（https://wolftrack.zeabur.app）
+3. ~~設定環境變數~~ ✅已完成（`DATABASE_URL`/`POLYGON_API_KEY`/`CRON_SECRET`）
+4. ~~跑 seed~~ ✅已完成
+5. ~~台股歷史回填~~ ✅已完成（62檔全部成功）
+6. GitHub repo secrets（`APP_URL`/`CRON_SECRET`）已設定，**但排程實際觸發還沒驗證過**——建議去 repo 的 Actions 分頁手動 "Run workflow" 測一次（workflow 有設 `workflow_dispatch`，不用等排程時間）
 
 ---
 
