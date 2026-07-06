@@ -43,6 +43,19 @@ function toDateParam(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+/** fetch 沒有內建 timeout，卡住的連線會讓 await 永遠不 resolve，讓整支批次腳本卡死 */
+const REQUEST_TIMEOUT_MS = 30_000;
+
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 /**
  * 抓某檔股票的歷史日線 OHLCV（Polygon.io Aggregates / Bars API）。
  * from/to 是日曆日範圍，Polygon 只會回傳實際有交易的日子。
@@ -61,7 +74,7 @@ export async function fetchDailyBars(
     `${POLYGON_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/` +
     `${toDateParam(from)}/${toDateParam(to)}?adjusted=true&sort=asc&limit=50000&apiKey=${apiKey}`;
 
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url);
   const body = (await res.json()) as PolygonAggsResponse;
 
   if (!res.ok || (body.status !== "OK" && body.status !== "DELAYED")) {

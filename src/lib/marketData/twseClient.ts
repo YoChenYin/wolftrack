@@ -35,20 +35,33 @@ function parseTwseNumber(raw: unknown): number | null {
 
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 2000;
+/** fetch 沒有內建 timeout，卡住的連線會讓 await 永遠不 resolve —— 曾經讓整支回填腳本掛了兩天都沒發現 */
+const REQUEST_TIMEOUT_MS = 30_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { headers: { "User-Agent": BROWSER_USER_AGENT }, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 /**
- * 政府網站偶爾會斷線/reset（ECONNRESET），單次失敗不該讓整支回填腳本直接崩潰，
- * 這裡對暫時性網路錯誤做指數退避重試；4xx/5xx HTTP 錯誤（非網路層錯誤）不重試，直接拋出。
+ * 政府網站偶爾會斷線/reset（ECONNRESET）或整個卡住不回應，單次失敗不該讓整支回填腳本直接崩潰
+ * 或無限期卡住，這裡對暫時性網路錯誤（含逾時）做指數退避重試；4xx/5xx HTTP 錯誤（非網路層錯誤）
+ * 不重試，直接拋出。
  */
 async function fetchJson<T>(url: string): Promise<T> {
   let lastErr: unknown;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const res = await fetch(url, { headers: { "User-Agent": BROWSER_USER_AGENT } });
+      const res = await fetchWithTimeout(url);
       if (!res.ok) {
         throw new TwseApiError(`TWSE API HTTP ${res.status}: ${url}`);
       }
