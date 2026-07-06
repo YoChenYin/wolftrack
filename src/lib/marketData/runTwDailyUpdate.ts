@@ -1,9 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import {
-  fetchAllStocksToday,
-  fetchInstitutionalTradingByDate,
-  fetchTaiexHistory,
-} from "./twseClient";
+import { fetchStockDayHistory, fetchInstitutionalTradingByDate, fetchTaiexHistory } from "./twseClient";
 import { createRateLimiter } from "./rateLimiter";
 import { runTwDailyBatch, type TwDailyBatchResult } from "./runTwDailyBatch";
 import { fetchTwValuationSnapshot, type TwValuationFetchResult } from "./fetchTwValuationSnapshot";
@@ -18,12 +14,18 @@ export interface TwDailyUpdateResult {
 }
 
 /**
- * 台股「每日增量更新」：只補「今天」一天（不重新回填2年），輕量、可排程。
- * 1. STOCK_DAY_ALL（一次請求拿全部上市股票今天的收盤價）
- * 2. T86（一次請求拿全部股票今天的三大法人買賣超）
+ * 台股「每日增量更新」：只補「今天」一天（不重新回填2年），可排程。
+ *
+ * ⚠️沒有用 STOCK_DAY_ALL（一次拿全部股票的當日快照）——實測發現這個 endpoint 的資料更新
+ * 明顯落後逐檔查詢的 STOCK_DAY endpoint（曾經差到 3 個交易日），會導致不同股票的「最新交易日」
+ * 對不齊，讓 /api/sector-trends 用全域 MAX(trade_date) 篩選時漏掉一大批其實有資料、只是
+ * 差幾天的股票。改成逐檔用 STOCK_DAY（只抓最近1個月=1次請求），跟 tw-backfill.ts 用同一個
+ * 資料源，確保新舊資料的日期基準一致。62 檔約 80 秒，排程用完全可以接受。
+ *
+ * 1. 逐檔 STOCK_DAY（近1個月，取最新一筆）
+ * 2. T86（一次請求拿全部股票當天的三大法人買賣超）
  * 3. TAIEX 當月指數（給相對強度因子用的 benchmark）
- * 都只對「已經有真實歷史資料」的股票（tw_daily_price 已有回填）補新的一天，
- * 沒回填過的股票（例如新加入還沒跑 tw-backfill.ts 的股票）不會處理。
+ * 都只對「已經有真實歷史資料」的股票（tw_daily_price 已有回填）補新的一天。
  * 最後跑 runTwDailyBatch() 重新計算訊號 + fetchTwValuationSnapshot() 更新 PE/PB。
  */
 export async function runTwDailyUpdate(): Promise<TwDailyUpdateResult> {
@@ -38,26 +40,35 @@ export async function runTwDailyUpdate(): Promise<TwDailyUpdateResult> {
   );
   const trackedTickers = trackedStocks.filter((s) => backfilledStockIds.has(s.id));
 
-  await throttle();
-  const todayPrices = await fetchAllStocksToday();
-
+  const latestByTicker = new Map<string, { date: string; open: number; high: number; low: number; close: number; volume: number }>();
   let pricesUpdated = 0;
+
   for (const stock of trackedTickers) {
-    const bar = todayPrices.get(stock.ticker);
-    if (!bar) continue;
+    await throttle();
+    let bars;
+    try {
+      bars = await fetchStockDayHistory(stock.ticker, 1, throttle);
+    } catch (err) {
+      console.error(`[tw-daily-update] skip ${stock.ticker}: ${(err as Error).message}`);
+      continue;
+    }
+    const latest = bars[bars.length - 1];
+    if (!latest) continue;
+
     await prisma.twDailyPrice.upsert({
-      where: { stockId_tradeDate: { stockId: stock.id, tradeDate: new Date(bar.date) } },
-      update: { open: bar.open, high: bar.high, low: bar.low, close: bar.close, volume: BigInt(Math.round(bar.volume)) },
+      where: { stockId_tradeDate: { stockId: stock.id, tradeDate: new Date(latest.date) } },
+      update: { open: latest.open, high: latest.high, low: latest.low, close: latest.close, volume: BigInt(Math.round(latest.volume)) },
       create: {
         stockId: stock.id,
-        tradeDate: new Date(bar.date),
-        open: bar.open,
-        high: bar.high,
-        low: bar.low,
-        close: bar.close,
-        volume: BigInt(Math.round(bar.volume)),
+        tradeDate: new Date(latest.date),
+        open: latest.open,
+        high: latest.high,
+        low: latest.low,
+        close: latest.close,
+        volume: BigInt(Math.round(latest.volume)),
       },
     });
+    latestByTicker.set(stock.ticker, latest);
     pricesUpdated++;
   }
 
@@ -84,19 +95,24 @@ export async function runTwDailyUpdate(): Promise<TwDailyUpdateResult> {
     }
   }
 
-  // 三大法人：用任一筆今天的股價資料反推實際交易日期（可能因假日/資料延遲不等於系統今天）
-  const anyBar = [...todayPrices.values()][0];
+  // 三大法人：用「大多數股票這次抓到的最新日期」反推實際交易日期，用一次 T86 請求涵蓋全部
+  const dateFrequency = new Map<string, number>();
+  for (const bar of latestByTicker.values()) {
+    dateFrequency.set(bar.date, (dateFrequency.get(bar.date) ?? 0) + 1);
+  }
+  const mostCommonDate = [...dateFrequency.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+
   let institutionalUpdated = 0;
-  if (anyBar) {
+  if (mostCommonDate) {
     await throttle();
-    const instMap = await fetchInstitutionalTradingByDate(anyBar.date.replace(/-/g, ""));
-    for (const stock of trackedTickers) {
-      const inst = instMap.get(stock.ticker);
-      const priceBar = todayPrices.get(stock.ticker);
-      if (!inst || !priceBar) continue;
+    const instMap = await fetchInstitutionalTradingByDate(mostCommonDate.replace(/-/g, ""));
+    for (const [ticker, stockId] of trackedTickers.map((s) => [s.ticker, s.id] as const)) {
+      const inst = instMap.get(ticker);
+      const priceBar = latestByTicker.get(ticker);
+      if (!inst || !priceBar || priceBar.date !== mostCommonDate) continue;
 
       await prisma.twInstitutionalTrading.upsert({
-        where: { stockId_tradeDate: { stockId: stock.id, tradeDate: new Date(anyBar.date) } },
+        where: { stockId_tradeDate: { stockId, tradeDate: new Date(mostCommonDate) } },
         update: {
           foreignNetBuyShares: BigInt(inst.foreignNetBuyShares),
           investTrustNetBuyShares: BigInt(inst.investTrustNetBuyShares),
@@ -104,8 +120,8 @@ export async function runTwDailyUpdate(): Promise<TwDailyUpdateResult> {
           totalVolumeShares: BigInt(Math.round(priceBar.volume / 1000)),
         },
         create: {
-          stockId: stock.id,
-          tradeDate: new Date(anyBar.date),
+          stockId,
+          tradeDate: new Date(mostCommonDate),
           foreignNetBuyShares: BigInt(inst.foreignNetBuyShares),
           investTrustNetBuyShares: BigInt(inst.investTrustNetBuyShares),
           dealerNetBuyShares: BigInt(inst.dealerNetBuyShares),
