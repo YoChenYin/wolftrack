@@ -33,7 +33,7 @@
 3. ~~設定環境變數~~ ✅已完成（`DATABASE_URL`/`POLYGON_API_KEY`/`CRON_SECRET`）
 4. ~~跑 seed~~ ✅已完成
 5. ~~台股歷史回填~~ ✅已完成（62檔全部成功）
-6. GitHub repo secrets（`APP_URL`/`CRON_SECRET`）已設定，**但排程實際觸發還沒驗證過**——建議去 repo 的 Actions 分頁手動 "Run workflow" 測一次（workflow 有設 `workflow_dispatch`，不用等排程時間）
+6. ~~GitHub Actions 排程驗證~~ ✅已確認（2026-07-08，使用者回報已穩定跑好幾天）
 
 ---
 
