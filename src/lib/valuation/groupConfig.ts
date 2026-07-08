@@ -8,7 +8,6 @@ export interface GroupTheme {
 
 export interface GroupConfig {
   industry_concepts: Record<string, GroupTheme[]>;
-  group_concepts: Record<string, GroupTheme[]>;
 }
 
 /**
@@ -25,8 +24,8 @@ export function getGroupConfig(): GroupConfig {
 
 /**
  * 找出某檔股票所屬的所有「產業概念」族群。
- * ⚠️刻意不含 group_concepts（集團概念）：spec 第四章分類邏輯提醒——集團概念股權股權/轉投資關係分類，
- * 拿來做「同業估值比較」意義不精準，估值比較模組預設只用產業概念分組。
+ * 2026-07-09：原本還有 group_concepts（集團概念/國際供應鏈）欄位，但程式碼從未讀取過
+ * （spec 第四章邏輯提醒集團股權關係不適合拿來做同業估值比較），已確認無用並移除。
  */
 export function findIndustryThemesForTicker(ticker: string): GroupTheme[] {
   const result: GroupTheme[] = [];
