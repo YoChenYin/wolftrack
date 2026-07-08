@@ -3,7 +3,7 @@
 > 這份文件記錄目前已完成的項目、已知限制、以及下一階段待辦，每次階段性完成後更新。
 > 對應規格文件：`trend-core-core-features-spec.md`、`trend-core-implementation-logic.md`（美股版）、`wolftrack-tw-spec.md`（台股版）。
 
-最後更新：2026-07-08
+最後更新：2026-07-09
 
 ---
 
@@ -116,7 +116,7 @@
 6. **投信認養偵測、外資階梯加碼、融資融券風險警示**（spec 3.2/3.3/3.5）：這次 A/B/C 範圍都沒有涵蓋，屬於「五、沿用美股版但需微調的功能」和「輔助訊號區」，尚未開發
 7. **group_config.json 的 members 清單**：骨架已就緒，需使用者提供實際股票代號清單，優先順序建議照 spec 「熱門概念股排行榜前20名」（AI、半導體、NVIDIA、AI伺服器、CoWoS、重電、AI電力、光通訊…）
 8. **PE/PB 本益比/股價淨值比資料源未接**：`calculateValuationPercentile()` 目前是純函式，沒有 `tw_stock_fundamentals` 之類的表，需另外決定資料來源（MOPS？第三方？）
-9. ~~沒有真實 TWSE/TPEx OpenAPI 資料~~ **2026-07-04 已接上 TWSE**（見 2.6），**TPEx（上櫃）仍是缺口**：TPEx 新版 OpenAPI 完全沒有歷史資料查詢能力（查過 swagger 規格確認，只有「今天」快照），舊版有歷史功能的 API 已被 Cloudflare 擋掉；86 檔台股裡有 23 檔是上櫃股，這批持續留在 mock 資料
+9. ~~沒有真實 TWSE/TPEx OpenAPI 資料~~ **2026-07-04 已接上 TWSE**（見 2.6），~~TPEx（上櫃）仍是缺口~~ **2026-07-09 已用 FinMind 補上**（見 2.8）
 10. **趨勢王者重現的籌碼疊加條件**（spec 5.1）、**回測需排除除權息跳空+檢查可否融券**（spec 5.2）：尚未開發（美股版的「Trend Core 選股」本身也還沒做）
 11. Benchmark（大盤指數）與個股序列的日期對齊：**美股版**（`run-daily-batch.ts`）仍用陣列長度差推算 index，未修；**台股版**已改用真實日期對照（`tw-daily-batch.ts` 用 `benchmarkDateIndex` Map by date），更精確
 
@@ -165,11 +165,35 @@
 
 **其他順手完成**：`ValuationSidePanel.tsx`（Module C 供應鏈估值比較的成員清單表格）補上公司名稱顯示，原本只有代號（`GroupValuationMember.companyName` 資料本來就有，純顯示層修改）
 
+**部署插曲**：這次推上去的程式碼變更（含前述公司名稱顯示）發現 Zeabur 沒有自動重新部署——原因不明（GitHub 有收到 push，但 Zeabur 後台完全沒有新的部署紀錄），使用者手動去後台觸發才成功部署。**這件事之後每次 push 完都要留意**，不能假設 Zeabur 的 GitHub auto-deploy 一定會自動觸發，需要使用者自己去後台確認/手動觸發。
+
+### 2.8 上櫃（TPEx）股票歷史資料缺口補上（2026-07-09，用 FinMind）
+
+**背景**：2.6 節記錄過的長期已知限制——TWSE 官方 API 沒有上櫃股資料，TPEx 自己的 OpenAPI（`tpex.org.tw/openapi/`）查過 swagger 規格確認全部端點都是「當日快照」、沒有日期區間查詢參數，舊版有歷史功能的 CSV 下載端點雖然這次重測不再被 Cloudflare 擋（回應 200），但回傳資料是空的（可能需要額外參數或改用 POST，沒有深究）。股票池擴大到 386 檔後，一直卡在 mock 資料的上櫃股數量累積到 24 檔（含之前查無資料的 4573 高明鐵）。
+
+**解法**：找到 [FinMind](https://finmindtrade.com)（開源金融資料 API，GitHub 上有維護），實測確認：
+- `TaiwanStockPrice` 資料集明確涵蓋「上市、上櫃、興櫃」，且是「一檔股票、任意日期區間」單次請求就拿到全部（不像 TWSE `STOCK_DAY` 要逐月請求），24 檔上櫃股回填只要 24 次請求就能拿到近 2 年（504 個交易日）歷史，幾秒內跑完
+- `TaiwanStockInstitutionalInvestorsBuySell`（三大法人買賣超）、`TaiwanStockPER`（PE/PB）也都涵蓋上櫃股，一樣支援日期區間查詢
+- 免費不需註冊/API key：300 次/小時；官網說明註冊後可提升到 600 次/小時
+- 只拿來補上櫃股這塊缺口，完全不動現有 TWSE 上市股那一套邏輯（風險較低的做法）
+
+**新增/修改的檔案**：
+- `src/lib/marketData/finmindClient.ts`（新）：`fetchFinMindStockPrice`、`fetchFinMindInstitutionalTrading`、`fetchFinMindLatestValuation`
+- `scripts/tpex-backfill.ts`（新）：一次性回填，自動抓出「目前完全沒有 `tw_daily_price` 資料」的 TW 股票（也可指定 ticker），寫進跟 TWSE 上市股共用的同一組表（`tw_daily_price`/`tw_institutional_trading`），下游訊號計算完全不用改
+- `fetchTwValuationSnapshot.ts`：TWSE `BWIBBU_ALL` 快照裡沒中的股票（幾乎都是上櫃股），改用 FinMind 逐檔查最新 PE/PB 補上
+- `runTwDailyUpdate.ts`（每日排程用）：TWSE `STOCK_DAY` 對上櫃股會回傳空資料（不是錯誤），改用 FinMind 抓近10天取最新一筆補上，三大法人買賣超也一樣用 FinMind 逐檔補（TWSE 的 T86 沒有上櫃股），確保上櫃股之後每天會持續更新，不會回填完就再度變成舊資料
+
+**執行結果**（本地 + production 都跑過）：
+- 回填：24 檔全部成功，0 失敗，0 查無資料
+- 訊號批次：「資料不足（<210天）」從 41 檔降到 17 檔（差額 24 剛好對應這批上櫃股）
+- PE/PB：可寫入數從 360 提升到 383（386 檔裡只剩 3 檔查無資料）
+- production API 驗證：3498 陽程科技（上櫃股）出現在正式站「反轉雷達」分類清單，確認資料面到前端全部打通
+
 ---
 
 ## 三、下一步可能的方向（尚未排入具體任務，等使用者決定優先順序）
 
-1. ~~台股真實資料源~~ **TWSE 已接（見 2.6）**，剩下：TPEx（23檔上櫃股）需要另找歷史資料來源（第三方？）；每日增量更新腳本還沒寫
+1. ~~台股真實資料源~~ **TWSE 已接（見 2.6）**，~~TPEx（23檔上櫃股）需要另找歷史資料來源~~ **已用 FinMind 補上（見 2.8）**；每日增量更新腳本還沒寫
 2. ~~group_config.json 補完~~ **已完成**（使用者 2026-07-03 提供 71 檔熱門族群清單）
 3. **PE/PB 資料源**：TWSE `BWIBBU_ALL` 是現成候選（已寫 `fetchValuationAllToday()` client 函式，這次沒接進 Module C），要不要直接用、或仍要找 MOPS/第三方另外決定
 4. **券商分點進出偵測邏輯**（spec 3.4「主力券商進駐」）：需先確認資料供應商（CMoney/嘉實 XQ/Fugle 等）
