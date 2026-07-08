@@ -71,6 +71,7 @@ export function ValuationSidePanel({
                       <tr key={m.ticker} className="border-t border-zinc-50">
                         <td className="py-1 pr-2 font-medium text-zinc-800">
                           {m.ticker}
+                          {m.companyName && <span className="ml-1 font-normal text-zinc-500">{m.companyName}</span>}
                           {m.isLeader && <span className="ml-1 rounded bg-zinc-100 px-1 text-[10px] text-zinc-500">龍頭</span>}
                         </td>
                         <td className="pr-2 text-zinc-600">{formatNum(m.pe)}</td>

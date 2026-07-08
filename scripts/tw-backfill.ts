@@ -7,8 +7,9 @@
  * 建議背景執行。之後的每日更新用 scripts/tw-daily-batch.ts，很輕量。
  *
  * 用法：
- *   npx tsx scripts/tw-backfill.ts                 // 跑全部 active TW 股票
- *   npx tsx scripts/tw-backfill.ts 2330,2454,6640   // 只跑指定 ticker（逗號分隔），小規模驗證用
+ *   npx tsx scripts/tw-backfill.ts                     // 跑全部 active TW 股票，回填25個月
+ *   npx tsx scripts/tw-backfill.ts 2330,2454,6640       // 只跑指定 ticker（逗號分隔），小規模驗證用
+ *   npx tsx scripts/tw-backfill.ts 2330,2454,6640 13    // 指定 ticker + 自訂回填月數（第二個參數）
  */
 import "dotenv/config";
 import { prisma } from "../src/lib/prisma";
@@ -20,7 +21,9 @@ import {
 import { createRateLimiter } from "../src/lib/marketData/rateLimiter";
 import type { OhlcvBar } from "../src/lib/trend/types";
 
-const BACKFILL_MONTHS = 25;
+// 200MA 暖身期至少需要 210 個交易日（見 runTwDailyBatch.ts 的 MIN_BARS_REQUIRED），
+// 25個月(~500交易日)是預設值，保留較多緩衝；大批量一次性回填可用第二個 CLI 參數縮短月數省時間。
+const BACKFILL_MONTHS = process.argv[3] ? Number(process.argv[3]) : 25;
 /** TWSE 沒有公開明確 rate limit，保守間隔避免對政府伺服器造成負擔 */
 const TWSE_MIN_INTERVAL_MS = 1300;
 /** 三大法人買賣超只需要近期窗口（chip score/concentration 最多看20日），不用回填2年 */
