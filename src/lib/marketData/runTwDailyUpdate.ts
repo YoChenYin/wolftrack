@@ -1,10 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { fetchStockDayHistory, fetchInstitutionalTradingByDate, fetchTaiexHistory } from "./twseClient";
+import { fetchFinMindStockPrice, fetchFinMindInstitutionalTrading } from "./finmindClient";
 import { createRateLimiter } from "./rateLimiter";
 import { runTwDailyBatch, type TwDailyBatchResult } from "./runTwDailyBatch";
 import { fetchTwValuationSnapshot, type TwValuationFetchResult } from "./fetchTwValuationSnapshot";
 
 const TWSE_MIN_INTERVAL_MS = 1300;
+const FINMIND_MIN_INTERVAL_MS = 1000;
+/** FinMind fallback 只需要抓最近幾天取最新一筆，不用像回填一樣拉整段歷史 */
+const FINMIND_LOOKBACK_DAYS = 10;
 
 export interface TwDailyUpdateResult {
   pricesUpdated: number;
@@ -22,14 +26,19 @@ export interface TwDailyUpdateResult {
  * 差幾天的股票。改成逐檔用 STOCK_DAY（只抓最近1個月=1次請求），跟 tw-backfill.ts 用同一個
  * 資料源，確保新舊資料的日期基準一致。62 檔約 80 秒，排程用完全可以接受。
  *
- * 1. 逐檔 STOCK_DAY（近1個月，取最新一筆）
- * 2. T86（一次請求拿全部股票當天的三大法人買賣超）
+ * TWSE STOCK_DAY 對上櫃（TPEx）股票會回傳空資料（不是錯誤）——這些股票改用 FinMind 補
+ * （見 finmindClient.ts 開頭說明 TWSE/TPEx 官方 API 都補不了上櫃歷史資料這件事），
+ * 股價和三大法人都一樣的 fallback 邏輯：TWSE 查不到才試 FinMind。
+ *
+ * 1. 逐檔 STOCK_DAY（近1個月，取最新一筆），查不到（上櫃股）改用 FinMind 抓近10天取最新一筆
+ * 2. T86（一次請求拿全部股票當天的三大法人買賣超），上櫃股額外用 FinMind 逐檔補
  * 3. TAIEX 當月指數（給相對強度因子用的 benchmark）
  * 都只對「已經有真實歷史資料」的股票（tw_daily_price 已有回填）補新的一天。
  * 最後跑 runTwDailyBatch() 重新計算訊號 + fetchTwValuationSnapshot() 更新 PE/PB。
  */
 export async function runTwDailyUpdate(): Promise<TwDailyUpdateResult> {
   const throttle = createRateLimiter(TWSE_MIN_INTERVAL_MS);
+  const finmindThrottle = createRateLimiter(FINMIND_MIN_INTERVAL_MS);
 
   const trackedStocks = await prisma.stock.findMany({
     where: { market: "TW", isActive: true, ticker: { not: "TAIEX" } },
@@ -41,6 +50,7 @@ export async function runTwDailyUpdate(): Promise<TwDailyUpdateResult> {
   const trackedTickers = trackedStocks.filter((s) => backfilledStockIds.has(s.id));
 
   const latestByTicker = new Map<string, { date: string; open: number; high: number; low: number; close: number; volume: number }>();
+  const tpexTickers = new Set<string>();
   let pricesUpdated = 0;
 
   for (const stock of trackedTickers) {
@@ -52,7 +62,21 @@ export async function runTwDailyUpdate(): Promise<TwDailyUpdateResult> {
       console.error(`[tw-daily-update] skip ${stock.ticker}: ${(err as Error).message}`);
       continue;
     }
-    const latest = bars[bars.length - 1];
+    let latest = bars[bars.length - 1];
+    let isTpex = false;
+
+    if (!latest) {
+      try {
+        await finmindThrottle();
+        const endDate = new Date().toISOString().slice(0, 10);
+        const startDate = new Date(Date.now() - FINMIND_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
+        const fmBars = await fetchFinMindStockPrice(stock.ticker, startDate, endDate);
+        latest = fmBars[fmBars.length - 1];
+        isTpex = true;
+      } catch (err) {
+        console.error(`[tw-daily-update] FinMind fallback failed for ${stock.ticker}: ${(err as Error).message}`);
+      }
+    }
     if (!latest) continue;
 
     await prisma.twDailyPrice.upsert({
@@ -69,6 +93,7 @@ export async function runTwDailyUpdate(): Promise<TwDailyUpdateResult> {
       },
     });
     latestByTicker.set(stock.ticker, latest);
+    if (isTpex) tpexTickers.add(stock.ticker);
     pricesUpdated++;
   }
 
@@ -129,6 +154,43 @@ export async function runTwDailyUpdate(): Promise<TwDailyUpdateResult> {
         },
       });
       institutionalUpdated++;
+    }
+  }
+
+  // 上櫃股不在 T86 裡（TWSE 資料源），逐檔用 FinMind 補三大法人買賣超
+  for (const ticker of tpexTickers) {
+    const stock = trackedTickers.find((s) => s.ticker === ticker);
+    const priceBar = latestByTicker.get(ticker);
+    if (!stock || !priceBar) continue;
+
+    try {
+      await finmindThrottle();
+      const endDate = new Date().toISOString().slice(0, 10);
+      const startDate = new Date(Date.now() - FINMIND_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
+      const instByDate = await fetchFinMindInstitutionalTrading(ticker, startDate, endDate);
+      const inst = instByDate.get(priceBar.date);
+      if (!inst) continue;
+
+      await prisma.twInstitutionalTrading.upsert({
+        where: { stockId_tradeDate: { stockId: stock.id, tradeDate: new Date(priceBar.date) } },
+        update: {
+          foreignNetBuyShares: BigInt(inst.foreignNetBuyShares),
+          investTrustNetBuyShares: BigInt(inst.investTrustNetBuyShares),
+          dealerNetBuyShares: BigInt(inst.dealerNetBuyShares),
+          totalVolumeShares: BigInt(Math.round(priceBar.volume / 1000)),
+        },
+        create: {
+          stockId: stock.id,
+          tradeDate: new Date(priceBar.date),
+          foreignNetBuyShares: BigInt(inst.foreignNetBuyShares),
+          investTrustNetBuyShares: BigInt(inst.investTrustNetBuyShares),
+          dealerNetBuyShares: BigInt(inst.dealerNetBuyShares),
+          totalVolumeShares: BigInt(Math.round(priceBar.volume / 1000)),
+        },
+      });
+      institutionalUpdated++;
+    } catch (err) {
+      console.error(`[tw-daily-update] FinMind institutional fallback failed for ${ticker}: ${(err as Error).message}`);
     }
   }
 
