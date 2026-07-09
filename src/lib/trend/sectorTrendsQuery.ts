@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { TrendStatus, Market } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
+import { findIndustryThemeByName, getAllThemedTickers, UNCATEGORIZED_THEME_CODE } from "@/lib/valuation/groupConfig";
 
 /** 三段式戰術面板顯示的狀態，不含 limitMove（漲跌停是特殊狀態，不算戰術分類的一種，不佔欄位） */
 export type TacticalStatus = Exclude<TrendStatus, "limitMove">;
@@ -95,16 +96,33 @@ export function clampLimit(raw: number | string | null | undefined): number {
   return Math.min(Math.floor(n), MAX_LIMIT);
 }
 
-function buildStockFilter(
+/**
+ * TW 版首頁「板塊」篩選 2026-07-09 改用 group_config.json 的 theme_name（比 TWSE 官方產業別更貼近
+ * 使用者實際想篩的供應鏈/概念族群），sectorCode 參數這時候傳的其實是 theme_name（或特殊值
+ * UNCATEGORIZED_THEME_CODE）。US 版沒有 group_config theme，維持原本用 sector_mapping 篩選。
+ */
+async function buildStockFilter(
   market: Market,
   sectorCode: string | null,
   themeCode: string | null
-): Prisma.DailyTrendSignalWhereInput {
+): Promise<Prisma.DailyTrendSignalWhereInput> {
   // isActive: true 排除掉軟移除的股票（例如 2026-07-09 收斂成科技+金融股後排除的傳統產業）——
   // 只有批次計算（runTwDailyBatch/runUsDailyBatch）會跳過非 active 股票，但這裡如果不篩，
   // 舊的、剛好還沒過期的 daily_trend_signal 歷史紀錄還是會被撈出來顯示，等於軟移除沒生效。
   const stockWhere: Prisma.StockWhereInput = { market, isActive: true };
-  if (sectorCode) stockWhere.sector = { sectorCode };
+
+  if (sectorCode && market === "TW") {
+    if (sectorCode === UNCATEGORIZED_THEME_CODE) {
+      const themed = getAllThemedTickers();
+      stockWhere.ticker = { notIn: [...themed] };
+    } else {
+      const theme = findIndustryThemeByName(sectorCode);
+      stockWhere.ticker = { in: theme?.members ?? [] };
+    }
+  } else if (sectorCode) {
+    stockWhere.sector = { sectorCode };
+  }
+
   if (themeCode) stockWhere.themes = { some: { theme: { themeCode } } };
   return { stock: stockWhere };
 }
@@ -137,7 +155,7 @@ export async function fetchSectorTrendsGrouped(options: {
   const themeCode = options.themeCode && options.themeCode !== "all" ? options.themeCode : null;
   const limit = clampLimit(options.limit);
 
-  const stockFilter = buildStockFilter(market, sectorCode, themeCode);
+  const stockFilter = await buildStockFilter(market, sectorCode, themeCode);
   const asOfDate = await latestTradeDate(market, stockFilter);
 
   if (!asOfDate) {
@@ -193,7 +211,7 @@ export async function fetchSectorTrendsForMode(options: {
   const themeCode = options.themeCode && options.themeCode !== "all" ? options.themeCode : null;
   const limit = clampLimit(options.limit);
 
-  const stockFilter = buildStockFilter(market, sectorCode, themeCode);
+  const stockFilter = await buildStockFilter(market, sectorCode, themeCode);
   const asOfDate = await latestTradeDate(market, stockFilter);
   if (!asOfDate) {
     return { asOfDate: null, market, sector: sectorCode ?? "all", theme: themeCode ?? "all", mode: options.mode, items: [] };

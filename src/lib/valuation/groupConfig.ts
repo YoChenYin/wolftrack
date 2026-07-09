@@ -46,3 +46,26 @@ export function findIndustryThemeByName(themeName: string): GroupTheme | undefin
   }
   return undefined;
 }
+
+/** 2026-07-09：首頁板塊改用 group_config.json 的 theme_name（見 sectorTrendsQuery.ts） */
+export const UNCATEGORIZED_THEME_CODE = "__uncategorized__";
+
+/** 列出全部 theme（跨 industry_concepts 各分類），theme_name 本身當代號用（已確認 43 個全部不重複） */
+export function listAllThemeNames(): string[] {
+  const names: string[] = [];
+  for (const themes of Object.values(groupConfig.industry_concepts)) {
+    for (const theme of themes) names.push(theme.theme_name);
+  }
+  return names;
+}
+
+/** 跨所有 theme 的不重複股票代號聯集，用來算「未分類」= 有追蹤但沒被任何 theme 收錄的股票 */
+export function getAllThemedTickers(): Set<string> {
+  const result = new Set<string>();
+  for (const themes of Object.values(groupConfig.industry_concepts)) {
+    for (const theme of themes) {
+      for (const t of theme.members) result.add(t);
+    }
+  }
+  return result;
+}
