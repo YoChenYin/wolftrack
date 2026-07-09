@@ -12,6 +12,14 @@ function formatNum(value: number | null, digits = 1): string {
   return value === null ? "N/A" : value.toFixed(digits);
 }
 
+/** 鏈位階配色，跟 ThemeHeatmap.tsx 用同一套（上游藍/中游紫/下游橘/支援層灰） */
+const STAGE_COLORS: Record<string, string> = {
+  upstream: "bg-blue-50 text-blue-700",
+  midstream: "bg-violet-50 text-violet-700",
+  downstream: "bg-amber-50 text-amber-700",
+  support: "bg-zinc-100 text-zinc-600",
+};
+
 /**
  * 單一族群的 PE/PB 估值比較表格（代號/PE/PE百分位/PB/近20日/落後股標記）。
  * 抽成獨立元件因為個股詳情頁的供應鏈估值比較（ValuationSidePanel）和首頁選板塊後顯示的
@@ -26,7 +34,17 @@ export function GroupValuationTable({ group }: { group: GroupValuationResult }) 
   return (
     <div className="rounded border border-zinc-100 p-3">
       <div className="flex items-baseline justify-between">
-        <p className="text-sm font-medium text-zinc-800">{group.themeName}</p>
+        <p className="text-sm font-medium text-zinc-800">
+          {group.themeName}
+          {group.chainStages.map((s) => (
+            <span
+              key={`${s.chainName}-${s.stageKey}`}
+              className={`ml-1.5 rounded px-1 py-0.5 text-[10px] font-normal ${STAGE_COLORS[s.stageKey] ?? "bg-zinc-100 text-zinc-500"}`}
+            >
+              {s.chainName}·{s.label.split("：")[0]}
+            </span>
+          ))}
+        </p>
         <p className="text-xs text-zinc-400">
           族群近20日 <span className={groupHot ? "font-medium text-emerald-600" : ""}>{formatPct(group.groupAvgReturn20d)}</span>
           {" · "}大盤 {formatPct(group.marketAvgReturn20d)}

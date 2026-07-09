@@ -9,6 +9,8 @@ export interface ThemeHeatmapCell {
   return20d: number | null;
   /** 有實際股價資料可算報酬率的成員數（分母），跟 theme.members.length 不一定相等 */
   sampleSize: number;
+  /** 2026-07-10：這個 theme 在產業鏈裡的上中下游位置，沒有的話是空陣列（見 groupConfig.ts ThemeChainStage） */
+  chainStages: { chainName: string; stageKey: string; label: string }[];
 }
 
 const LOOKBACK_TRADING_DAYS = 21; // 算20日報酬要21筆(今天+20天前)
@@ -86,6 +88,7 @@ export async function computeThemeHeatmap(): Promise<ThemeHeatmapCell[]> {
         return10d: avg(perMember.map((m) => m.r10)),
         return20d: avg(perMember.map((m) => m.r20)),
         sampleSize: perMember.filter((m) => m.r20 !== null).length,
+        chainStages: theme.chainStages ?? [],
       });
     }
   }

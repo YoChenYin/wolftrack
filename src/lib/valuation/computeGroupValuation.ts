@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { calculateValuationPercentile } from "./calculateValuationPercentile";
 import { screenLaggingStocks, type LaggingStockResult } from "./screenLaggingStocks";
-import type { GroupTheme } from "./groupConfig";
+import type { GroupTheme, ThemeChainStage } from "./groupConfig";
 
 export interface GroupValuationMember {
   ticker: string;
@@ -23,6 +23,8 @@ export interface GroupValuationResult {
   marketAvgReturn20d: number | null;
   members: GroupValuationMember[];
   laggingStocks: LaggingStockResult[];
+  /** 2026-07-10：這個 theme 在產業鏈裡的上中下游位置，見 groupConfig.ts ThemeChainStage */
+  chainStages: ThemeChainStage[];
 }
 
 /** 近20日報酬率 = (今天收盤 - 20個交易日前收盤) / 20個交易日前收盤 * 100 */
@@ -121,5 +123,6 @@ export async function computeGroupValuation(theme: GroupTheme): Promise<GroupVal
     marketAvgReturn20d,
     members,
     laggingStocks,
+    chainStages: theme.chainStages ?? [],
   };
 }

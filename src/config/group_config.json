@@ -43,6 +43,13 @@
           "8271",
           "4967",
           "8088"
+        ],
+        "chainStages": [
+          {
+            "chainName": "記憶體",
+            "stageKey": "midstream",
+            "label": "中游：封測與模組"
+          }
         ]
       },
       {
@@ -57,6 +64,13 @@
           "2408",
           "3006",
           "5351"
+        ],
+        "chainStages": [
+          {
+            "chainName": "記憶體",
+            "stageKey": "upstream",
+            "label": "上游：IDM製造與控制IC"
+          }
         ]
       },
       {
@@ -68,6 +82,13 @@
           "1785",
           "8299",
           "2451"
+        ],
+        "chainStages": [
+          {
+            "chainName": "記憶體",
+            "stageKey": "midstream",
+            "label": "中游：封測與模組"
+          }
         ]
       }
     ],
@@ -155,6 +176,13 @@
           "1536",
           "5243",
           "3665"
+        ],
+        "chainStages": [
+          {
+            "chainName": "電動車",
+            "stageKey": "midstream",
+            "label": "中游：零組件與系統（上游電池材料、下游整車廠目前股票池覆蓋很少）"
+          }
         ]
       },
       {
@@ -169,6 +197,13 @@
           "3376",
           "6271",
           "2497"
+        ],
+        "chainStages": [
+          {
+            "chainName": "電動車",
+            "stageKey": "midstream",
+            "label": "中游：零組件與系統（上游電池材料、下游整車廠目前股票池覆蓋很少）"
+          }
         ]
       }
     ],
@@ -341,6 +376,13 @@
           "2303",
           "5347",
           "6770"
+        ],
+        "chainStages": [
+          {
+            "chainName": "半導體",
+            "stageKey": "midstream",
+            "label": "中游：晶圓製造"
+          }
         ]
       },
       {
@@ -359,6 +401,13 @@
           "2458",
           "4961",
           "3545"
+        ],
+        "chainStages": [
+          {
+            "chainName": "半導體",
+            "stageKey": "upstream",
+            "label": "上游：IP與IC設計"
+          }
         ]
       },
       {
@@ -374,6 +423,13 @@
           "3035",
           "6533",
           "6462"
+        ],
+        "chainStages": [
+          {
+            "chainName": "半導體",
+            "stageKey": "upstream",
+            "label": "上游：IP與IC設計"
+          }
         ]
       },
       {
@@ -387,6 +443,13 @@
           "2408",
           "2344",
           "2337"
+        ],
+        "chainStages": [
+          {
+            "chainName": "記憶體",
+            "stageKey": "upstream",
+            "label": "上游：IDM製造與控制IC"
+          }
         ]
       },
       {
@@ -402,6 +465,13 @@
           "3264",
           "6147",
           "2441"
+        ],
+        "chainStages": [
+          {
+            "chainName": "半導體",
+            "stageKey": "downstream",
+            "label": "下游：封裝測試"
+          }
         ]
       },
       {
@@ -421,6 +491,13 @@
           "6207",
           "8064",
           "6664"
+        ],
+        "chainStages": [
+          {
+            "chainName": "半導體",
+            "stageKey": "support",
+            "label": "支援層：設備與材料"
+          }
         ]
       },
       {
@@ -436,6 +513,13 @@
           "6830",
           "3289",
           "4755"
+        ],
+        "chainStages": [
+          {
+            "chainName": "半導體",
+            "stageKey": "support",
+            "label": "支援層：設備與材料"
+          }
         ]
       }
     ],
@@ -457,6 +541,13 @@
           "2357",
           "2324",
           "4938"
+        ],
+        "chainStages": [
+          {
+            "chainName": "AI伺服器",
+            "stageKey": "midstream",
+            "label": "中游：代工組裝"
+          }
         ]
       },
       {
@@ -472,6 +563,13 @@
           "3483",
           "3338",
           "2421"
+        ],
+        "chainStages": [
+          {
+            "chainName": "AI伺服器",
+            "stageKey": "upstream",
+            "label": "上游：關鍵零組件"
+          }
         ]
       },
       {
@@ -485,6 +583,13 @@
           "3015",
           "2420",
           "6282"
+        ],
+        "chainStages": [
+          {
+            "chainName": "AI伺服器",
+            "stageKey": "upstream",
+            "label": "上游：關鍵零組件"
+          }
         ]
       },
       {
@@ -503,6 +608,13 @@
           "8155",
           "3189",
           "8046"
+        ],
+        "chainStages": [
+          {
+            "chainName": "AI伺服器",
+            "stageKey": "upstream",
+            "label": "上游：關鍵零組件"
+          }
         ]
       },
       {
@@ -516,6 +628,13 @@
           "6117",
           "6584",
           "8210"
+        ],
+        "chainStages": [
+          {
+            "chainName": "AI伺服器",
+            "stageKey": "downstream",
+            "label": "下游：機構與結構件"
+          }
         ]
       }
     ],
@@ -536,6 +655,18 @@
           "3090",
           "6173",
           "2478"
+        ],
+        "chainStages": [
+          {
+            "chainName": "AI伺服器",
+            "stageKey": "upstream",
+            "label": "上游：關鍵零組件"
+          },
+          {
+            "chainName": "被動元件",
+            "stageKey": "midstream",
+            "label": "中游：元件製造（上游原料多為日商，我們股票池覆蓋很少）"
+          }
         ]
       },
       {
@@ -566,6 +697,13 @@
           "3380",
           "3558",
           "3025"
+        ],
+        "chainStages": [
+          {
+            "chainName": "光通訊",
+            "stageKey": "downstream",
+            "label": "下游：網通設備"
+          }
         ]
       },
       {
@@ -583,6 +721,13 @@
           "4908",
           "4977",
           "6223"
+        ],
+        "chainStages": [
+          {
+            "chainName": "光通訊",
+            "stageKey": "midstream",
+            "label": "中游：矽光子與CPO模組"
+          }
         ]
       }
     ],

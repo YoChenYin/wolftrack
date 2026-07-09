@@ -2,6 +2,12 @@
 
 import { useEffect, useState } from "react";
 
+interface ThemeChainStage {
+  chainName: string;
+  stageKey: string;
+  label: string;
+}
+
 interface ThemeHeatmapCell {
   themeName: string;
   category: string;
@@ -9,7 +15,16 @@ interface ThemeHeatmapCell {
   return10d: number | null;
   return20d: number | null;
   sampleSize: number;
+  chainStages: ThemeChainStage[];
 }
+
+/** 鏈位階配色：上游藍、中游紫、下游橘、支援層灰，跟熱圖本身的綠紅漲跌配色區隔開 */
+const STAGE_COLORS: Record<string, string> = {
+  upstream: "bg-blue-50 text-blue-700",
+  midstream: "bg-violet-50 text-violet-700",
+  downstream: "bg-amber-50 text-amber-700",
+  support: "bg-zinc-100 text-zinc-600",
+};
 
 /** 報酬率映到熱圖底色：正值綠、負值紅，深淺依幅度（±5% 封頂，超過一樣是最深色） */
 function heatColor(value: number | null): string {
@@ -38,6 +53,7 @@ function formatPct(value: number | null): string {
 export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: string) => void }) {
   const [cells, setCells] = useState<ThemeHeatmapCell[] | null>(null);
   const [sortBy, setSortBy] = useState<"return5d" | "return10d" | "return20d">("return20d");
+  const [chainFilter, setChainFilter] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/theme-heatmap")
@@ -54,7 +70,9 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
     );
   }
 
-  const sorted = [...cells].sort((a, b) => (b[sortBy] ?? -999) - (a[sortBy] ?? -999));
+  const chainNames = [...new Set(cells.flatMap((c) => c.chainStages.map((s) => s.chainName)))];
+  const filtered = chainFilter ? cells.filter((c) => c.chainStages.some((s) => s.chainName === chainFilter)) : cells;
+  const sorted = [...filtered].sort((a, b) => (b[sortBy] ?? -999) - (a[sortBy] ?? -999));
 
   return (
     <section className="rounded-lg border border-zinc-200 bg-white p-4">
@@ -75,7 +93,31 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
           ))}
         </div>
       </div>
-      <p className="mt-1 text-[11px] text-zinc-400">族群成員平均報酬率，點列可直接篩選該板塊</p>
+      <p className="mt-1 text-[11px] text-zinc-400">族群成員平均報酬率，點列可直接篩選該板塊；標籤是該板塊在產業鏈上的位置</p>
+
+      <div className="mt-2 flex flex-wrap gap-1">
+        <button
+          type="button"
+          onClick={() => setChainFilter(null)}
+          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+            chainFilter === null ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+          }`}
+        >
+          全部產業鏈
+        </button>
+        {chainNames.map((name) => (
+          <button
+            key={name}
+            type="button"
+            onClick={() => setChainFilter(name)}
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              chainFilter === name ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+            }`}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
 
       <div className="mt-3 max-h-80 overflow-y-auto overflow-x-auto">
         <table className="w-full text-xs">
@@ -97,6 +139,14 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
                 <td className="py-1 pr-2 font-medium text-zinc-800">
                   {cell.themeName}
                   {cell.sampleSize > 0 && <span className="ml-1 text-[10px] font-normal text-zinc-400">({cell.sampleSize})</span>}
+                  {cell.chainStages.map((s) => (
+                    <span
+                      key={`${s.chainName}-${s.stageKey}`}
+                      className={`ml-1 rounded px-1 py-0.5 text-[9px] font-normal ${STAGE_COLORS[s.stageKey] ?? "bg-zinc-100 text-zinc-500"}`}
+                    >
+                      {s.chainName}·{s.label.split("：")[0]}
+                    </span>
+                  ))}
                 </td>
                 <td className="py-1 text-right">
                   <span

@@ -1,9 +1,22 @@
 import groupConfigJson from "@/config/group_config.json";
 
+/** 一個 theme 在某條產業鏈裡的位置，見 GroupConfig.chains 說明 */
+export interface ThemeChainStage {
+  chainName: string;
+  stageKey: string;
+  label: string;
+}
+
 export interface GroupTheme {
   theme_name: string;
   leader: string[];
   members: string[];
+  /**
+   * 2026-07-10：這個 theme 在產業鏈裡的上中下游位置（直接標在 theme 物件上、不用另外查
+   * chains 交叉索引），資料來源是 group_config.json 生成時把 chains 結構「連動」寫回每個 theme，
+   * 不是每個 theme 都有——只有屬於六條主力鏈其中一條的才會有值。
+   */
+  chainStages?: ThemeChainStage[];
 }
 
 /** 2026-07-10：產業鏈上中下游結構，見 groupConfig.ts 底部的 getChainForTheme() 等存取函式說明 */
@@ -115,15 +128,10 @@ export function getChainStagesWithThemes(
   }));
 }
 
-/** 找出某個 theme_name 屬於哪些鏈的哪個階段（一個 theme 可能同時屬於多條鏈，例如被動元件同時餵AI伺服器鏈） */
-export function findChainStagesForTheme(themeName: string): { chainName: string; stageKey: string; label: string }[] {
-  const result: { chainName: string; stageKey: string; label: string }[] = [];
-  for (const [chainName, chain] of Object.entries(groupConfig.chains ?? {})) {
-    for (const [stageKey, stage] of Object.entries(chain.stages)) {
-      if (stage.themes.includes(themeName)) {
-        result.push({ chainName, stageKey, label: stage.label });
-      }
-    }
-  }
-  return result;
+/**
+ * 找出某個 theme_name 屬於哪些鏈的哪個階段。直接讀 GroupTheme.chainStages（group_config.json
+ * 生成時已經把 chains 結構寫回每個 theme），不用每次呼叫都重新掃一遍 chains 交叉索引。
+ */
+export function findChainStagesForTheme(themeName: string): ThemeChainStage[] {
+  return findIndustryThemeByName(themeName)?.chainStages ?? [];
 }
