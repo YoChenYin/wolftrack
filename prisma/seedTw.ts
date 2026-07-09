@@ -488,6 +488,32 @@ const STOCKS = [
   { ticker: "6121", companyName: "新普科技股份有限公司", sectorCode: "COMPUTER", industry: "全球筆電與智慧手機電池模組龍頭 / 穩健高配息", isActive: true },
   { ticker: "3323", companyName: "加百裕工業股份有限公司", sectorCode: "COMPUTER", industry: "鋰電池模組大廠 / 擴展網通、儲能與電動兩輪車市場", isActive: true },
 
+  // --- 2026-07-09 補上 group_config.json theme members 裡漏加進 stocks 主檔的股票 ---
+  { ticker: "1304", companyName: "台灣聚合化學品股份有限公司", sectorCode: "PLASTIC", industry: "塑膠工業", isActive: true },
+  { ticker: "1308", companyName: "亞洲聚合股份有限公司", sectorCode: "PLASTIC", industry: "塑膠工業", isActive: true },
+  { ticker: "1536", companyName: "和大工業股份有限公司", sectorCode: "TW12", industry: "汽車工業", isActive: true },
+  { ticker: "1727", companyName: "臺灣中華化學工業股份有限公司", sectorCode: "TW21", industry: "化學生技醫療", isActive: true },
+  { ticker: "1789", companyName: "台灣神隆股份有限公司", sectorCode: "TW22", industry: "生技醫療業", isActive: true },
+  { ticker: "2031", companyName: "新光鋼鐵股份有限公司", sectorCode: "STEEL", industry: "鋼鐵工業", isActive: true },
+  { ticker: "2314", companyName: "台揚科技股份有限公司", sectorCode: "TELECOM", industry: "電子工業", isActive: true },
+  { ticker: "2406", companyName: "國碩科技工業股份有限公司", sectorCode: "TW26", industry: "電子工業", isActive: true },
+  { ticker: "2605", companyName: "新興航運股份有限公司", sectorCode: "SHIPPING", industry: "航運業", isActive: true },
+  { ticker: "2612", companyName: "中國航運股份有限公司", sectorCode: "SHIPPING", industry: "航運業", isActive: true },
+  { ticker: "2731", companyName: "雄獅旅行社股份有限公司", sectorCode: "TW16", industry: "觀光餐旅", isActive: true },
+  { ticker: "3049", companyName: "精金科技股份有限公司", sectorCode: "TW26", industry: "電子工業", isActive: true },
+  { ticker: "3176", companyName: "基亞生物科技股份有限公司", sectorCode: "TW22", industry: "生技醫療業", isActive: true },
+  { ticker: "3491", companyName: "昇達科技股份有限公司", sectorCode: "TELECOM", industry: "通信網路業", isActive: true },
+  { ticker: "4147", companyName: "中裕新藥股份有限公司", sectorCode: "TW22", industry: "生技醫療業", isActive: true },
+  { ticker: "4174", companyName: "台灣浩鼎生技股份有限公司", sectorCode: "TW22", industry: "生技醫療業", isActive: true },
+  { ticker: "4572", companyName: "駐龍精密機械股份有限公司", sectorCode: "TW05", industry: "電機機械", isActive: true },
+  { ticker: "5243", companyName: "乙盛精密工業股份有限公司", sectorCode: "TW26", industry: "電子工業", isActive: true },
+  { ticker: "5351", companyName: "鈺創科技股份有限公司", sectorCode: "SEMI", industry: "半導體業", isActive: true },
+  { ticker: "6443", companyName: "元晶太陽能科技股份有限公司", sectorCode: "TW26", industry: "電子工業", isActive: true },
+  { ticker: "6477", companyName: "安集科技股份有限公司", sectorCode: "TW26", industry: "電子工業", isActive: true },
+  { ticker: "6589", companyName: "台康生技股份有限公司", sectorCode: "TW22", industry: "生技醫療業", isActive: true },
+  { ticker: "8088", companyName: "品安科技股份有限公司", sectorCode: "SEMI", industry: "半導體業", isActive: true },
+  { ticker: "8222", companyName: "寶一科技股份有限公司", sectorCode: "TW05", industry: "電機機械", isActive: true },
+
   // 大盤指數（合成股票紀錄，重用 tw_daily_price 存 TAIEX 歷史，當相對強度因子的 benchmark，isActive=false 不會出現在戰術面板）
   { ticker: "TAIEX", companyName: "台灣加權股價指數", sectorCode: "INDEX", industry: "大盤指數", isActive: false },
 ] as const;

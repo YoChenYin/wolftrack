@@ -3,12 +3,19 @@ import type { TrendStatus, Market } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { findIndustryThemeByName, getAllThemedTickers, UNCATEGORIZED_THEME_CODE } from "@/lib/valuation/groupConfig";
 
-/** 三段式戰術面板顯示的狀態，不含 limitMove（漲跌停是特殊狀態，不算戰術分類的一種，不佔欄位） */
-export type TacticalStatus = Exclude<TrendStatus, "limitMove">;
+/**
+ * 三段式戰術面板顯示的狀態。刻意用明確列舉（不是 Exclude<TrendStatus, "limitMove"> 這種衍生型別）——
+ * limitMove 是特殊狀態不算戰術分類，chipLeading（2026-07-09新增）是獨立的第四類「觀察名單」，
+ * 用自己的排序邏輯（依 chipScore 而非 coreScore）和 UI 區塊呈現，不跟主要三欄混在一起，
+ * 避免改 Prisma enum 時型別自動膨脹、影響到已經假設「只有三種」的 COLUMN_META 等地方。
+ */
+export type TacticalStatus = "reversal" | "pullback" | "bullish";
 
 export const TREND_STATUSES: TacticalStatus[] = ["reversal", "pullback", "bullish"];
 export const DEFAULT_LIMIT = 10;
 export const MAX_LIMIT = 50;
+/** 籌碼領先是觀察名單性質，給比主要三欄更寬的預設筆數 */
+export const CHIP_LEADING_LIMIT = 20;
 
 export interface SectorTrendItem {
   ticker: string;
@@ -38,6 +45,8 @@ export interface SectorTrendsGrouped {
   sector: string;
   theme: string;
   groups: Record<TacticalStatus, SectorTrendItem[]>;
+  /** 籌碼領先觀察名單（TW限定，見 calculateTwDailySignal.ts 的 isChipLeadingCandidate），依 chipScore 排序 */
+  chipLeading: SectorTrendItem[];
 }
 
 type SignalRow = {
@@ -188,20 +197,25 @@ export async function fetchSectorTrendsGrouped(options: {
       sector: sectorCode ?? "all",
       theme: themeCode ?? "all",
       groups: { reversal: [], pullback: [], bullish: [] },
+      chipLeading: [],
     };
   }
 
   const latestPerStock = await fetchLatestSignalPerStock(stockFilter, asOfDate);
   const groups: Record<TacticalStatus, SignalRow[]> = { reversal: [], pullback: [], bullish: [] };
+  const chipLeadingRows: SignalRow[] = [];
   for (const row of latestPerStock) {
     if (row.status === "reversal" || row.status === "pullback" || row.status === "bullish") {
       groups[row.status].push(row);
+    } else if (row.status === "chipLeading") {
+      chipLeadingRows.push(row);
     }
   }
   for (const status of TREND_STATUSES) {
     groups[status].sort((a, b) => Number(b.coreScore) - Number(a.coreScore));
     groups[status] = groups[status].slice(0, limit);
   }
+  chipLeadingRows.sort((a, b) => Number(b.chipScore) - Number(a.chipScore));
 
   return {
     asOfDate: asOfDate.toISOString().slice(0, 10),
@@ -213,6 +227,7 @@ export async function fetchSectorTrendsGrouped(options: {
       pullback: groups.pullback.map(toItem),
       bullish: groups.bullish.map(toItem),
     },
+    chipLeading: chipLeadingRows.slice(0, CHIP_LEADING_LIMIT).map(toItem),
   };
 }
 

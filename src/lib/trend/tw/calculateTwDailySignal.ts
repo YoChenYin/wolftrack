@@ -29,6 +29,29 @@ function resolveChipBadge(status: TwDailySignal["status"], momentum: ReturnType<
   return null;
 }
 
+/**
+ * 「籌碼領先」門檻（2026-07-09，用 scripts/validate-chip-leading.ts 對本地真實資料驗證過，
+ * 344 檔追蹤股票裡抓到 45 檔，訊號品質合理，非任意數字）：
+ * - chipMomentum = strengthening（集中度5日>10日>20日且5日>0，代表連續三個窗口都在加速，不是單日雜訊）
+ * - chipScore >= 60（排除勉強轉強但整體偏弱的邊緣案例）
+ * - chipConcentration5 >= 1%（排除三個數字都趨近於零、統計上不具意義的假訊號）
+ * TODO: 待業務端用回測校準門檻，目前是合理起點非官方公式。
+ */
+const CHIP_LEADING_SCORE_THRESHOLD = 60;
+const CHIP_LEADING_CONCENTRATION5_THRESHOLD = 1;
+
+function isChipLeadingCandidate(
+  chipScore: number,
+  concentration5: number,
+  momentum: ReturnType<typeof calculateChipConcentration>["momentum"]
+): boolean {
+  return (
+    momentum === "strengthening" &&
+    chipScore >= CHIP_LEADING_SCORE_THRESHOLD &&
+    concentration5 >= CHIP_LEADING_CONCENTRATION5_THRESHOLD
+  );
+}
+
 function diffOrNull(a: number | null, b: number | null): number | null {
   return a !== null && b !== null ? a - b : null;
 }
@@ -87,6 +110,11 @@ export function calculateTwTrendSignalAtIndex(
   const chipBadge = resolveChipBadge(classification.status, momentum);
   const coreScore = isLimitMove ? technicalScore : combineCoreScoreTw(technicalScore, chipScore);
 
+  const status =
+    classification.status === "none" && isChipLeadingCandidate(chipScore, concentration5, momentum)
+      ? "chipLeading"
+      : classification.status;
+
   return {
     tradeDate: bar.date,
     closePrice: bar.close,
@@ -111,7 +139,7 @@ export function calculateTwTrendSignalAtIndex(
     chipScore,
     chipSubScores,
     coreScore,
-    status: classification.status,
+    status,
     reversalPointDate: classification.reversalPointDate,
     priceAtSignal: classification.priceAtSignal,
     isLimitMove,

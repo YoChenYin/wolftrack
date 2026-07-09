@@ -1,14 +1,21 @@
 import Link from "next/link";
 import type { SectorTrendItem, TacticalStatus } from "@/lib/trend/sectorTrendsQuery";
 import type { Market } from "@/generated/prisma/enums";
+import { stripCompanySuffix } from "@/lib/formatCompanyName";
+import { InfoTooltip } from "./InfoTooltip";
 
-const COLUMN_META: Record<TacticalStatus, { emoji: string; title: string; subtitle: string; accent: string; badge: string }> = {
+const COLUMN_META: Record<
+  TacticalStatus,
+  { emoji: string; title: string; subtitle: string; accent: string; badge: string; criteria: string }
+> = {
   reversal: {
     emoji: "🔵",
     title: "反轉雷達",
     subtitle: "接近趨勢切換點，變盤初期 — 提早佈局",
     accent: "border-t-blue-500",
     badge: "bg-blue-50 text-blue-700",
+    criteria:
+      "近期剛發生黃金交叉，動能剛轉強：① MA20/MA50 在近5個交易日內出現黃金交叉 ② 同期間 MACD 柱狀圖由負轉正 ③ 近3日內出現爆量（成交量 > 20日均量 ×1.5倍）。三者同時符合才會進這一欄。",
   },
   pullback: {
     emoji: "🟡",
@@ -16,6 +23,8 @@ const COLUMN_META: Record<TacticalStatus, { emoji: string; title: string; subtit
     subtitle: "回檔整理中 — 等拉回上車",
     accent: "border-t-amber-500",
     badge: "bg-amber-50 text-amber-700",
+    criteria:
+      "多頭排列中的健康回檔，準備反彈：① 均線多頭排列（MA20>MA50>MA200）② 從近60日高點回檔5%~15%之間 ③ 股價貼近MA20或MA50支撐（±2%以內）④ RSI從超買區(>70)冷卻回40~55區間。",
   },
   bullish: {
     emoji: "🟢",
@@ -23,6 +32,8 @@ const COLUMN_META: Record<TacticalStatus, { emoji: string; title: string; subtit
     subtitle: "已進入上升軌道、動能延續 — 續抱追蹤",
     accent: "border-t-emerald-500",
     badge: "bg-emerald-50 text-emerald-700",
+    criteria:
+      "確立中的強勢多頭趨勢：① 均線多頭排列且MA20/MA50/MA200近5日都上揚 ② ADX14>25且持續走高 ③ 近20日內至少2次「新高」 ④ 從近60日高點回檔不到5%。TW版另疊加籌碼動能：技術面判bullish但籌碼轉弱標記「籌碼背離」、籌碼轉強標記「籌碼確認」（不改變分類）。",
   },
 };
 
@@ -58,6 +69,7 @@ export function TrendColumn({
         <h2 className="flex items-center gap-2 text-base font-semibold text-zinc-900">
           <span>{meta.emoji}</span>
           {meta.title}
+          <InfoTooltip>{meta.criteria}</InfoTooltip>
         </h2>
         <p className="mt-0.5 text-xs text-zinc-500">{meta.subtitle}</p>
       </header>
@@ -95,7 +107,7 @@ export function TrendColumn({
                     </span>
                   )}
                 </div>
-                <p className="truncate text-xs text-zinc-500">{item.companyName}</p>
+                <p className="truncate text-xs text-zinc-500">{stripCompanySuffix(item.companyName)}</p>
                 <p className="mt-0.5 text-xs text-zinc-400">
                   {item.signalDate ? (
                     <>

@@ -84,11 +84,13 @@ model StockTheme {
 }
 
 /// 三段式戰術狀態：反轉雷達 / 蓄勢待發 / 趨勢穩健 / limitMove（台股觸及漲跌停±10%的特殊狀態，不套用一般分類邏輯）
+/// / chipLeading（台股專用，2026-07-09：技術面未觸發但籌碼集中度加速轉強的觀察名單，見 types.ts 說明）
 enum TrendStatus {
   reversal
   pullback
   bullish
   limitMove
+  chipLeading
 }
 
 /// 籌碼集中度動態訊號：轉強 / 持平 / 轉弱（docs/wolftrack-tw-spec.md 3.6）

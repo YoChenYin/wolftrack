@@ -14,8 +14,14 @@ export interface OhlcvBar {
  *
  * "limitMove" = 台股版專用：當日觸及漲跌停(±10%)，不套用一般三段式分類邏輯，
  * 標記為特殊狀態（會寫入 daily_trend_signals，跟 "none" 不同）。美股版不會產生這個狀態。
+ *
+ * "chipLeading" = 台股版專用（2026-07-09）：技術面尚未觸發任何戰術分類（本來會是 "none"），
+ * 但籌碼集中度呈現「5日>10日>20日」加速排列、且籌碼分數/強度達門檻，判斷是法人可能已經
+ * 開始布局、股價還沒真的發動。跟其餘三種狀態不同，可信度天生較低（少了技術面確認），
+ * 只是「觀察名單」不是「進場訊號」，會寫入 daily_trend_signals 但在 UI 上獨立區隔顯示。
+ * 美股版不會產生這個狀態（US 沒有籌碼資料）。
  */
-export type TrendStatus = "reversal" | "pullback" | "bullish" | "none" | "limitMove";
+export type TrendStatus = "reversal" | "pullback" | "bullish" | "none" | "limitMove" | "chipLeading";
 
 /** 會寫入 daily_trend_signals 的狀態（排除 "none"） */
 export type WritableTrendStatus = Exclude<TrendStatus, "none">;

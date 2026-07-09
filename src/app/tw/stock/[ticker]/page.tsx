@@ -4,6 +4,7 @@ import { findIndustryThemesForTicker } from "@/lib/valuation/groupConfig";
 import { computeGroupValuation } from "@/lib/valuation/computeGroupValuation";
 import { CoreScoreBreakdown } from "@/components/tw/CoreScoreBreakdown";
 import { ValuationSidePanel } from "@/components/tw/ValuationSidePanel";
+import { stripCompanySuffix } from "@/lib/formatCompanyName";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
         <header>
           <p className="text-sm text-zinc-500">{stock.sector.sectorNameZh ?? stock.sector.sectorName}</p>
           <h1 className="text-2xl font-bold text-zinc-900">
-            {stock.ticker} {stock.companyName}
+            {stock.ticker} {stripCompanySuffix(stock.companyName)}
           </h1>
         </header>
 

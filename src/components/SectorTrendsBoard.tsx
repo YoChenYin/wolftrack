@@ -3,6 +3,8 @@
 import { useEffect, useState, useTransition } from "react";
 import { TrendColumn } from "./TrendColumn";
 import { GroupValuationTable } from "./tw/GroupValuationTable";
+import { ThemeHeatmap } from "./tw/ThemeHeatmap";
+import { ChipLeadingList } from "./tw/ChipLeadingList";
 import { UNCATEGORIZED_THEME_CODE } from "@/lib/valuation/groupConfig";
 import type { SectorTrendsGrouped } from "@/lib/trend/sectorTrendsQuery";
 import type { GroupValuationResult } from "@/lib/valuation/computeGroupValuation";
@@ -120,6 +122,8 @@ export function SectorTrendsBoard({
 
       {data.asOfDate && <p className="text-xs text-zinc-400">資料日期（as of）：{data.asOfDate}</p>}
 
+      {market === "TW" && <ThemeHeatmap onSelectTheme={handleSelectSector} />}
+
       {selectedSector !== "all" && selectedSector !== UNCATEGORIZED_THEME_CODE && (
         <section className="rounded-lg border border-zinc-200 bg-white p-4">
           <h2 className="text-sm font-semibold text-zinc-900">{selectedSector} · PE/PB 估值比較</h2>
@@ -140,6 +144,8 @@ export function SectorTrendsBoard({
         <TrendColumn market={market} status="pullback" items={data.groups.pullback} loading={isPending} />
         <TrendColumn market={market} status="bullish" items={data.groups.bullish} loading={isPending} />
       </div>
+
+      {market === "TW" && <ChipLeadingList items={data.chipLeading} />}
     </div>
   );
 }
