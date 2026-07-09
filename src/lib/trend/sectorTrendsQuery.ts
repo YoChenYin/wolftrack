@@ -141,6 +141,29 @@ async function latestTradeDate(market: Market, stockFilter: Prisma.DailyTrendSig
 }
 
 /**
+ * TWSE 逐檔查詢天生就會有日期落差（同一批次裡不同股票「最新可查到的交易日」可能差 1-2 天，
+ * 已經在 progress-status.md 記錄過好幾次），股票池擴到 300+ 檔後，只要有 1 檔股票日期比其他
+ * 股票新，用「嚴格等於全域最新日期」篩選會讓其餘幾百檔全部消失（親眼在 production 看到：
+ * 320 檔裡只有 1 檔日期對得上，整個面板幾乎全空）。改成「每檔股票自己最新一筆訊號」，
+ * 只要求在 RECENCY_WINDOW_DAYS 天內（排除真的斷更很久、資料可能有問題的股票），
+ * 不要求跟其他股票完全同一天。
+ */
+const RECENCY_WINDOW_DAYS = 7;
+
+async function fetchLatestSignalPerStock(
+  stockFilter: Prisma.DailyTrendSignalWhereInput,
+  globalMaxDate: Date
+): Promise<SignalRow[]> {
+  const cutoff = new Date(globalMaxDate.getTime() - RECENCY_WINDOW_DAYS * 86_400_000);
+  return prisma.dailyTrendSignal.findMany({
+    where: { ...stockFilter, tradeDate: { gte: cutoff } },
+    orderBy: [{ stockId: "asc" }, { tradeDate: "desc" }],
+    distinct: ["stockId"],
+    include: SIGNAL_INCLUDE,
+  });
+}
+
+/**
  * 依市場/板塊/題材/狀態撈「最新一個有資料的交易日」排行榜。
  * 給 API route（/api/sector-trends）和首頁 Server Component 首次渲染共用，避免邏輯重複。
  */
@@ -168,16 +191,17 @@ export async function fetchSectorTrendsGrouped(options: {
     };
   }
 
-  const [reversal, pullback, bullish] = await Promise.all(
-    TREND_STATUSES.map((status) =>
-      prisma.dailyTrendSignal.findMany({
-        where: { tradeDate: asOfDate, status, ...stockFilter },
-        orderBy: { coreScore: "desc" },
-        take: limit,
-        include: SIGNAL_INCLUDE,
-      })
-    )
-  );
+  const latestPerStock = await fetchLatestSignalPerStock(stockFilter, asOfDate);
+  const groups: Record<TacticalStatus, SignalRow[]> = { reversal: [], pullback: [], bullish: [] };
+  for (const row of latestPerStock) {
+    if (row.status === "reversal" || row.status === "pullback" || row.status === "bullish") {
+      groups[row.status].push(row);
+    }
+  }
+  for (const status of TREND_STATUSES) {
+    groups[status].sort((a, b) => Number(b.coreScore) - Number(a.coreScore));
+    groups[status] = groups[status].slice(0, limit);
+  }
 
   return {
     asOfDate: asOfDate.toISOString().slice(0, 10),
@@ -185,9 +209,9 @@ export async function fetchSectorTrendsGrouped(options: {
     sector: sectorCode ?? "all",
     theme: themeCode ?? "all",
     groups: {
-      reversal: reversal.map(toItem),
-      pullback: pullback.map(toItem),
-      bullish: bullish.map(toItem),
+      reversal: groups.reversal.map(toItem),
+      pullback: groups.pullback.map(toItem),
+      bullish: groups.bullish.map(toItem),
     },
   };
 }
@@ -217,12 +241,11 @@ export async function fetchSectorTrendsForMode(options: {
     return { asOfDate: null, market, sector: sectorCode ?? "all", theme: themeCode ?? "all", mode: options.mode, items: [] };
   }
 
-  const rows = await prisma.dailyTrendSignal.findMany({
-    where: { tradeDate: asOfDate, status: options.mode, ...stockFilter },
-    orderBy: { coreScore: "desc" },
-    take: limit,
-    include: SIGNAL_INCLUDE,
-  });
+  const latestPerStock = await fetchLatestSignalPerStock(stockFilter, asOfDate);
+  const rows = latestPerStock
+    .filter((row) => row.status === options.mode)
+    .sort((a, b) => Number(b.coreScore) - Number(a.coreScore))
+    .slice(0, limit);
 
   return {
     asOfDate: asOfDate.toISOString().slice(0, 10),
