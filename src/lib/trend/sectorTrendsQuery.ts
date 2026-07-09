@@ -100,7 +100,10 @@ function buildStockFilter(
   sectorCode: string | null,
   themeCode: string | null
 ): Prisma.DailyTrendSignalWhereInput {
-  const stockWhere: Prisma.StockWhereInput = { market };
+  // isActive: true 排除掉軟移除的股票（例如 2026-07-09 收斂成科技+金融股後排除的傳統產業）——
+  // 只有批次計算（runTwDailyBatch/runUsDailyBatch）會跳過非 active 股票，但這裡如果不篩，
+  // 舊的、剛好還沒過期的 daily_trend_signal 歷史紀錄還是會被撈出來顯示，等於軟移除沒生效。
+  const stockWhere: Prisma.StockWhereInput = { market, isActive: true };
   if (sectorCode) stockWhere.sector = { sectorCode };
   if (themeCode) stockWhere.themes = { some: { theme: { themeCode } } };
   return { stock: stockWhere };

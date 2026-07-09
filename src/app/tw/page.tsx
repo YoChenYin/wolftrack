@@ -8,7 +8,10 @@ export const dynamic = "force-dynamic";
 export default async function HomeTw() {
   const [sectors, initialData] = await Promise.all([
     prisma.sectorMapping.findMany({
-      where: { market: "TW" },
+      // 2026-07-09 股票池收斂成科技+金融股後，傳統產業板塊底下的股票都被軟移除（isActive=false），
+      // 板塊本身沒刪（歷史資料/未來要恢復都還在），但篩選下拉選單只顯示「還有股票在追蹤」的板塊，
+      // 不然會列出一堆選了也是空清單的板塊（水泥/食品/紡織…）
+      where: { market: "TW", stocks: { some: { isActive: true } } },
       orderBy: { displayOrder: "asc" },
       select: { sectorCode: true, sectorName: true, sectorNameZh: true },
     }),
