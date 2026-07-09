@@ -634,5 +634,123 @@
         ]
       }
     ]
+  },
+  "chains": {
+    "半導體": {
+      "chainNameFull": "半導體產業鏈",
+      "stages": {
+        "upstream": {
+          "label": "上游：IP與IC設計",
+          "themes": [
+            "IC設計：高階運算與邊緣AI",
+            "矽智財：IP與ASIC設計服務"
+          ]
+        },
+        "midstream": {
+          "label": "中游：晶圓製造",
+          "themes": [
+            "晶圓代工與重權值"
+          ]
+        },
+        "downstream": {
+          "label": "下游：封裝測試",
+          "themes": [
+            "半導體先進封測：OSAT"
+          ]
+        },
+        "support": {
+          "label": "支援層：設備與材料",
+          "themes": [
+            "先進製程：設備與材料供應鏈",
+            "特用化學與材料檢測分析"
+          ]
+        }
+      }
+    },
+    "AI伺服器": {
+      "chainNameFull": "AI伺服器產業鏈",
+      "stages": {
+        "upstream": {
+          "label": "上游：關鍵零組件",
+          "themes": [
+            "高頻高速：PCB與載板材料",
+            "散熱與熱管理系統",
+            "電力與能源管理系統",
+            "被動元件：電容：電阻：電感"
+          ]
+        },
+        "midstream": {
+          "label": "中游：代工組裝",
+          "themes": [
+            "系統整合與代工：ODM"
+          ]
+        },
+        "downstream": {
+          "label": "下游：機構與結構件",
+          "themes": [
+            "精密機構件：滑軌與機殼機櫃"
+          ]
+        }
+      }
+    },
+    "被動元件": {
+      "chainNameFull": "被動元件產業鏈",
+      "stages": {
+        "midstream": {
+          "label": "中游：元件製造（上游原料多為日商，我們股票池覆蓋很少）",
+          "themes": [
+            "被動元件：電容：電阻：電感"
+          ]
+        }
+      }
+    },
+    "記憶體": {
+      "chainNameFull": "記憶體產業鏈",
+      "stages": {
+        "upstream": {
+          "label": "上游：IDM製造與控制IC",
+          "themes": [
+            "記憶體晶片與控制IC",
+            "記憶體概念股"
+          ]
+        },
+        "midstream": {
+          "label": "中游：封測與模組",
+          "themes": [
+            "記憶體模組概念股",
+            "HAMR概念股"
+          ]
+        }
+      }
+    },
+    "電動車": {
+      "chainNameFull": "電動車產業鏈",
+      "stages": {
+        "midstream": {
+          "label": "中游：零組件與系統（上游電池材料、下游整車廠目前股票池覆蓋很少）",
+          "themes": [
+            "電動車概念股",
+            "車用電子概念股"
+          ]
+        }
+      }
+    },
+    "光通訊": {
+      "chainNameFull": "光通訊／CPO產業鏈",
+      "stages": {
+        "midstream": {
+          "label": "中游：矽光子與CPO模組",
+          "themes": [
+            "矽光子：CPO與光通訊組件"
+          ]
+        },
+        "downstream": {
+          "label": "下游：網通設備",
+          "themes": [
+            "網通設備與高階交換器"
+          ]
+        }
+      }
+    }
   }
 }
