@@ -3,7 +3,7 @@
 > 這份文件記錄目前已完成的項目、已知限制、以及下一階段待辦，每次階段性完成後更新。
 > 對應規格文件：`trend-core-core-features-spec.md`、`trend-core-implementation-logic.md`（美股版）、`wolftrack-tw-spec.md`（台股版）。
 
-最後更新：2026-07-09
+最後更新：2026-07-09（籌碼領先/板塊熱圖/資金流動折線圖）
 
 ---
 
@@ -213,6 +213,33 @@
 - 40 檔新股回填：16 檔 TWSE（`tw-backfill.ts`）+ 24 檔 TPEx（`tpex-backfill.ts`）全部成功
 - 訊號批次 + PE/PB：新股正確進入分類（例：3265台星科=reversal、6121新普科技=pullback）
 - production 驗證：`/tw/stock/2330` 的供應鏈估值比較面板正確顯示新分類名稱「晶圓代工與重權值」（確認 `group_config.json` 重寫已部署上線）；`/api/sector-trends` 確認新股票（6121新普科技等）出現在戰術分類清單
+
+### 2.10 首頁大改版：板塊下拉選單、PE/PB比較表、熱圖、資金流動折線圖、籌碼領先觀察名單（2026-07-09）
+
+**日期碎片化 bug 修正**：使用者回報「三個戰術區塊股票很少，有些甚至沒有」，查出來不是真的股票少，是查詢邏輯的 bug——`/api/sector-trends` 原本用「嚴格等於全域最新交易日」篩選，320+ 檔股票裡只要有 1 檔資料比其他人新（TWSE逐檔查詢天生會有1-2天落差），其餘幾百檔全部從面板消失（親眼在production看到320檔裡只剩1檔對得上日期）。改成「每檔股票自己最新一筆訊號」（`distinct: ['stockId']` + `orderBy tradeDate desc`），只要求在7天內，不要求跟其他股票同一天。修好後本地測試從幾乎全空回升到8/10/10（後兩欄還頂到顯示上限）。
+
+**板塊改用 group_config.json theme_name**：原本首頁「板塊」篩選是 TWSE 官方產業別（`sector_mapping`），改成 `group_config.json` 的 43 個 theme_name，更貼近使用者實際想篩的供應鏈/概念族群。因為 theme 只涵蓋部分股票（見下方缺資料股票段落），額外加「未分類」虛擬選項，「全部」選項維持不限縮範圍。篩選 UI 也從按鈕列改成原生 `<select>` 下拉選單。
+
+**選了板塊後顯示 PE/PB 估值比較表**：新增 `/api/theme-valuation`，重用個股詳情頁「供應鏈估值比較」的 `computeGroupValuation()` 邏輯與資料，把重複的表格 JSX 抽成共用元件 `GroupValuationTable`。
+
+**板塊熱圖**：新增 `/api/theme-heatmap`，一次算出全部43個theme的5/10/20日族群平均報酬率，做成可捲動的表格（`max-h-80 overflow-y-auto` + sticky表頭），點列可直接篩選該板塊。
+
+**板塊資金流動折線圖**：新增 `/api/theme-flow`，以 group_config.json 的14個大分類（比43個theme少很多，才畫得清楚）為單位，算過去20個交易日的族群平均累積報酬指數時間序列，用純手刻 SVG 折線圖呈現（沒有加圖表函式庫依賴），可點圖例隱藏/顯示個別分類線、hover看當天各分類數值。
+
+**發現並補上 24 檔缺資料的股票**：使用者回報 3491/8088/5351/1789 等股票在供應鏈估值比較裡沒有資料，查出來是這些代號在 `group_config.json` 某些 theme 的 members 清單裡（來自最早期使用者提供的概念股清單），但當初從沒被加進 `stocks` 主檔，導致 `computeGroupValuation()` 對這些代號回傳全 null。全面掃描抓出 29 檔類似情況，其中 5 檔是 ETF（0050/0056/00878/00919/00929，我們的資料模型沒有ETF支援，PE/PB/基本面完全不適用，列為已知缺口不處理），另外 24 檔是真股票，用 FinMind 交叉驗證代號正確性後全部補進 `stocks`（18檔TWSE + 6檔TPEx），本地+production都完成回填。
+
+**新增「籌碼領先」第四類觀察名單**：使用者提出財經問題「技術面OK時，籌碼有沒有可能還沒跟上」，討論後決定把這個洞察做成功能——抓「技術面尚未觸發任何戰術分類（本來的status="none"，完全不會被顯示）、但籌碼集中度已經加速轉強」的股票。判斷條件：`chipMomentum="strengthening"`（集中度5日>10日>20日且5日>0，代表連續三個窗口都在加速）+ `chipScore>=60` + `chipConcentration5>=1%`。門檻**先用 `scripts/validate-chip-leading.ts` 對本地真實資料驗證過**才正式做成功能（344檔追蹤股票，244檔當天是none，45檔符合條件，抽樣看訊號品質合理，非任意數字）。
+
+技術實作：`daily_trend_signals` 原本status="none"的訊號完全不會寫入資料庫（省空間，但也代表沒辦法查詢），這次新增 `TrendStatus` enum 值 `chipLeading`（Prisma migration `20260709140941_add_chip_leading_status`，純新增列舉值不影響既有資料），讓符合條件的「none」訊號改用這個新狀態寫入，複用既有的 upsert 邏輯不用改批次腳本主體。因為只是籌碼面訊號、少了技術面確認，可信度天生較低，UI上刻意跟主要三欄拉開視覺份量（虛線邊框、「⏳籌碼領先·待確認」標題，放在三欄下方而非並列第四欄）。
+
+**其他順手完成**：
+- 公司名稱顯示統一移除「股份有限公司」尾綴（`stripCompanySuffix()`，只影響顯示，DB存的還是全名）
+- PE/PE百分位/PB/近20日/落後股標記，以及三個戰術欄位的選股條件，都加上 hover「？」說明（`InfoTooltip` 元件，純CSS hover不用JS事件）
+
+**執行結果**（本地+production都跑過，並在正式站逐項驗證過）：
+- `chipLeading` 訊號：production 跑出20檔進入籌碼領先觀察名單（例：微星科技 chipScore=95.3、兆豐金 92.5）
+- 24檔缺資料股票補齊後，`/api/theme-valuation` 正確回傳真實 PE/PB（例：3491昇達科技 PE=138.95、8088品安科技 PE=21.62）
+- production 逐項確認：板塊dropdown、PE/PB表格、板塊熱圖、資金流動折線圖、籌碼領先名單、公司名稱簡化、hover說明，全部正常顯示
 
 ---
 
