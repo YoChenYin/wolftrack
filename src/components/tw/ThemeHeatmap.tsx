@@ -77,9 +77,9 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
       </div>
       <p className="mt-1 text-[11px] text-zinc-400">族群成員平均報酬率，點列可直接篩選該板塊</p>
 
-      <div className="mt-3 overflow-x-auto">
+      <div className="mt-3 max-h-80 overflow-y-auto overflow-x-auto">
         <table className="w-full text-xs">
-          <thead>
+          <thead className="sticky top-0 bg-white">
             <tr className="text-left text-zinc-400">
               <th className="pb-1.5 font-normal">板塊</th>
               <th className="w-20 pb-1.5 text-right font-normal">5日</th>
