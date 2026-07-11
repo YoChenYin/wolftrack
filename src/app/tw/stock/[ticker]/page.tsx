@@ -4,6 +4,7 @@ import { findIndustryThemesForTicker } from "@/lib/valuation/groupConfig";
 import { computeGroupValuation } from "@/lib/valuation/computeGroupValuation";
 import { CoreScoreBreakdown } from "@/components/tw/CoreScoreBreakdown";
 import { ValuationSidePanel } from "@/components/tw/ValuationSidePanel";
+import { MonthlyRevenuePanel } from "@/components/tw/MonthlyRevenuePanel";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,12 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
   const themesWithData = themes.filter((t) => t.members.length > 0);
   const themesWithoutData = themes.filter((t) => t.members.length === 0);
   const valuations = await Promise.all(themesWithData.map((theme) => computeGroupValuation(theme)));
+
+  const revenueRows = await prisma.twMonthlyRevenue.findMany({
+    where: { stockId: stock.id },
+    orderBy: { revenueMonth: "desc" },
+    take: 6,
+  });
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50">
@@ -50,6 +57,16 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
         ) : (
           <p className="text-sm text-zinc-400">這檔股票目前沒有任何戰術分類歷史資料。</p>
         )}
+
+        <MonthlyRevenuePanel
+          rows={revenueRows.map((r) => ({
+            revenueMonth: r.revenueMonth.toISOString().slice(0, 7),
+            revenue: r.revenue.toString(),
+            yoyGrowthPct: r.yoyGrowthPct !== null ? Number(r.yoyGrowthPct) : null,
+            momGrowthPct: r.momGrowthPct !== null ? Number(r.momGrowthPct) : null,
+            cumulativeYoyGrowthPct: r.cumulativeYoyGrowthPct !== null ? Number(r.cumulativeYoyGrowthPct) : null,
+          }))}
+        />
 
         <ValuationSidePanel themesWithoutData={themesWithoutData} valuations={valuations} />
       </main>

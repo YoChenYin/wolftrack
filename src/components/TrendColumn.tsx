@@ -106,6 +106,15 @@ export function TrendColumn({
                       籌碼背離 ⚠️
                     </span>
                   )}
+                  {item.revenueYoyGrowthPct !== null && (
+                    <span
+                      className={`text-xs font-medium ${item.revenueYoyGrowthPct >= 0 ? "text-emerald-600" : "text-red-600"}`}
+                      title={`${item.revenueMonth} 月營收年增率`}
+                    >
+                      {item.revenueYoyGrowthPct >= 20 ? "🚀" : ""}營收{item.revenueYoyGrowthPct >= 0 ? "+" : ""}
+                      {item.revenueYoyGrowthPct.toFixed(0)}%
+                    </span>
+                  )}
                 </div>
                 <p className="truncate text-xs text-zinc-500">{stripCompanySuffix(item.companyName)}</p>
                 <p className="mt-0.5 text-xs text-zinc-400">

@@ -37,6 +37,10 @@ export interface SectorTrendItem {
   priceNow: number;
   /** 訊號後漲跌幅 = (priceNow - priceAtSignal) / priceAtSignal * 100 */
   changePctSinceSignal: number | null;
+  /** 2026-07-11：最新一期月營收年增率(%)，TW限定，沒有資料是 null（見 monthlyRevenueClient.ts） */
+  revenueYoyGrowthPct: number | null;
+  /** 該筆月營收所屬月份，YYYY-MM，方便顯示「這是幾月的資料」 */
+  revenueMonth: string | null;
 }
 
 export interface SectorTrendsGrouped {
@@ -64,6 +68,7 @@ type SignalRow = {
     companyName: string;
     sector: { sectorCode: string; sectorName: string; sectorNameZh: string | null };
     themes: { theme: { themeCode: string; themeNameZh: string | null } }[];
+    monthlyRevenues: { revenueMonth: Date; yoyGrowthPct: Prisma.Decimal | null }[];
   };
 };
 
@@ -76,6 +81,7 @@ function toItem(row: SignalRow): SectorTrendItem {
   const daysSinceSignal = row.reversalPointDate
     ? Math.round((row.tradeDate.getTime() - row.reversalPointDate.getTime()) / 86_400_000)
     : null;
+  const latestRevenue = row.stock.monthlyRevenues[0];
 
   return {
     ticker: row.stock.ticker,
@@ -96,6 +102,8 @@ function toItem(row: SignalRow): SectorTrendItem {
     priceAtSignal,
     priceNow,
     changePctSinceSignal,
+    revenueYoyGrowthPct: latestRevenue?.yoyGrowthPct !== undefined && latestRevenue?.yoyGrowthPct !== null ? Number(latestRevenue.yoyGrowthPct) : null,
+    revenueMonth: latestRevenue ? latestRevenue.revenueMonth.toISOString().slice(0, 7) : null,
   };
 }
 
@@ -137,7 +145,13 @@ async function buildStockFilter(
 }
 
 const SIGNAL_INCLUDE = {
-  stock: { include: { sector: true, themes: { include: { theme: true } } } },
+  stock: {
+    include: {
+      sector: true,
+      themes: { include: { theme: true } },
+      monthlyRevenues: { orderBy: { revenueMonth: "desc" }, take: 1 },
+    },
+  },
 } satisfies Prisma.DailyTrendSignalInclude;
 
 /** 該 market 底下「最新一個有資料的交易日」，US/TW 各自獨立（美股 ET 收盤、台股 09:00-13:30，資料日期不會同步） */

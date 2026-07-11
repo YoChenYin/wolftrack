@@ -51,6 +51,7 @@ model Stock {
   brokerBranchFlow     TwBrokerBranchFlow[]
   dailyPrices          TwDailyPrice[]
   fundamentals         TwStockFundamentals[]
+  monthlyRevenues      TwMonthlyRevenue[]
 
   @@unique([market, ticker])
   @@index([sectorId])
@@ -227,6 +228,37 @@ model TwStockFundamentals {
 
   @@unique([stockId, tradeDate])
   @@map("tw_stock_fundamentals")
+}
+
+/// 月營收（2026-07-11 新增）：TWSE/TPEx OpenAPI 的 t187ap05 系列端點只回傳「最新一期」快照，
+/// 不能查歷史區間，所以每個月固定會抓到同一期資料 upsert 覆蓋，多月趨勢是靠每天/每月排程
+/// 跑過去、資料庫裡自然累積出來的，不是一次回填的（跟 TwStockFundamentals 的 PE/PB 架構一致）。
+model TwMonthlyRevenue {
+  id           BigInt   @id @default(autoincrement())
+  stockId      Int      @map("stock_id")
+  /// 資料所屬月份的第一天，例如 2026-05-01 代表民國115年05月
+  revenueMonth DateTime @map("revenue_month") @db.Date
+
+  /// 當月營收（千元）
+  revenue                  BigInt   @map("revenue")
+  revenuePriorMonth        BigInt?  @map("revenue_prior_month")
+  revenueSameMonthLastYear BigInt?  @map("revenue_same_month_last_year")
+  /// 月增率(%)
+  momGrowthPct             Decimal? @map("mom_growth_pct") @db.Decimal(8, 2)
+  /// 年增率(%)——台股投資人最常看的營收指標
+  yoyGrowthPct             Decimal? @map("yoy_growth_pct") @db.Decimal(8, 2)
+  cumulativeRevenue         BigInt?  @map("cumulative_revenue")
+  cumulativeRevenueLastYear BigInt?  @map("cumulative_revenue_last_year")
+  /// 累計營收年增率(%)
+  cumulativeYoyGrowthPct    Decimal? @map("cumulative_yoy_growth_pct") @db.Decimal(8, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  stock Stock @relation(fields: [stockId], references: [id])
+
+  @@unique([stockId, revenueMonth])
+  @@index([revenueMonth])
+  @@map("tw_monthly_revenue")
 }
 
 /// 券商分點進出（docs/wolftrack-tw-spec.md 3.4），台股獨有
