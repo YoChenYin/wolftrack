@@ -131,6 +131,13 @@ export interface ClassificationInput {
    * 避免漲跌停當天失真的量能/動能指標造成誤判。
    */
   isLimitMove?: boolean;
+  /**
+   * 蓄勢待發回檔幅度上限（%），2026-07-11 用 scripts/backtest.ts 對台股資料回測後發現
+   * 原本 5%~15% 區間 20日超額報酬中位數是負的(-0.43%)，收窄到 5%~10% 變成 +1.76%（樣本200筆）。
+   * 這個改動只有台股證據，沒有美股回測，所以刻意做成可覆寫參數、預設值維持原本 15%（美股行為不變），
+   * 只有 calculateTwDailySignal.ts 會傳 10 進來。
+   */
+  pullbackMaxDrawdownPct?: number;
 }
 
 export interface ClassificationResult {
@@ -143,7 +150,13 @@ export interface ClassificationResult {
  * 三段式分類，判斷順序：反轉 → 蓄勢待發 → 趨勢穩健（互斥，符合前者就不再檢查後者）。
  * 邏輯對應 docs/trend-core-implementation-logic.md 第2章。
  */
-export function classifyTrend({ bars, series, targetIndex, isLimitMove }: ClassificationInput): ClassificationResult {
+export function classifyTrend({
+  bars,
+  series,
+  targetIndex,
+  isLimitMove,
+  pullbackMaxDrawdownPct = PULLBACK_MAX_DRAWDOWN_PCT,
+}: ClassificationInput): ClassificationResult {
   if (isLimitMove) {
     return { status: "limitMove", reversalPointDate: null, priceAtSignal: null };
   }
@@ -178,7 +191,7 @@ export function classifyTrend({ bars, series, targetIndex, isLimitMove }: Classi
   const bullishStack = ma20 !== null && ma50 !== null && ma200 !== null && ma20 > ma50 && ma50 > ma200;
 
   // 2.2 蓄勢待發
-  const pullbackRange = drawdownPct >= PULLBACK_MIN_DRAWDOWN_PCT && drawdownPct <= PULLBACK_MAX_DRAWDOWN_PCT;
+  const pullbackRange = drawdownPct >= PULLBACK_MIN_DRAWDOWN_PCT && drawdownPct <= pullbackMaxDrawdownPct;
   const nearSupport =
     (ma20 !== null && Math.abs((close - ma20) / ma20) * 100 <= SUPPORT_BAND_PCT) ||
     (ma50 !== null && Math.abs((close - ma50) / ma50) * 100 <= SUPPORT_BAND_PCT);
