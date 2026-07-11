@@ -187,6 +187,8 @@ export function roc(closes: number[], period: number): (number | null)[] {
 }
 
 export interface IndicatorSeries {
+  ma5: (number | null)[];
+  ma10: (number | null)[];
   ma20: (number | null)[];
   ma50: (number | null)[];
   ma200: (number | null)[];
@@ -203,6 +205,8 @@ export function computeIndicatorSeries(bars: OhlcvBar[]): IndicatorSeries {
   const closes = bars.map((b) => b.close);
   const volumes = bars.map((b) => b.volume);
   return {
+    ma5: sma(closes, 5),
+    ma10: sma(closes, 10),
     ma20: sma(closes, 20),
     ma50: sma(closes, 50),
     ma200: sma(closes, 200),

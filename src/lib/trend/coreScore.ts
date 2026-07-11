@@ -18,7 +18,14 @@ export function scoreMaAlignment(
   close: number,
   ma20: number | null,
   ma50: number | null,
-  ma200: number | null
+  ma200: number | null,
+  /**
+   * 2026-07-11：中短線強訊號 MA5>MA10>MA20，選填（只有台股版會傳，見 calculateTwDailySignal.ts）。
+   * 美股版維持原本 5 項檢查、分母不變（沒有對應美股回測證據前不動美股行為）。
+   * TODO: 待回測驗證這個因子對 20 日超額報酬的實際貢獻，目前只是加進均線排列分數，還沒獨立驗證過。
+   */
+  ma5?: number | null,
+  ma10?: number | null
 ): number {
   const checks = [
     ma20 !== null && close > ma20,
@@ -27,6 +34,9 @@ export function scoreMaAlignment(
     ma20 !== null && ma50 !== null && ma20 > ma50,
     ma50 !== null && ma200 !== null && ma50 > ma200,
   ];
+  if (ma5 !== undefined && ma10 !== undefined) {
+    checks.push(ma5 !== null && ma10 !== null && ma20 !== null && ma5 > ma10 && ma10 > ma20);
+  }
   const passed = checks.filter(Boolean).length;
   return (passed / checks.length) * 100;
 }

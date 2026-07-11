@@ -92,7 +92,9 @@ export function calculateTwTrendSignalAtIndex(
     bar.close,
     series.ma20[targetIndex],
     series.ma50[targetIndex],
-    series.ma200[targetIndex]
+    series.ma200[targetIndex],
+    series.ma5[targetIndex],
+    series.ma10[targetIndex]
   );
   const momentumScore = scoreMomentum(series.rsi14[targetIndex], series.roc20[targetIndex]);
   const adxScore = scoreAdx(series.adx14[targetIndex]);
