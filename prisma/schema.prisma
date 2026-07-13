@@ -52,6 +52,7 @@ model Stock {
   dailyPrices          TwDailyPrice[]
   fundamentals         TwStockFundamentals[]
   monthlyRevenues      TwMonthlyRevenue[]
+  youtubeMentions      YoutubeStockMention[]
 
   @@unique([market, ticker])
   @@index([sectorId])
@@ -280,4 +281,82 @@ model TwBrokerBranchFlow {
   @@unique([stockId, tradeDate, brokerName])
   @@index([tradeDate])
   @@map("tw_broker_branch_flow")
+}
+
+/// 逐字稿來源：caption=官方/自動字幕（游庭皓頻道有）、whisper=語音轉文字（EBC/Gooaye沒有字幕，走這條）
+enum TranscriptSource {
+  caption
+  whisper
+}
+
+/// LLM 從逐字稿判讀出的個股情緒
+enum MentionSentiment {
+  bullish
+  bearish
+  neutral
+}
+
+/// 影片情緒 vs 系統當下 TrendStatus 的交叉比對結果。TrendStatus 完全沒有看空分類，
+/// 所以 bearish/neutral 一律 noData（無從比較）；bullish 時，系統當下有訊號=agree，
+/// 沒有訊號=aheadOfSystem（網紅已經看多但系統還沒亮燈，這才是最有價值的落差案例，
+/// 不叫 disagree 避免誤導成「系統判斷錯誤」）。
+enum MentionAgreement {
+  agree
+  aheadOfSystem
+  noData
+}
+
+/// YouTube 財經頻道影片（2026-07-13新增）：頻道清單是 src/config/youtubeChannels.ts 裡
+/// 固定的3個頻道（少量、手動維護，比照 group_config.json 的做法，不建 DB table）。
+/// 新影片先用頻道 RSS feed 發現（stub row，transcript 為 null），字幕/語音轉文字在
+/// GitHub Actions 另一個 workflow 跑完後回填，再觸發 LLM 解析出 mentions。
+model YoutubeVideo {
+  id                 Int               @id @default(autoincrement())
+  channelId          String            @map("channel_id")
+  videoId            String            @unique @map("video_id")
+  title              String
+  publishedAt        DateTime          @map("published_at")
+  transcript         String?           @db.Text
+  transcriptSource   TranscriptSource? @map("transcript_source")
+  /// 擷取失敗次數，超過3次不再重試（保護 GH Actions 免費分鐘數）
+  transcriptAttempts Int               @default(0) @map("transcript_attempts")
+  transcriptFailedAt DateTime?         @map("transcript_failed_at")
+  /// LLM 判讀出的整體市場看法摘要
+  summary            String?           @db.Text
+  processedAt        DateTime?         @map("processed_at")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  mentions YoutubeStockMention[]
+
+  @@index([channelId, publishedAt])
+  @@index([processedAt])
+  @@map("youtube_videos")
+}
+
+/// 單支影片裡提到的個股（2026-07-13新增）。stockId 為 null 代表：FinMind 比對出0筆或2筆以上
+/// 候選，無法自動判定，保留在 resolutionNote 供人工比對（比照既有的 seedTw.ts 驗證方式），
+/// 不做 fuzzy match 硬猜。US 個股提及一律不自動新增，只比對已追蹤清單。
+model YoutubeStockMention {
+  id               BigInt            @id @default(autoincrement())
+  videoId          Int               @map("video_id")
+  stockId          Int?              @map("stock_id")
+  /// LLM 逐字擷取出的原始個股名稱或代號（未經正規化）
+  rawNameOrTicker  String            @map("raw_name_or_ticker")
+  sentiment        MentionSentiment
+  reasoningExcerpt String            @map("reasoning_excerpt") @db.Text
+  isNewStock       Boolean           @default(false) @map("is_new_stock")
+  /// stockId 為 null 時，記錄無法自動判定的原因（例如「FinMind比對到2筆候選」）
+  resolutionNote   String?           @map("resolution_note")
+  /// 交叉比對當下（mention 建立時）的系統 TrendStatus 快照，之後不會重算
+  systemStatus     TrendStatus?      @map("system_status")
+  agreement        MentionAgreement? @map("agreement")
+  createdAt        DateTime          @default(now()) @map("created_at")
+
+  video YoutubeVideo @relation(fields: [videoId], references: [id])
+  stock Stock?       @relation(fields: [stockId], references: [id])
+
+  @@index([videoId])
+  @@index([stockId])
+  @@map("youtube_stock_mentions")
 }

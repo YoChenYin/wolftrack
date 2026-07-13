@@ -241,6 +241,40 @@
 - 24檔缺資料股票補齊後，`/api/theme-valuation` 正確回傳真實 PE/PB（例：3491昇達科技 PE=138.95、8088品安科技 PE=21.62）
 - production 逐項確認：板塊dropdown、PE/PB表格、板塊熱圖、資金流動折線圖、籌碼領先名單、公司名稱簡化、hover說明，全部正常顯示
 
+（註：2.10之後、本節之前，還有回測引擎/門檻校正、月營收、MA5>MA10>MA20訊號、產業鏈訊號燈號等功能，這份文件尚未補上對應章節，之後有空再補。）
+
+### 2.11 YouTube財經頻道「網紅視角」：頻道抓取＋LLM解析＋個股交叉驗證（2026-07-13）
+
+**目標**：抓取3個台股財經YouTube頻道（理財達人秀EBCmoneyshow、游庭皓的財經皓角、Gooaye股癌）的內容，用LLM解析出提到的個股、看多看空立場、對大盤的看法；把影片提到但系統還沒追蹤的個股加進資料庫；並把每支被提到股票的影片情緒和系統當下的TrendStatus分類做交叉比對，找出「網紅已經看多但系統還沒亮燈」的落差案例。
+
+**實測驗證過的關鍵事實**：新影片清單用頻道RSS feed（`https://www.youtube.com/feeds/videos.xml?channel_id=...`）就能拿到，不需要YouTube Data API v3 key；3個頻道裡只有游庭皓有自動字幕，理財達人秀和股癌完全沒有字幕，必須語音轉文字——這是使用者明確選擇的架構決策點：不用付費雲端STT（OpenAI/Groq），改用GitHub Actions runner跑開源faster-whisper模型（`small`，int8），免費但受GH Actions分鐘數限制、非即時。
+
+**技術實作**：
+- Schema新增 `YoutubeVideo`/`YoutubeStockMention` 兩張表 + `TranscriptSource`/`MentionSentiment`/`MentionAgreement` 三個enum（migration `20260713131014_add_youtube_mentions`）
+- `src/config/youtubeChannels.ts`：3個頻道的固定清單（比照group_config.json的做法，少量參考資料用static config不建DB table）
+- `src/lib/youtube/fetchChannelRss.ts` + `runYoutubeDiscovery.ts` + `/api/cron/youtube-discovery`：RSS掃描新影片
+- 新增獨立的 `.github/workflows/youtube-transcribe.yml`（Python + yt-dlp + faster-whisper，跟其他cron job用途差很多特別拆開）+ `scripts/youtube-transcribe.py`：字幕優先，沒字幕才下載音訊跑Whisper，結果回傳給 `/api/youtube/ingest-transcript`
+- `src/lib/youtube/parseTranscript.ts`：這個專案第一次引入LLM API（`@anthropic-ai/sdk`，新增`ANTHROPIC_API_KEY`），用forced tool-use結構化輸出解析逐字稿
+- `src/lib/youtube/resolveStockMention.ts`：個股名稱/代號解析，只有「唯一明確匹配」才自動insert新股（US個股絕不自動新增，模糊/多筆候選留白交人工確認）；`finmindClient.ts`新增`fetchFinMindStockInfo()`
+- `src/lib/marketData/backfillSingleTwStock.ts`：新股自動新增後必須立即單股回補歷史價格/法人資料，否則`runTwDailyBatch`（需≥210天資料）和`runTwDailyUpdate`（只碰已有價格歷史的股票）永遠不會處理這支新股
+- UI：`/tw`首頁「網紅視角」區塊 + 個股detail頁「近期媒體提及」面板
+
+**交叉驗證語意**：`TrendStatus`完全沒有看空分類，所以video情緒=bearish/neutral一律`noData`；bullish時，系統當下有訊號=`agree`，沒有訊號=`aheadOfSystem`（最有價值的案例，不叫`disagree`避免誤導成系統判斷錯誤）。
+
+**本地驗證過程中發現並修正的bug**：
+1. FinMind的`TaiwanStockInfo`同一個ticker常有多筆列（產業分類歷史變更快照，例如某股票曾是「半導體業」後來改「電子工業」），不去重的話`resolveStockMention`會誤判成「查到多筆不同候選」而放棄自動解析——修成依`date`取最新一筆去重。
+2. 更關鍵的發現：FinMind的公司註冊資料裡有些ticker（實測案例：3614誠致）查得到公司名稱/產業別，但TWSE和FinMind都沒有任何實際交易價格歷史（可能是下市或註冊未實際掛牌）。原本的設計只要FinMind比對到唯一候選就自動insert並設`isActive:true`，這種案例會插入一筆永遠不會有資料、系統也永遠不會處理的死股票。修正：新股insert後立即嘗試回補，若拿回0筆價格資料，自動把該股票`isActive`設回`false`，避免弄髒追蹤清單。
+
+**執行結果驗證**（本地，`ANTHROPIC_API_KEY`未設定所以LLM解析這段沒有真的跑，其餘全部驗證過）：
+- `npm run build`成功，`tsc --noEmit`/`eslint`全部乾淨
+- 呼叫`/api/cron/youtube-discovery`：3個頻道共發現45支新影片，正確寫入`youtube_videos`
+- 手動跑`scripts/youtube-transcribe.py`的核心流程：游庭皓一支影片走字幕路徑成功（10613字），理財達人秀一支39秒短片走Whisper路徑成功（231字），都正確POST回`/api/youtube/ingest-transcript`並存入DB（`transcriptSource`分別為`caption`/`whisper`）
+- LLM解析因為沒有API key會fire-and-forget失敗，但有正確被catch記錄、不影響transcript已經存好這件事
+- `resolveStockMention`直接單元測試：ticker精確匹配、公司名稱比對（含股份有限公司尾綴正規化）、查無資料、US股不自動新增、FinMind唯一候選自動新增（含上述bug修正後的驗證）都各自測過
+- `/tw`和`/tw/stock/2330`頁面確認渲染出「網紅視角」/「近期媒體提及」新區塊
+
+**部署前使用者需要手動處理**：Zeabur設定新環境變數`ANTHROPIC_API_KEY`（這個功能第一次用到LLM API）。
+
 ---
 
 ## 三、下一步可能的方向（尚未排入具體任務，等使用者決定優先順序）

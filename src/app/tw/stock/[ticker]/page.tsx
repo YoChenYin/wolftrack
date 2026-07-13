@@ -5,6 +5,8 @@ import { computeGroupValuation } from "@/lib/valuation/computeGroupValuation";
 import { CoreScoreBreakdown } from "@/components/tw/CoreScoreBreakdown";
 import { ValuationSidePanel } from "@/components/tw/ValuationSidePanel";
 import { MonthlyRevenuePanel } from "@/components/tw/MonthlyRevenuePanel";
+import { StockMentionsPanel } from "@/components/youtube/StockMentionsPanel";
+import { fetchStockMentions } from "@/lib/youtube/queries";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +35,8 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
     orderBy: { revenueMonth: "desc" },
     take: 6,
   });
+
+  const stockMentions = await fetchStockMentions(stock.id);
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50">
@@ -67,6 +71,8 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
             cumulativeYoyGrowthPct: r.cumulativeYoyGrowthPct !== null ? Number(r.cumulativeYoyGrowthPct) : null,
           }))}
         />
+
+        <StockMentionsPanel mentions={stockMentions} />
 
         <ValuationSidePanel themesWithoutData={themesWithoutData} valuations={valuations} />
       </main>

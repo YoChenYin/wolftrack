@@ -177,3 +177,55 @@ export async function fetchFinMindLatestValuation(ticker: string): Promise<FinMi
   if (!latest) return null;
   return { date: latest.date, pe: latest.PER, pb: latest.PBR, dividendYield: latest.dividend_yield };
 }
+
+interface FinMindStockInfoRow {
+  industry_category: string;
+  stock_id: string;
+  stock_name: string;
+  type: "twse" | "tpex" | string;
+  date: string;
+}
+
+export interface FinMindStockInfo {
+  ticker: string;
+  name: string;
+  industryCategory: string;
+  type: "twse" | "tpex" | string;
+}
+
+/**
+ * 全市場股票註冊資料（上市+上櫃+興櫃），靜態的整批registry，不需要日期區間。
+ * YouTube個股提及解析（resolveStockMention.ts）用這個把逐字稿裡的公司名稱/代號
+ * 比對成正式ticker，比照這個檔案既有的fetchWithRetry寫法。
+ *
+ * ⚠️ 實測發現：FinMind同一個ticker常常有多筆列（產業分類歷史變更的快照，例如某檔股票
+ * 曾被歸類「半導體業」後來改成「電子工業」），每筆date不同。這裡依date取最新一筆
+ * 依ticker去重——不去重的話，呼叫端（resolveStockMention.ts）會誤判成「查到多筆不同候選」
+ * 而放棄自動解析，即使實際上只有一檔股票。
+ */
+export async function fetchFinMindStockInfo(): Promise<FinMindStockInfo[]> {
+  const url = `${FINMIND_BASE_URL}?dataset=TaiwanStockInfo`;
+  const res = await fetchWithRetry(url);
+  if (!res.ok) {
+    throw new Error(`[finmind] TaiwanStockInfo HTTP ${res.status}`);
+  }
+  const body = (await res.json()) as FinMindResponse<FinMindStockInfoRow>;
+  if (body.status !== 200) {
+    throw new Error(`[finmind] TaiwanStockInfo error: ${body.msg}`);
+  }
+
+  const latestByTicker = new Map<string, FinMindStockInfoRow>();
+  for (const row of body.data) {
+    const existing = latestByTicker.get(row.stock_id);
+    if (!existing || row.date > existing.date) {
+      latestByTicker.set(row.stock_id, row);
+    }
+  }
+
+  return [...latestByTicker.values()].map((row) => ({
+    ticker: row.stock_id,
+    name: row.stock_name,
+    industryCategory: row.industry_category,
+    type: row.type,
+  }));
+}

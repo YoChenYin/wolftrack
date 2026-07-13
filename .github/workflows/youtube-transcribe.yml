@@ -1,0 +1,38 @@
+name: YouTube transcript acquisition
+
+# 獨立於 daily-batch.yml：這支需要 Python + yt-dlp + ffmpeg + faster-whisper，
+# 跟其他 job 單純 curl 觸發完全不同量級，拆開比較清楚。
+# 字幕優先（游庭皓頻道有自動字幕，免跑 Whisper）；沒字幕才下載音訊跑本地開源模型
+# 語音轉文字（EBC/Gooaye兩個頻道），跑在 GitHub Actions runner 上而不是 Zeabur 正式站
+# container，避免拖慢/佔用常駐服務（見 docs 說明，這是使用者明確選擇的方案）。
+on:
+  schedule:
+    # 01:00 台北時間，discovery（23:30跑）之後約1.5小時，讓新影片有機會先被發現
+    - cron: "0 17 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  transcribe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache faster-whisper model weights
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: faster-whisper-small-v1
+
+      - name: Install dependencies
+        run: pip install yt-dlp faster-whisper requests
+
+      - name: Run transcription job
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: python scripts/youtube-transcribe.py

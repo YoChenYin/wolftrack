@@ -11,6 +11,9 @@ on:
     # 台股月營收：官方每月10日左右公布上月營收，抓 10-12 號三天當緩衝（免費 GitHub Actions
     # 排程本身就不保證準時，公司申報也可能延遲，重跑同一天資料是安全的 upsert，不會壞掉）
     - cron: "0 9 10-12 * *"
+    # YouTube 頻道新影片發現：每天（含週末，頻道週末也發文）約當台北時間 23:30，覆蓋3個頻道
+    # 當天典型的發文時間（EBC 21:00、游庭皓 08:30 隔天才追上、Gooaye 不定期）
+    - cron: "30 15 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -39,4 +42,13 @@ jobs:
       - name: Trigger TW monthly revenue fetch
         run: |
           curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/tw-revenue" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+  youtube-discovery:
+    if: github.event.schedule == '30 15 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger YouTube video discovery
+        run: |
+          curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/youtube-discovery" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
