@@ -8,6 +8,9 @@ on:
     - cron: "30 23 * * 1-5"
     # 台股每日更新：約當台北時間 17:00（UTC+8，無日光節約）
     - cron: "0 9 * * 1-5"
+    # 台股月營收：官方每月10日左右公布上月營收，抓 10-12 號三天當緩衝（免費 GitHub Actions
+    # 排程本身就不保證準時，公司申報也可能延遲，重跑同一天資料是安全的 upsert，不會壞掉）
+    - cron: "0 9 10-12 * *"
   workflow_dispatch: {}
 
 jobs:
@@ -27,4 +30,13 @@ jobs:
       - name: Trigger TW daily update
         run: |
           curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/tw-daily" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+  tw-revenue:
+    if: github.event.schedule == '0 9 10-12 * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger TW monthly revenue fetch
+        run: |
+          curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/tw-revenue" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
