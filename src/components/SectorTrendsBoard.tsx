@@ -5,6 +5,7 @@ import { TrendColumn } from "./TrendColumn";
 import { GroupValuationTable } from "./tw/GroupValuationTable";
 import { ThemeHeatmap } from "./tw/ThemeHeatmap";
 import { ThemeFlowChart } from "./tw/ThemeFlowChart";
+import { ChainSignalLights } from "./tw/ChainSignalLights";
 import { ChipLeadingList } from "./tw/ChipLeadingList";
 import { UNCATEGORIZED_THEME_CODE } from "@/lib/valuation/groupConfig";
 import type { SectorTrendsGrouped } from "@/lib/trend/sectorTrendsQuery";
@@ -122,6 +123,8 @@ export function SectorTrendsBoard({
       </div>
 
       {data.asOfDate && <p className="text-xs text-zinc-400">資料日期（as of）：{data.asOfDate}</p>}
+
+      {market === "TW" && <ChainSignalLights />}
 
       {market === "TW" && <ThemeFlowChart />}
 
