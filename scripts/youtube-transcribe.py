@@ -24,8 +24,17 @@ CAPTION_LANGS = ["zh-Hant", "zh-TW", "zh"]
 WHISPER_MODEL_SIZE = "small"
 
 
+PENDING_BATCH_LIMIT = 10  # 對齊 pending-transcripts route.ts 的 MAX_LIMIT
+MAX_ROUNDS = 50  # 安全上限，避免因為某種bug無限迴圈（正常情況遠遠用不到這麼多輪）
+
+
 def fetch_pending():
-    res = requests.get(f"{APP_URL}/api/youtube/pending-transcripts", headers=HEADERS, timeout=30)
+    res = requests.get(
+        f"{APP_URL}/api/youtube/pending-transcripts",
+        headers=HEADERS,
+        params={"limit": PENDING_BATCH_LIMIT},
+        timeout=30,
+    )
     res.raise_for_status()
     return res.json()["videos"]
 
@@ -170,10 +179,22 @@ def process_video(video: dict):
 
 
 def main():
-    videos = fetch_pending()
-    print(f"{len(videos)} pending video(s)")
-    for video in videos:
-        process_video(video)
+    """
+    每輪抓一批pending影片處理完，再抓下一批，直到抓回空清單為止——這樣「補過去一週累積的
+    影片」只需要手動觸發一次workflow，不用因為pending-transcripts單次回傳筆數上限（10筆）
+    而重複手動點好幾次。用MAX_ROUNDS當安全上限，實際會先被workflow本身的90分鐘timeout擋住。
+    """
+    total_processed = 0
+    for round_num in range(1, MAX_ROUNDS + 1):
+        videos = fetch_pending()
+        if not videos:
+            print(f"round {round_num}: no more pending videos, done")
+            break
+        print(f"round {round_num}: {len(videos)} pending video(s)")
+        for video in videos:
+            process_video(video)
+            total_processed += 1
+    print(f"total processed: {total_processed}")
 
 
 if __name__ == "__main__":
