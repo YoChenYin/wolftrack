@@ -23,6 +23,19 @@ HEADERS = {"Authorization": f"Bearer {CRON_SECRET}"}
 CAPTION_LANGS = ["zh-Hant", "zh-TW", "zh"]
 WHISPER_MODEL_SIZE = "small"
 
+# GitHub Actions runner的IP會被YouTube的反機器人機制擋下來（"Sign in to confirm you're
+# not a bot"，yt-dlp社群裡很常見的雲端IP問題），帶著登入過的cookies才能繞過。
+# workflow一律會寫出這個檔案，但secret沒設定時內容是空的——用檔案大小判斷，而不是
+# 只看env var有沒有設定（本機手動測試沒有這個env var時，get()就直接回傳None跳過）。
+_cookies_path = os.environ.get("YOUTUBE_COOKIES_FILE")
+COOKIES_FILE = _cookies_path if _cookies_path and os.path.getsize(_cookies_path) > 0 else None
+
+
+def _with_cookies(opts: dict) -> dict:
+    if COOKIES_FILE:
+        opts["cookiefile"] = COOKIES_FILE
+    return opts
+
 
 PENDING_BATCH_LIMIT = 10  # 對齊 pending-transcripts route.ts 的 MAX_LIMIT
 MAX_ROUNDS = 50  # 安全上限，避免因為某種bug無限迴圈（正常情況遠遠用不到這麼多輪）
@@ -80,7 +93,7 @@ def vtt_to_text(vtt_path: str) -> str:
 
 
 def try_fetch_captions(video_url: str, video_id: str, workdir: str) -> str | None:
-    opts = {
+    opts = _with_cookies({
         "writeautomaticsub": True,
         "writesubtitles": True,
         "subtitleslangs": CAPTION_LANGS,
@@ -89,7 +102,7 @@ def try_fetch_captions(video_url: str, video_id: str, workdir: str) -> str | Non
         "outtmpl": os.path.join(workdir, f"{video_id}.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
-    }
+    })
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([video_url])
@@ -105,12 +118,12 @@ def try_fetch_captions(video_url: str, video_id: str, workdir: str) -> str | Non
 
 
 def download_audio(video_url: str, video_id: str, workdir: str) -> str | None:
-    opts = {
+    opts = _with_cookies({
         "format": "bestaudio/best",
         "outtmpl": os.path.join(workdir, f"{video_id}.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
-    }
+    })
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([video_url])

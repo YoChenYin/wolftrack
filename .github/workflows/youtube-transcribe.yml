@@ -31,8 +31,21 @@ jobs:
       - name: Install dependencies
         run: pip install yt-dlp faster-whisper requests
 
+      # 不用 `if: secrets.X != ''` 判斷要不要寫這個檔案——secrets在if條件式裡的支援度
+      # 不同版本/linter行為不一致，容易出問題。改成一律寫檔（secret沒設定時就是空檔案），
+      # 交給Python那邊檢查檔案是否非空再決定要不要帶cookiefile，邏輯簡單很多。
+      - name: Write YouTube cookies file
+        env:
+          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+        run: echo "$YOUTUBE_COOKIES" > "$RUNNER_TEMP/youtube-cookies.txt"
+
+      # GitHub Actions runner的IP常被YouTube的反機器人機制擋下來（"Sign in to confirm
+      # you're not a bot"），需要帶登入過的cookies才能繞過，見docs/progress-status.md裡
+      # YOUTUBE_COOKIES secret的設定說明。沒設定這個secret時腳本會跳過cookies直接跑，
+      # 遇到bot check多半會失敗。
       - name: Run transcription job
         env:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          YOUTUBE_COOKIES_FILE: ${{ runner.temp }}/youtube-cookies.txt
         run: python scripts/youtube-transcribe.py
