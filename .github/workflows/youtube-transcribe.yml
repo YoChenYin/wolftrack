@@ -47,8 +47,13 @@ jobs:
           f="$RUNNER_TEMP/youtube-cookies.txt"
           echo "byte size: $(wc -c < "$f")"
           echo "line count: $(wc -l < "$f")"
-          echo "first line: $(head -1 "$f")"
-          echo "lines mentioning youtube.com: $(grep -c 'youtube\.com' "$f" || true)"
+          if head -1 "$f" | grep -q '^# Netscape HTTP Cookie File'; then
+            echo "header format: OK (starts with '# Netscape HTTP Cookie File')"
+          else
+            echo "header format: MISSING or WRONG — this is likely why yt-dlp ignores the file"
+          fi
+          echo "domains present (no cookie values shown):"
+          grep -v '^#' "$f" | grep -v '^$' | awk -F'\t' '{print $1}' | sort -u
 
       # GitHub Actions runner的IP常被YouTube的反機器人機制擋下來（"Sign in to confirm
       # you're not a bot"），需要帶登入過的cookies才能繞過，見docs/progress-status.md裡
