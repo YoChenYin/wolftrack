@@ -39,6 +39,17 @@ jobs:
           YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
         run: echo "$YOUTUBE_COOKIES" > "$RUNNER_TEMP/youtube-cookies.txt"
 
+      # 排查用：確認cookies檔案格式對不對，不印出實際cookie值（domain/name/value那些
+      # 敏感欄位），只印檔案大小、行數、開頭那行（應該是"# Netscape HTTP Cookie File"
+      # 這種註解，本身不敏感）、以及含youtube.com網域的行數。
+      - name: Debug cookies file shape
+        run: |
+          f="$RUNNER_TEMP/youtube-cookies.txt"
+          echo "byte size: $(wc -c < "$f")"
+          echo "line count: $(wc -l < "$f")"
+          echo "first line: $(head -1 "$f")"
+          echo "lines mentioning youtube.com: $(grep -c 'youtube\.com' "$f" || true)"
+
       # GitHub Actions runner的IP常被YouTube的反機器人機制擋下來（"Sign in to confirm
       # you're not a bot"），需要帶登入過的cookies才能繞過，見docs/progress-status.md裡
       # YOUTUBE_COOKIES secret的設定說明。沒設定這個secret時腳本會跳過cookies直接跑，
