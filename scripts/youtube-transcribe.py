@@ -67,13 +67,18 @@ def ingest_success(video_id: int, transcript: str, source: str):
 
 
 def ingest_failure(video_id: int):
-    res = requests.post(
-        f"{APP_URL}/api/youtube/ingest-transcript",
-        headers=HEADERS,
-        json={"id": video_id, "failed": True},
-        timeout=30,
-    )
-    res.raise_for_status()
+    # 這支呼叫本身失敗（例如Zeabur暫時性502）不該讓整個batch中斷——寧可這支影片的
+    # transcriptAttempts沒累加成功（下次還會被retry），也不要讓後面幾十支影片完全沒被處理到。
+    try:
+        res = requests.post(
+            f"{APP_URL}/api/youtube/ingest-transcript",
+            headers=HEADERS,
+            json={"id": video_id, "failed": True},
+            timeout=30,
+        )
+        res.raise_for_status()
+    except Exception as e:
+        print(f"  (also failed to report failure for video {video_id}, will be retried next run: {e})")
 
 
 def vtt_to_text(vtt_path: str) -> str:
