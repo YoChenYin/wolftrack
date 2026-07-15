@@ -4,16 +4,15 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 
 /**
- * 排程觸發：跑 scripts/youtube-transcribe.py（字幕優先，沒字幕就下載音訊跑faster-whisper）。
+ * 排程觸發：跑 scripts/youtube-transcribe.py（下載Podcast MP3 + faster-whisper轉錄）。
  *
- * 這支腳本原本是在GitHub Actions runner上跑，但YouTube的反機器人機制會擋GitHub Actions
- * 的IP（"Sign in to confirm you're not a bot"），cookies跟偽裝手機App用戶端兩種常見繞過
- * 方式都試過仍被擋，改成直接在這個container內跑（見repo根目錄Dockerfile），用子行程
+ * 這支腳本原本用yt-dlp直接抓YouTube，但YouTube的反機器人機制在雲端環境（GitHub Actions、
+ * Zeabur）一律擋下（cookies、偽裝手機App用戶端、PO Token provider都試過仍被擋），最後
+ * 改成從這些節目的Podcast RSS feed抓（沒有反爬蟲機制），跑在這個container內、用子行程
  * 執行、不阻塞這支API本身的回應。
  *
  * 已知取捨：faster-whisper轉錄很吃CPU，會跟同一個container上的網頁請求搶運算資源，
- * 這是使用者知情後接受的風險（原本選GitHub Actions就是為了避免這個問題，但GitHub
- * Actions的IP被擋，兩害相權取其輕）。
+ * 這是使用者知情後接受的風險。
  */
 export async function POST(request: NextRequest) {
   if (!isAuthorizedCronRequest(request)) {

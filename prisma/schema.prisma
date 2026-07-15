@@ -308,17 +308,25 @@ enum MentionAgreement {
 
 /// YouTube 財經頻道影片（2026-07-13新增）：頻道清單是 src/config/youtubeChannels.ts 裡
 /// 固定的3個頻道（少量、手動維護，比照 group_config.json 的做法，不建 DB table）。
-/// 新影片先用頻道 RSS feed 發現（stub row，transcript 為 null），字幕/語音轉文字在
-/// GitHub Actions 另一個 workflow 跑完後回填，再觸發 LLM 解析出 mentions。
+///
+/// 2026-07-15改版：YouTube本身（yt-dlp）在雲端環境（GitHub Actions、Zeabur）一律被反機器人
+/// 機制擋下（"Sign in to confirm you're not a bot"），cookies/PO Token/代理都試過仍被擋，
+/// 改成從這3個節目對應的Podcast RSS feed抓取（SoundOn/SoundCloud等標準podcast host，
+/// 沒有反爬蟲機制）。channelId/videoId欄位保留原名（避免大改schema/API路徑），語意變成
+/// 「podcast節目slug」/「episode guid」；新增audioUrl存實際的MP3下載連結。
+/// 新集數先用podcast RSS feed發現（stub row，transcript 為 null），語音轉文字在
+/// Zeabur container內用faster-whisper跑完後回填，再觸發 LLM 解析出 mentions。
 model YoutubeVideo {
   id                 Int               @id @default(autoincrement())
   channelId          String            @map("channel_id")
   videoId            String            @unique @map("video_id")
   title              String
   publishedAt        DateTime          @map("published_at")
+  /// Podcast episode的MP3直接下載連結（discovery當下抓到的，用來給轉錄步驟下載音檔）
+  audioUrl           String?           @map("audio_url")
   transcript         String?           @db.Text
   transcriptSource   TranscriptSource? @map("transcript_source")
-  /// 擷取失敗次數，超過3次不再重試（保護 GH Actions 免費分鐘數）
+  /// 擷取失敗次數，超過3次不再重試（保護運算資源）
   transcriptAttempts Int               @default(0) @map("transcript_attempts")
   transcriptFailedAt DateTime?         @map("transcript_failed_at")
   /// LLM 判讀出的整體市場看法摘要

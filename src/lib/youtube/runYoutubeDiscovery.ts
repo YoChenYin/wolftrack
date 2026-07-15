@@ -8,15 +8,15 @@ export interface YoutubeDiscoveryResult {
 }
 
 /**
- * 掃描3個固定頻道的 RSS feed，把還沒見過的影片存成 stub row（transcript 為 null），
- * 等 GitHub Actions 的 youtube-transcribe workflow 抓到字幕/語音轉文字後再回填。
+ * 掃描3個固定節目的Podcast RSS feed，把還沒見過的集數存成 stub row（transcript 為 null），
+ * 等 /api/cron/youtube-transcribe 下載音檔+跑faster-whisper後回填。
  */
 export async function runYoutubeDiscovery(): Promise<YoutubeDiscoveryResult> {
   let newVideos = 0;
   let checked = 0;
 
   for (const channel of YOUTUBE_CHANNELS) {
-    const entries = await fetchChannelRss(channel.channelId);
+    const entries = await fetchChannelRss(channel.podcastFeedUrl);
     checked += entries.length;
 
     for (const entry of entries) {
@@ -29,6 +29,7 @@ export async function runYoutubeDiscovery(): Promise<YoutubeDiscoveryResult> {
           videoId: entry.videoId,
           title: entry.title,
           publishedAt: new Date(entry.publishedAt),
+          audioUrl: entry.audioUrl,
         },
       });
       newVideos++;

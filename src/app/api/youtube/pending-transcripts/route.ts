@@ -7,9 +7,9 @@ const MAX_LIMIT = 10;
 const MAX_ATTEMPTS = 3;
 
 /**
- * 給 youtube-transcribe.yml（GitHub Actions）用：回傳還沒有transcript、且失敗次數
- * 沒超過上限的影片清單。限制筆數是為了讓每次 GH Actions 執行時間可預期（yt-dlp+Whisper
- * 一支就可能跑好幾分鐘）。
+ * 給 scripts/youtube-transcribe.py（在Zeabur container內執行）用：回傳還沒有transcript、
+ * 且失敗次數沒超過上限的集數清單，含Podcast MP3下載連結。限制筆數是為了讓每次執行時間
+ * 可預期（下載音檔+跑Whisper一支就可能跑好幾分鐘）。
  */
 export async function GET(request: NextRequest) {
   if (!isAuthorizedCronRequest(request)) {
@@ -22,11 +22,12 @@ export async function GET(request: NextRequest) {
   const videos = await prisma.youtubeVideo.findMany({
     where: {
       transcript: null,
+      audioUrl: { not: null },
       OR: [{ transcriptFailedAt: null }, { transcriptAttempts: { lt: MAX_ATTEMPTS } }],
     },
     orderBy: { publishedAt: "desc" },
     take: limit,
-    select: { id: true, videoId: true, title: true },
+    select: { id: true, videoId: true, title: true, audioUrl: true },
   });
 
   return NextResponse.json({ videos });

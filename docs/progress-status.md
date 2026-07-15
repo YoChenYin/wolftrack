@@ -298,6 +298,26 @@
 
 **改用`bgutil-ytdlp-pot-provider`**（yt-dlp官方PO Token指南推薦的方案）：一個Node.js寫的本地HTTP server（預設監聽127.0.0.1:4416）負責產生PO Token，搭配對應的yt-dlp python plugin（`pip install bgutil-ytdlp-pot-provider`）。Dockerfile新增：clone `Brainicism/bgutil-ytdlp-pot-provider`（pin在1.3.1版）、`npm ci && npx tsc`建置出`server/build/main.js`；新增`docker-entrypoint.sh`在背景啟動這個provider server後再用`exec npm run start`跑主服務（兩個服務共用同一個container）。本地測試過（clone+build+啟動server+`yt-dlp -v`確認plugin正確抓到`bgutil:http-1.3.1 (external)`）沒問題，但因為本地IP本來就沒被擋，沒辦法在本地驗證這是否真的解決YouTube那邊的封鎖，要等部署後才知道。
 
+**PO Token也沒解決（2026-07-15）**：部署後實測，`bgutil` provider server確認成功啟動（log印出"Started POT server (v1.3.1)..."），Zeabur container內部網路也正常（python腳本能正常抓pending清單、回報結果），但yt-dlp還是被擋，包含**有字幕的影片也一樣被擋**——證實反機器人檢查發生在yt-dlp判斷「這支影片有沒有字幕」之前更上游的資訊擷取階段。額外測了「每支影片間加5-10秒隨機延遲、只測3支」排除是頻率觸發的可能性，結果一樣全部立刻失敗。至此cookies、client偽裝、換平台（GitHub Actions→Zeabur）、PO Token、降低頻率，5種免費方法全部確認無效，指向IP本身的名聲已經被列入比「缺Token」更嚴重的封鎖層級，不是技術手段能解的（yt-dlp的issue tracker上也有其他人回報同樣結論：換一個新IP問題就消失了）。
+
+### 2.13 改用Podcast RSS取代YouTube+yt-dlp（2026-07-15）
+
+使用者提出「這3個節目是不是也有Podcast版本」——查證後發現**三個節目都有官方Podcast版本，且內容/主持人相同**：
+- Gooaye股癌：SoundOn平台，`https://feeds.soundon.fm/podcasts/954689a5-.../xml`，679集（股癌本身就是以Podcast起家的節目）
+- 游庭皓的財經皓角：SoundCloud平台，集數標題跟YouTube版本完全一致，確認是同一節目
+- 理財達人秀（EBC）：Podcast品牌名稱是「兆華與股惑仔」，主持人就是理財達人秀主持人李兆華本人，同樣的股市/產業內容
+
+實測Podcast的MP3是直接放在Backblaze B2 + Cloudflare CDN（SoundOn）或SoundCloud自家CDN上，一般HTTP GET就能下載，沒有任何反爬蟲機制——這代表可以完全移除yt-dlp/cookies/PO Token/代理這整條路線，改成單純的「抓RSS + 下載MP3 + faster-whisper」。
+
+**技術實作**：
+- Schema：`YoutubeVideo`新增`audioUrl`欄位存MP3下載連結（migration `20260715150256_add_youtube_video_audio_url`）；`channelId`/`videoId`欄位沿用原名但語意改成「節目slug」/「episode guid」，避免大改schema/API路徑
+- `src/config/youtubeChannels.ts`：`channelId`改成內部slug（`ebc-moneyshow`/`yutinghao-finance`/`gooaye`），新增`podcastFeedUrl`
+- `src/lib/youtube/fetchChannelRss.ts`：整個重寫，從YouTube的Atom feed格式（`<entry>`/`<yt:videoId>`）改成標準Podcast RSS格式（`<item>`/`<guid>`/`<enclosure url="...">`），本地測試過三個真實feed都正確解析
+- `scripts/youtube-transcribe.py`：整個簡化，移除yt-dlp/cookies/extractor_args/字幕判斷邏輯，改成`requests.get(audio_url, stream=True)`直接下載MP3再丟給faster-whisper，程式碼行數少了一半以上
+- `Dockerfile`：移除`git`、yt-dlp、bgutil-ytdlp-pot-provider整套建置步驟，移除`docker-entrypoint.sh`（不用再背景啟動PO Token provider），改回單純`CMD ["npm","run","start"]`
+
+**驗證**：本地真的下載一集股癌實際節目（53MB MP3）並完整跑完faster-whisper轉錄，耗時約18分鐘（55分鐘音訊，約3.1倍實時速度，跟預期的small model在CPU上的速度吻合），輸出可讀的繁中逐字稿，確認整條pipeline技術上可行。因為改用Podcast RSS完全不碰YouTube，理論上不會再遇到反機器人問題，實際效果待部署後在production驗證。
+
 ---
 
 ## 三、下一步可能的方向（尚未排入具體任務，等使用者決定優先順序）

@@ -15,9 +15,9 @@ interface IngestFailureBody {
 }
 
 /**
- * 給 youtube-transcribe.yml（GitHub Actions）用：回傳擷取結果。成功時存transcript並
- * fire-and-forget觸發LLM解析；失敗時累加transcriptAttempts，超過上限就不會再被
- * pending-transcripts撿到（保護GH Actions免費分鐘數，不會無限重試）。
+ * 給 scripts/youtube-transcribe.py（在Zeabur container內執行）用：回傳擷取結果。
+ * 成功時存transcript並fire-and-forget觸發LLM解析；失敗時累加transcriptAttempts，
+ * 超過上限就不會再被pending-transcripts撿到（不會無限重試）。
  */
 export async function POST(request: NextRequest) {
   if (!isAuthorizedCronRequest(request)) {
