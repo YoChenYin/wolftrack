@@ -275,6 +275,25 @@
 
 **部署前使用者需要手動處理**：Zeabur設定新環境變數`ANTHROPIC_API_KEY`（這個功能第一次用到LLM API）。
 
+### 2.12 部署上線後發現：GitHub Actions的IP被YouTube反機器人機制擋下來，改成Docker+Zeabur跑（2026-07-14~15）
+
+部署後實測，discovery（RSS）正常運作，但`scripts/youtube-transcribe.py`在GitHub Actions runner上一律失敗：`ERROR: [youtube] ...: Sign in to confirm you're not a bot`。這是yt-dlp社群裡常見的問題——YouTube會針對雲端/CI的IP範圍（尤其GitHub Actions，因為太多公開repo拿它做類似爬取）加強反機器人檢查。
+
+**依序試過兩種免費繞過方式，都沒解決：**
+1. **Cookies認證**：從備用Google帳號匯出cookies.txt，存成GitHub secret `YOUTUBE_COOKIES`，`scripts/youtube-transcribe.py`帶著跑（`cookiefile`選項）。第一次只匯出了`.youtube.com`網域（漏了`.google.com`底下的關鍵登入驗證cookies），補上後兩個網域都有了，還是一樣的錯誤。
+2. **偽裝手機App用戶端**：yt-dlp的`extractor_args: {youtube: {player_client: ["android","ios","web"]}}`，繞過網頁版client需要的PO token驗證，跟cookies一起加上去，還是被擋。
+
+**結論**：GitHub Actions這個特定服務的IP被鎖得比cookies/client偽裝能解的範圍更嚴格。跟使用者討論後，決定改成在Zeabur的container上直接跑yt-dlp+faster-whisper（原本選GitHub Actions就是為了不要讓這個CPU密集的工作跟正式站搶資源，這次是已知取捨、使用者知情後接受的風險）。
+
+**技術實作**：
+- 新增repo根目錄`Dockerfile`（Zeabur偵測到Dockerfile會自動改用Docker建置，不用額外設定）：`node:22-slim`基底，裝`python3`/`python3-venv`/`ffmpeg`，Python套件裝在venv裡（Debian新版系統Python的PEP668限制，不能直接pip install），`yt-dlp`+`faster-whisper`+`requests`
+- 本地驗證：暫時移除`.env`後跑`next build`跟`prisma generate`都成功（這個專案所有頁面都是`force-dynamic`，不需要build time連DB），降低Docker build階段失敗的風險（沒辦法在這個環境直接跑`docker build`測試）
+- 新增`src/app/api/cron/youtube-transcribe/route.ts`：cron-authorized，用Node的`child_process.spawn`跑`python3 scripts/youtube-transcribe.py`，APP_URL改指向`http://127.0.0.1:$PORT`（同一個container內部呼叫，不用繞出去外部網址），fire-and-forget回傳202
+- `.github/workflows/daily-batch.yml`：`youtube-transcribe` job改成單純curl觸發這支新端點（跟其他cron job一樣的模式），移除原本`youtube-transcribe.yml`裡一大段Python/yt-dlp/faster-whisper/cookies安裝設定（整個獨立workflow檔案刪除）
+- `scripts/youtube-transcribe.py`的cookies/player_client邏輯保留（沒有害處，萬一Zeabur的IP之後也被盯上還能當備案），但不再是必要條件
+
+**部署後待驗證**：Zeabur用Dockerfile建置有沒有成功、yt-dlp在Zeabur的IP上是否真的不會被擋、faster-whisper轉錄會不會明顯拖慢正式站回應速度。
+
 ---
 
 ## 三、下一步可能的方向（尚未排入具體任務，等使用者決定優先順序）
@@ -288,6 +307,13 @@
 7. **個股詳情頁補完**（美股版+台股版）：6M/1Y 趨勢區間圖、三大法人買賣超歷史圖、5/10/20日籌碼集中度排列圖
 8. **部署到 Zeabur**：目前只在本地跑，還沒有正式部署流程
 9. Trend Core 選股（歷史回測，美股版 spec 第二章第4點 / 台股版 spec 5.2）：兩版都還沒做
+
+**2026-07-14 使用者提出的UI/UX待辦（尚未開始）：**
+
+10. `/tw`首頁板塊dropdown版面容易誤導：它只控制PE/PB表格和三個戰術欄位，但視覺上位置讓人以為也控制上面的產業鏈訊號燈號、板塊資金流動折線圖（這兩個區塊其實不受篩選影響）——需要調整版面分組，讓篩選範圍更清楚
+11. 產業鏈訊號燈號（`ChainSignalLights.tsx`）：每個階段（上游/中游/下游/支援層）要能點擊展開，顯示該階段實際包含哪些個股、目前個別表現
+12. 板塊資金流動折線圖（`computeThemeFlow.ts`/`ThemeFlowChart.tsx`）：(a) 目前固定算最近20個交易日，改成顯示資料庫實際能撐到的最長時間；(b) hover時要能明顯標示走強/走弱的族群，不是每條線一樣顯眼
+13. 台股個股漲跌顏色：改成台灣市場慣例（漲=紅、跌=綠），現在應該是共用美股的紅跌綠漲邏輯，需要找出所有共用的漲跌顏色判斷（例如`pctColor`類的function）分market處理
 
 ---
 
