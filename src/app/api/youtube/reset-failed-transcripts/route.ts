@@ -13,8 +13,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await prisma.youtubeVideo.updateMany({
+  // 可選limit：小規模測試時只想解鎖少數幾支影片，不用一次全部重新解鎖
+  const limitParam = Number(request.nextUrl.searchParams.get("limit"));
+  const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : undefined;
+
+  const targets = await prisma.youtubeVideo.findMany({
     where: { transcript: null },
+    select: { id: true },
+    take: limit,
+  });
+
+  const result = await prisma.youtubeVideo.updateMany({
+    where: { id: { in: targets.map((t) => t.id) } },
     data: { transcriptAttempts: 0, transcriptFailedAt: null },
   });
 

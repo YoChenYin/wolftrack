@@ -10,8 +10,10 @@
 import os
 import re
 import glob
+import random
 import shutil
 import tempfile
+import time
 
 import requests
 import yt_dlp
@@ -216,6 +218,9 @@ def main():
         for video in videos:
             process_video(video)
             total_processed += 1
+            delay = random.uniform(5, 10)
+            print(f"  sleeping {delay:.1f}s before next video")
+            time.sleep(delay)
     print(f"total processed: {total_processed}")
 
 
