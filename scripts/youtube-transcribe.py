@@ -34,6 +34,10 @@ COOKIES_FILE = _cookies_path if _cookies_path and os.path.getsize(_cookies_path)
 def _with_cookies(opts: dict) -> dict:
     if COOKIES_FILE:
         opts["cookiefile"] = COOKIES_FILE
+    # cookies加了google.com+youtube.com兩個網域還是被擋的話，問題可能出在yt-dlp預設的
+    # 網頁版player client需要額外的PO token驗證，cookies補不了這塊。改用手機App的client
+    # （android/ios不走網頁那套驗證），是社群裡另一個常見繞過方式，兩個一起加上去試。
+    opts["extractor_args"] = {"youtube": {"player_client": ["android", "ios", "web"]}}
     return opts
 
 
