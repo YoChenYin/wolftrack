@@ -294,6 +294,10 @@
 
 **部署後待驗證**：Zeabur用Dockerfile建置有沒有成功、yt-dlp在Zeabur的IP上是否真的不會被擋、faster-whisper轉錄會不會明顯拖慢正式站回應速度。
 
+**驗證結果（2026-07-15）**：Docker建置成功、網站沒中斷，但**Zeabur的IP一樣被YouTube擋**（同樣的"Sign in to confirm you're not a bot"錯誤），而且**有無字幕都一樣被擋**——證實反機器人檢查發生在yt-dlp判斷「這支影片有沒有字幕」之前更上游的資訊擷取階段，不是字幕/音訊個別被擋。查資料才發現：YouTube從2024-2026開始針對某些用戶端強制要求**BotGuard attestation + PO Token**，這是比cookies更新一層的驗證機制，單純cookies或偽裝用戶端已經不夠。
+
+**改用`bgutil-ytdlp-pot-provider`**（yt-dlp官方PO Token指南推薦的方案）：一個Node.js寫的本地HTTP server（預設監聽127.0.0.1:4416）負責產生PO Token，搭配對應的yt-dlp python plugin（`pip install bgutil-ytdlp-pot-provider`）。Dockerfile新增：clone `Brainicism/bgutil-ytdlp-pot-provider`（pin在1.3.1版）、`npm ci && npx tsc`建置出`server/build/main.js`；新增`docker-entrypoint.sh`在背景啟動這個provider server後再用`exec npm run start`跑主服務（兩個服務共用同一個container）。本地測試過（clone+build+啟動server+`yt-dlp -v`確認plugin正確抓到`bgutil:http-1.3.1 (external)`）沒問題，但因為本地IP本來就沒被擋，沒辦法在本地驗證這是否真的解決YouTube那邊的封鎖，要等部署後才知道。
+
 ---
 
 ## 三、下一步可能的方向（尚未排入具體任務，等使用者決定優先順序）
