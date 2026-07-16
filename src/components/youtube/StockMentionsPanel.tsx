@@ -47,6 +47,22 @@ export function StockMentionsPanel({ mentions }: { mentions: StockMentionItem[] 
                 )}
               </div>
               <p className="mt-1 text-zinc-500">{m.reasoningExcerpt}</p>
+              {(m.entryReason || m.exitCondition) && (
+                <div className="mt-1.5 flex flex-col gap-0.5 rounded bg-zinc-50 p-1.5 text-[11px]">
+                  {m.entryReason && (
+                    <p>
+                      <span className="font-medium text-zinc-500">進場理由：</span>
+                      <span className="text-zinc-600">{m.entryReason}</span>
+                    </p>
+                  )}
+                  {m.exitCondition && (
+                    <p>
+                      <span className="font-medium text-zinc-500">出場條件：</span>
+                      <span className="text-zinc-600">{m.exitCondition}</span>
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}

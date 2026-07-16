@@ -12,6 +12,10 @@ export interface TranscriptMention {
   market: "TW" | "US" | "unknown";
   sentiment: "bullish" | "bearish" | "neutral";
   reasoningExcerpt: string;
+  /** 進場理由（例如「季報優於預期、法人開始加碼」），逐字稿沒明確提到就是null，不要硬湊 */
+  entryReason: string | null;
+  /** 出場條件（例如「跌破月線」「本益比超過20倍」「到目標價」），沒提到就是null */
+  exitCondition: string | null;
 }
 
 export interface TranscriptAnalysis {
@@ -24,7 +28,11 @@ const TOOL_NAME = "record_video_analysis";
 const SYSTEM_PROMPT = `你是專業的財經內容分析師，任務是從台股/美股財經YouTube節目的逐字稿中，
 萃取出主持人或來賓對個股的具體看法。只記錄逐字稿裡明確、有方向性判斷依據的個股提及
 （例如明確表態看多/看空、給出具體理由），不要把單純提到股票名稱但沒有立場的情況也算進去，
-也不要幻覺出逐字稿沒有提到的個股。summary欄位用2-3句話總結整支影片對大盤/總經的看法。`;
+也不要幻覺出逐字稿沒有提到的個股。summary欄位用2-3句話總結整支影片對大盤/總經的看法。
+
+如果逐字稿有提到具體的進場理由（例如「季報優於預期」「法人開始加碼」「剛突破頸線」）就填entryReason，
+如果有提到出場條件/停損停利點（例如「跌破月線」「本益比超過20倍該獲利了結」「到目標價OO元」）就填
+exitCondition。這兩個欄位只記錄逐字稿明確講出來的內容，沒有提到就填null，不要自己推論或硬湊一個。`;
 
 export async function parseTranscript(transcript: string): Promise<TranscriptAnalysis> {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -51,8 +59,16 @@ export async function parseTranscript(transcript: string): Promise<TranscriptAna
                   market: { type: "string", enum: ["TW", "US", "unknown"] },
                   sentiment: { type: "string", enum: ["bullish", "bearish", "neutral"] },
                   reasoningExcerpt: { type: "string", description: "支持這個判斷的逐字稿原文摘錄或改寫" },
+                  entryReason: {
+                    type: ["string", "null"],
+                    description: "逐字稿明確提到的進場理由，沒提到就是null，不要推論或硬湊",
+                  },
+                  exitCondition: {
+                    type: ["string", "null"],
+                    description: "逐字稿明確提到的出場條件/停損停利點，沒提到就是null，不要推論或硬湊",
+                  },
                 },
-                required: ["rawNameOrTicker", "market", "sentiment", "reasoningExcerpt"],
+                required: ["rawNameOrTicker", "market", "sentiment", "reasoningExcerpt", "entryReason", "exitCondition"],
               },
             },
           },

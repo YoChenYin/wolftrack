@@ -12,6 +12,8 @@ export interface VideoMentionItem {
   sentiment: string;
   agreement: string | null;
   isNewStock: boolean;
+  entryReason: string | null;
+  exitCondition: string | null;
 }
 
 export interface VideoMentionSummary {
@@ -29,6 +31,8 @@ function toMentionItem(row: {
   sentiment: string;
   agreement: string | null;
   isNewStock: boolean;
+  entryReason: string | null;
+  exitCondition: string | null;
   stock: { ticker: string; companyName: string } | null;
 }): VideoMentionItem {
   return {
@@ -39,6 +43,8 @@ function toMentionItem(row: {
     sentiment: row.sentiment,
     agreement: row.agreement,
     isNewStock: row.isNewStock,
+    entryReason: row.entryReason,
+    exitCondition: row.exitCondition,
   };
 }
 

@@ -58,6 +58,8 @@ export async function runYoutubeParseAndResolve(videoId: number): Promise<void> 
         rawNameOrTicker: mention.rawNameOrTicker,
         sentiment: mention.sentiment,
         reasoningExcerpt: mention.reasoningExcerpt,
+        entryReason: mention.entryReason,
+        exitCondition: mention.exitCondition,
         isNewStock: resolved.isNewStock,
         resolutionNote: resolved.resolutionNote,
         systemStatus,

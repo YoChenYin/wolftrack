@@ -353,6 +353,11 @@ model YoutubeStockMention {
   rawNameOrTicker  String            @map("raw_name_or_ticker")
   sentiment        MentionSentiment
   reasoningExcerpt String            @map("reasoning_excerpt") @db.Text
+  /// 2026-07-16新增：LLM整理出的進場理由（例如「季報優於預期、法人開始加碼」），
+  /// 逐字稿沒有明確提到就是null，不要求每個mention都硬湊一個
+  entryReason      String?           @map("entry_reason") @db.Text
+  /// 出場條件（例如「跌破月線」「本益比超過20倍」「達到目標價後」），同樣沒提到就是null
+  exitCondition    String?           @map("exit_condition") @db.Text
   isNewStock       Boolean           @default(false) @map("is_new_stock")
   /// stockId 為 null 時，記錄無法自動判定的原因（例如「FinMind比對到2筆候選」）
   resolutionNote   String?           @map("resolution_note")
