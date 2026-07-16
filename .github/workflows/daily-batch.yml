@@ -14,8 +14,6 @@ on:
     # YouTube 頻道新影片發現：每天（含週末，頻道週末也發文）約當台北時間 23:30，覆蓋3個頻道
     # 當天典型的發文時間（EBC 21:00、游庭皓 08:30 隔天才追上、Gooaye 不定期）
     - cron: "30 15 * * *"
-    # YouTube 逐字稿擷取：discovery之後約1.5小時，讓新影片有機會先被發現
-    - cron: "0 17 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -53,17 +51,4 @@ jobs:
       - name: Trigger YouTube video discovery
         run: |
           curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/youtube-discovery" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
-
-  # 這支現在只是觸發，實際抓字幕/跑Whisper轉錄的工作是在Zeabur那個container裡跑
-  # （見 src/app/api/cron/youtube-transcribe/route.ts + 根目錄 Dockerfile）——原本
-  # 跑在GitHub Actions runner上，但被YouTube的反機器人機制擋下來（cookies、偽裝手機App
-  # 用戶端都試過仍被擋），改成在Zeabur上跑之後這裡只是單純觸發+fire-and-forget。
-  youtube-transcribe:
-    if: github.event.schedule == '0 17 * * *' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger YouTube transcript acquisition
-        run: |
-          curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/youtube-transcribe" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
