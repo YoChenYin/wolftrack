@@ -318,6 +318,16 @@
 
 **驗證**：本地真的下載一集股癌實際節目（53MB MP3）並完整跑完faster-whisper轉錄，耗時約18分鐘（55分鐘音訊，約3.1倍實時速度，跟預期的small model在CPU上的速度吻合），輸出可讀的繁中逐字稿，確認整條pipeline技術上可行。因為改用Podcast RSS完全不碰YouTube，理論上不會再遇到反機器人問題，實際效果待部署後在production驗證。
 
+**部署後發現更嚴重的問題（2026-07-15夜間）**：反機器人問題確實解決了（Podcast MP3能正常下載），但**跟正式站共用Zeabur container這件事本身直接造成正式站當機**——先是丟37集一次處理，網站完全無回應（連Zeabur後台的重啟/看log都連不上，回報`Please try again later`）；使用者手動重啟後，改成一次只處理1集、Whisper限制1個CPU執行緒再測，網站還是整個卡死超過10分鐘。這代表這個container的CPU資源遠比預期緊繃，不是「跑太多集」的問題，是「同一個container裡有任何faster-whisper在跑」就會讓Next.js的事件迴圈完全被餓死。
+
+**緊急處理（使用者當時已就寢，明確授權自行處理不用再確認）**：
+1. 刪除`Dockerfile`+`.dockerignore`，讓Zeabur恢復成原本的自動偵測Node建置（不再需要Python/faster-whisper跑在這個container上）
+2. 刪除`src/app/api/cron/youtube-transcribe/route.ts`（原本在Zeabur container內用child_process跑轉錄腳本的端點，不再需要）
+3. 轉錄工作**搬回GitHub Actions**（恢復獨立的`youtube-transcribe.yml`，內容跟2026-07-13最早的版本一樣，只是把yt-dlp換成單純`requests.get()`下載Podcast MP3）——現在內容來源已經不是YouTube本身，當初從GitHub Actions搬去Zeabur的理由（yt-dlp被YouTube反機器人機制擋）已經不存在，搬回去GitHub Actions同時解決「不被擋」和「不跟正式站搶資源」兩個問題
+4. `scripts/youtube-transcribe.py`：拿掉Zeabur專用的`MAX_VIDEOS_PER_RUN=1`和`cpu_threads=1`限制，恢復成drain整個pending佇列的設計（GitHub Actions有獨立2 vCPU，不用像跟正式站共用container那樣保守）
+
+推送emergency revert後，Zeabur站台恢復時間比預期久很多（超過20分鐘持續無回應），懷疑跟這個session稍早就記錄過的「Zeabur自動部署不穩定」問題有關，可能需要人工到後台確認部署狀態或手動觸發Redeploy。
+
 ---
 
 ## 三、下一步可能的方向（尚未排入具體任務，等使用者決定優先順序）
