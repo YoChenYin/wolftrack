@@ -19,7 +19,9 @@ interface ChainStageSignal {
   signalRate: number;
   statusBreakdown: Record<string, number>;
   avgReturn5d: number | null;
-  light: "green" | "yellow" | "gray";
+  risingCount: number;
+  fallingCount: number;
+  light: "green" | "yellow" | "gray" | "declining";
   members: ChainStageMember[];
 }
 
@@ -36,6 +38,7 @@ const LIGHT_STYLE: Record<string, { emoji: string; ring: string }> = {
   green: { emoji: "🟢", ring: "ring-emerald-200 bg-emerald-50" },
   yellow: { emoji: "🟡", ring: "ring-amber-200 bg-amber-50" },
   gray: { emoji: "⚪", ring: "ring-zinc-200 bg-zinc-50" },
+  declining: { emoji: "🔻", ring: "ring-sky-200 bg-sky-50" },
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -85,7 +88,7 @@ export function ChainSignalLights() {
       <h2 className="flex items-center gap-1 text-sm font-semibold text-zinc-900">
         產業鏈訊號燈號
         <InfoTooltip>
-          每個階段（上游/中游/下游/支援層）目前有多少比例的成員股票觸發戰術訊號（反轉雷達/蓄勢待發/趨勢穩健/籌碼領先），加上近5日族群平均報酬，綜合判斷燈號：🟢活躍（訊號比例≥30%或近5日報酬≥3%）、🟡初動（有訊號或近5日報酬&gt;0）、⚪平靜（都沒有）。點擊各階段可以展開看實際成員股票。
+          每個階段（上游/中游/下游/支援層）目前有多少比例的成員股票觸發戰術訊號（反轉雷達/蓄勢待發/趨勢穩健/籌碼領先），加上近5日族群平均報酬與實際上漲/下跌檔數，綜合判斷燈號：🔻走弱（近5日報酬&lt;-1%，不管訊號比例多高都優先判定，避免技術面訊號跟實際下跌方向矛盾）、🟢活躍（近5日報酬≥3%，或訊號比例≥30%且報酬沒有轉負）、🟡初動（有訊號或報酬&gt;0）、⚪平靜（都沒有）。點擊各階段可以展開看實際成員股票。
         </InfoTooltip>
       </h2>
 
@@ -125,11 +128,18 @@ export function ChainSignalLights() {
                         </div>
                         {stage.memberCount > 0 ? (
                           <div className="mt-0.5 text-[10px] text-zinc-500">
-                            {Object.entries(stage.statusBreakdown)
-                              .map(([status, count]) => `${STATUS_LABELS[status] ?? status}${count}`)
-                              .join(" ") || "無訊號"}
-                            {" · 5日"}
-                            {formatPct(stage.avgReturn5d)}
+                            {stage.risingCount}漲{stage.fallingCount}跌 · 5日
+                            <span className={`font-medium ${returnColor(stage.avgReturn5d)}`}>
+                              {formatPct(stage.avgReturn5d)}
+                            </span>
+                            {Object.keys(stage.statusBreakdown).length > 0 && (
+                              <>
+                                {" · "}
+                                {Object.entries(stage.statusBreakdown)
+                                  .map(([status, count]) => `${STATUS_LABELS[status] ?? status}${count}`)
+                                  .join(" ")}
+                              </>
+                            )}
                           </div>
                         ) : (
                           <div className="mt-0.5 text-[10px] text-zinc-400">無成員資料</div>

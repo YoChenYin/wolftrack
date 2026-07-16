@@ -22,8 +22,14 @@ export interface ChainStageSignal {
   statusBreakdown: Record<string, number>;
   /** 近5日族群平均報酬(%)，null=沒有足夠股價資料 */
   avgReturn5d: number | null;
-  /** 綜合 signalRate 和 avgReturn5d 判斷的燈號：green=活躍、yellow=初動、gray=平靜 */
-  light: "green" | "yellow" | "gray";
+  /** 有股價資料的成員裡，近5日上漲/下跌的檔數——直接反映族群漲跌分布，不像avgReturn5d
+   * 被少數幾檔大漲/大跌拉走平均，也不像signalRate只看技術面設定、不看實際漲跌方向 */
+  risingCount: number;
+  fallingCount: number;
+  /** 燈號：green=活躍上漲、yellow=初動/多空不明、gray=平靜無資料、declining=族群明顯走弱。
+   * declining一定優先於其他判斷——不會因為signalRate高就蓋掉「族群其實在跌」這件事
+   * （2026-07-17修正：被動元件全部個股下跌但因為signalRate夠高被判成綠燈的bug）。 */
+  light: "green" | "yellow" | "gray" | "declining";
   /** 點開燈號要看的個別成員股票，依報酬率由高到低排序 */
   members: ChainStageMember[];
 }
@@ -38,8 +44,13 @@ const RECENCY_WINDOW_DAYS = 7;
 const RETURN_LOOKBACK_TRADING_DAYS = 6; // 算5日報酬要6筆
 const RETURN_LOOKBACK_CALENDAR_DAYS = 14;
 
-function decideLight(signalRate: number, avgReturn5d: number | null): "green" | "yellow" | "gray" {
-  if (signalRate >= 0.3 || (avgReturn5d !== null && avgReturn5d >= 3)) return "green";
+/** declining永遠優先判斷：族群平均報酬明顯是負的，不管signalRate多高都不該是green/活躍
+ * （舊版bug：pullback/reversal這些技術面訊號本身就常伴隨近期價格走弱，signalRate高
+ * 不代表現在在漲，兩者混在一起用OR判斷會讓「全部下跌」的族群顯示成綠燈）。 */
+function decideLight(signalRate: number, avgReturn5d: number | null): "green" | "yellow" | "gray" | "declining" {
+  if (avgReturn5d !== null && avgReturn5d < -1) return "declining";
+  if (avgReturn5d !== null && avgReturn5d >= 3) return "green";
+  if (signalRate >= 0.3 && (avgReturn5d === null || avgReturn5d >= 0)) return "green";
   if (signalRate > 0 || (avgReturn5d !== null && avgReturn5d > 0)) return "yellow";
   return "gray";
 }
@@ -67,6 +78,8 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
         signalRate: 0,
         statusBreakdown: {},
         avgReturn5d: null,
+        risingCount: 0,
+        fallingCount: 0,
         light: "gray",
         members: [],
       });
@@ -117,6 +130,8 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
     }
     const returns = [...return5dByStockId.values()];
     const avgReturn5d = returns.length > 0 ? Math.round((returns.reduce((a, b) => a + b, 0) / returns.length) * 100) / 100 : null;
+    const risingCount = returns.filter((r) => r > 0).length;
+    const fallingCount = returns.filter((r) => r < 0).length;
 
     const members: ChainStageMember[] = stocks
       .map((s) => ({
@@ -134,6 +149,8 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
       signalRate: Math.round(signalRate * 1000) / 1000,
       statusBreakdown,
       avgReturn5d,
+      risingCount,
+      fallingCount,
       light: decideLight(signalRate, avgReturn5d),
       members,
     });
