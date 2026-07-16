@@ -1,0 +1,42 @@
+name: YouTube transcript acquisition
+
+# 跑在GitHub Actions runner上，不是Zeabur正式站——2026-07-15實測過，即使只轉錄1集、
+# 把faster-whisper限制成1個CPU執行緒，Zeabur那個container還是會完全無法回應長達
+# 10分鐘以上，CPU密集的語音轉文字不該跟正式站共用同一個container。GitHub Actions
+# runner有獨立的2 vCPU，不會影響正式站。
+#
+# 內容來源是Podcast RSS（見scripts/youtube-transcribe.py開頭說明），不是YouTube本身，
+# 所以不會遇到yt-dlp在雲端IP被YouTube反機器人機制擋下的問題（這是本來跑在GitHub Actions
+# 上、後來因為這個問題才一度搬去Zeabur的原因；現在換了內容來源後，原本搬家的理由已經
+# 不存在了，直接搬回來，順便解決CPU共用的問題）。
+on:
+  schedule:
+    # 01:00 台北時間，discovery（23:30跑）之後約1.5小時，讓新集數有機會先被發現
+    - cron: "0 17 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  transcribe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache faster-whisper model weights
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: faster-whisper-small-v1
+
+      - name: Install dependencies
+        run: pip install faster-whisper requests
+
+      - name: Run transcription job
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: python scripts/youtube-transcribe.py
