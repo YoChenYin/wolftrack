@@ -195,7 +195,7 @@ export function ThemeFlowChart() {
                       style={{ background: CATEGORY_COLORS[s.category] ?? "#71717a" }}
                     />
                     {s.category}
-                    <span className={v !== null && v >= 100 ? "text-emerald-600" : "text-red-600"}>
+                    <span className={v !== null && v >= 100 ? "text-red-600" : "text-emerald-600"}>
                       {v !== null ? `${(v - 100).toFixed(1)}%` : "—"}
                     </span>
                   </span>

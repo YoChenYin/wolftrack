@@ -46,7 +46,7 @@ export function GroupValuationTable({ group }: { group: GroupValuationResult }) 
           ))}
         </p>
         <p className="text-xs text-zinc-400">
-          族群近20日 <span className={groupHot ? "font-medium text-emerald-600" : ""}>{formatPct(group.groupAvgReturn20d)}</span>
+          族群近20日 <span className={groupHot ? "font-medium text-red-600" : ""}>{formatPct(group.groupAvgReturn20d)}</span>
           {" · "}大盤 {formatPct(group.marketAvgReturn20d)}
         </p>
       </div>

@@ -43,10 +43,13 @@ function formatChangePct(value: number | null): string {
   return `${sign}${value.toFixed(1)}%`;
 }
 
-function changeColorClass(value: number | null): string {
+/** 台股慣例是漲紅跌綠，跟美股的漲綠跌紅相反，這個元件兩個市場共用，要照market分開判斷 */
+function changeColorClass(value: number | null, market: Market): string {
   if (value === null) return "text-zinc-400";
-  if (value > 0) return "text-emerald-600";
-  if (value < 0) return "text-red-600";
+  const upColor = market === "TW" ? "text-red-600" : "text-emerald-600";
+  const downColor = market === "TW" ? "text-emerald-600" : "text-red-600";
+  if (value > 0) return upColor;
+  if (value < 0) return downColor;
   return "text-zinc-500";
 }
 
@@ -108,7 +111,7 @@ export function TrendColumn({
                   )}
                   {item.revenueYoyGrowthPct !== null && (
                     <span
-                      className={`text-xs font-medium ${item.revenueYoyGrowthPct >= 0 ? "text-emerald-600" : "text-red-600"}`}
+                      className={`text-xs font-medium ${changeColorClass(item.revenueYoyGrowthPct, market)}`}
                       title={`${item.revenueMonth} 月營收年增率`}
                     >
                       {item.revenueYoyGrowthPct >= 20 ? "🚀" : ""}營收{item.revenueYoyGrowthPct >= 0 ? "+" : ""}
@@ -141,7 +144,7 @@ export function TrendColumn({
                 )}
               </div>
 
-              <div className={`shrink-0 text-right text-sm font-semibold ${changeColorClass(item.changePctSinceSignal)}`}>
+              <div className={`shrink-0 text-right text-sm font-semibold ${changeColorClass(item.changePctSinceSignal, market)}`}>
                 {formatChangePct(item.changePctSinceSignal)}
                 <p className="text-[10px] font-normal text-zinc-400">訊號後漲跌幅</p>
               </div>

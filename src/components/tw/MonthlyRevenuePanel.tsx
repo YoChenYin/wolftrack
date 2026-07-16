@@ -20,9 +20,10 @@ function formatPct(value: number | null): string {
   return `${sign}${value.toFixed(1)}%`;
 }
 
+/** 台股慣例：漲(正)=紅、跌(負)=綠 */
 function pctColor(value: number | null): string {
   if (value === null) return "text-zinc-400";
-  return value >= 0 ? "text-emerald-600" : "text-red-600";
+  return value >= 0 ? "text-red-600" : "text-emerald-600";
 }
 
 /**
