@@ -56,6 +56,19 @@ export function ThemeFlowChart() {
 
   const { dates, series } = data;
   const visibleSeries = series.filter((s) => !hiddenCategories.has(s.category));
+
+  // hover當下，哪個族群最強/最弱——用來在線圖跟下方明細都做出視覺強調，不是每條線一樣顯眼
+  let strongestCategory: string | null = null;
+  let weakestCategory: string | null = null;
+  if (hoverIndex !== null) {
+    const atHover = visibleSeries
+      .map((s) => ({ category: s.category, value: s.values[hoverIndex] }))
+      .filter((s): s is { category: string; value: number } => s.value !== null);
+    if (atHover.length > 0) {
+      strongestCategory = atHover.reduce((a, b) => (b.value > a.value ? b : a)).category;
+      weakestCategory = atHover.reduce((a, b) => (b.value < a.value ? b : a)).category;
+    }
+  }
   const allValues = visibleSeries.flatMap((s) => s.values.filter((v): v is number => v !== null));
   const minV = allValues.length > 0 ? Math.min(...allValues, 100) : 95;
   const maxV = allValues.length > 0 ? Math.max(...allValues, 100) : 105;
@@ -138,16 +151,21 @@ export function ThemeFlowChart() {
             strokeDasharray="3,3"
           />
 
-          {visibleSeries.map((s) => (
-            <path
-              key={s.category}
-              d={toPath(s.values)}
-              fill="none"
-              stroke={CATEGORY_COLORS[s.category] ?? "#71717a"}
-              strokeWidth={hoverIndex !== null ? 1.5 : 1.75}
-              opacity={0.85}
-            />
-          ))}
+          {visibleSeries.map((s) => {
+            const isStrongest = s.category === strongestCategory;
+            const isWeakest = s.category === weakestCategory;
+            const isExtreme = isStrongest || isWeakest;
+            return (
+              <path
+                key={s.category}
+                d={toPath(s.values)}
+                fill="none"
+                stroke={CATEGORY_COLORS[s.category] ?? "#71717a"}
+                strokeWidth={hoverIndex === null ? 1.75 : isExtreme ? 2.75 : 1}
+                opacity={hoverIndex === null ? 0.85 : isExtreme ? 1 : 0.25}
+              />
+            );
+          })}
 
           {hoverIndex !== null && (
             <line
@@ -186,15 +204,23 @@ export function ThemeFlowChart() {
           <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 sm:grid-cols-3">
             {series
               .filter((s) => !hiddenCategories.has(s.category))
-              .map((s) => {
-                const v = s.values[hoverIndex];
+              .map((s) => ({ ...s, v: s.values[hoverIndex] }))
+              .sort((a, b) => (b.v ?? -Infinity) - (a.v ?? -Infinity))
+              .map(({ category, v }) => {
+                const isStrongest = category === strongestCategory;
+                const isWeakest = category === weakestCategory;
                 return (
-                  <span key={s.category} className="flex items-center gap-1 text-zinc-500">
+                  <span
+                    key={category}
+                    className={`flex items-center gap-1 ${isStrongest || isWeakest ? "font-medium text-zinc-700" : "text-zinc-500"}`}
+                  >
                     <span
                       className="inline-block h-2 w-2 rounded-full"
-                      style={{ background: CATEGORY_COLORS[s.category] ?? "#71717a" }}
+                      style={{ background: CATEGORY_COLORS[category] ?? "#71717a" }}
                     />
-                    {s.category}
+                    {isStrongest && "🔥"}
+                    {isWeakest && "🧊"}
+                    {category}
                     <span className={v !== null && v >= 100 ? "text-red-600" : "text-emerald-600"}>
                       {v !== null ? `${(v - 100).toFixed(1)}%` : "—"}
                     </span>

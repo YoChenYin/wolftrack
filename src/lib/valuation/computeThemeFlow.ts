@@ -12,8 +12,11 @@ export interface ThemeFlowResult {
   series: ThemeFlowSeries[];
 }
 
-const LOOKBACK_TRADING_DAYS = 20;
-const LOOKBACK_CALENDAR_DAYS = 42; // 20個交易日抓寬鬆一點的日曆天數，含週末假日緩衝
+/// 2026-07-16改版：原本固定只看20個交易日，改成顯示資料庫實際能撐到的最長時間——
+/// 上限抓25個月（跟tw-backfill.ts的BACKFILL_MONTHS預設值一致，回填歷史最多就這麼長，
+/// 抓更長也沒有意義），不再武斷地砍成20天。
+const MAX_LOOKBACK_TRADING_DAYS = 600;
+const MAX_LOOKBACK_CALENDAR_DAYS = 25 * 31; // 25個月，抓寬鬆一點的日曆天數涵蓋週末假日
 
 /**
  * 「資金流動」折線圖用：以 group_config.json 的大分類（14個，比43個 theme 少很多，畫成折線圖才看得清楚）
@@ -41,7 +44,7 @@ export async function computeThemeFlow(): Promise<ThemeFlowResult> {
   });
   const categoriesByStockId = new Map(stocks.map((s) => [s.id, tickerToCategories.get(s.ticker) ?? new Set<string>()]));
 
-  const cutoff = new Date(Date.now() - LOOKBACK_CALENDAR_DAYS * 86_400_000);
+  const cutoff = new Date(Date.now() - MAX_LOOKBACK_CALENDAR_DAYS * 86_400_000);
   const priceRows = await prisma.twDailyPrice.findMany({
     where: { stockId: { in: stocks.map((s) => s.id) }, tradeDate: { gte: cutoff } },
     orderBy: [{ stockId: "asc" }, { tradeDate: "asc" }],
@@ -55,7 +58,7 @@ export async function computeThemeFlow(): Promise<ThemeFlowResult> {
     barsByStockId.set(row.stockId, list);
   }
   for (const list of barsByStockId.values()) {
-    if (list.length > LOOKBACK_TRADING_DAYS + 1) list.splice(0, list.length - (LOOKBACK_TRADING_DAYS + 1));
+    if (list.length > MAX_LOOKBACK_TRADING_DAYS + 1) list.splice(0, list.length - (MAX_LOOKBACK_TRADING_DAYS + 1));
   }
 
   // 用最長的那一檔股票的交易日當作 x 軸日期骨架（TWSE 全市場共用同一套交易日曆，理論上都一樣長）
