@@ -1,6 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { getChain, getChainStagesWithThemes } from "./groupConfig";
 
+/** 點開階段燈號後要看的個別成員股票明細 */
+export interface ChainStageMember {
+  ticker: string;
+  companyName: string;
+  /** 最新一筆（7天內）戰術狀態，null=目前沒有訊號 */
+  status: string | null;
+  /** 近5日報酬(%)，null=沒有足夠股價資料 */
+  return5d: number | null;
+}
+
 export interface ChainStageSignal {
   stageKey: string;
   label: string;
@@ -14,6 +24,8 @@ export interface ChainStageSignal {
   avgReturn5d: number | null;
   /** 綜合 signalRate 和 avgReturn5d 判斷的燈號：green=活躍、yellow=初動、gray=平靜 */
   light: "green" | "yellow" | "gray";
+  /** 點開燈號要看的個別成員股票，依報酬率由高到低排序 */
+  members: ChainStageMember[];
 }
 
 export interface ChainSignalResult {
@@ -56,17 +68,19 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
         statusBreakdown: {},
         avgReturn5d: null,
         light: "gray",
+        members: [],
       });
       continue;
     }
 
     const stocks = await prisma.stock.findMany({
       where: { market: "TW", ticker: { in: tickers } },
-      select: { id: true, ticker: true },
+      select: { id: true, ticker: true, companyName: true },
     });
     const stockIds = stocks.map((s) => s.id);
 
-    // 訊號比例：每檔股票取最新一筆（7天內），統計非 none 的比例
+    // 訊號比例：每檔股票取最新一筆（7天內），統計非 none 的比例；順便建stockId->status
+    // 對照表，點開燈號時每檔股票要顯示自己目前的狀態
     const latestSignals = await prisma.dailyTrendSignal.findMany({
       where: {
         stockId: { in: stockIds },
@@ -74,15 +88,16 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
       },
       orderBy: [{ stockId: "asc" }, { tradeDate: "desc" }],
       distinct: ["stockId"],
-      select: { status: true },
+      select: { stockId: true, status: true },
     });
+    const statusByStockId = new Map(latestSignals.map((row) => [row.stockId, row.status as string]));
     const statusBreakdown: Record<string, number> = {};
     for (const row of latestSignals) {
       statusBreakdown[row.status] = (statusBreakdown[row.status] ?? 0) + 1;
     }
     const signalRate = tickers.length > 0 ? latestSignals.length / tickers.length : 0;
 
-    // 近5日族群平均報酬
+    // 近5日報酬：先算每檔股票自己的，再平均成族群數字
     const cutoff = new Date(Date.now() - RETURN_LOOKBACK_CALENDAR_DAYS * 86_400_000);
     const priceRows = await prisma.twDailyPrice.findMany({
       where: { stockId: { in: stockIds }, tradeDate: { gte: cutoff } },
@@ -95,12 +110,22 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
       if (list.length < RETURN_LOOKBACK_TRADING_DAYS) list.push(Number(row.close));
       barsByStockId.set(row.stockId, list);
     }
-    const returns: number[] = [];
-    for (const closes of barsByStockId.values()) {
+    const return5dByStockId = new Map<number, number>();
+    for (const [stockId, closes] of barsByStockId) {
       if (closes.length <= 5 || closes[5] === 0) continue;
-      returns.push(((closes[0] - closes[5]) / closes[5]) * 100);
+      return5dByStockId.set(stockId, Math.round(((closes[0] - closes[5]) / closes[5]) * 10000) / 100);
     }
+    const returns = [...return5dByStockId.values()];
     const avgReturn5d = returns.length > 0 ? Math.round((returns.reduce((a, b) => a + b, 0) / returns.length) * 100) / 100 : null;
+
+    const members: ChainStageMember[] = stocks
+      .map((s) => ({
+        ticker: s.ticker,
+        companyName: s.companyName,
+        status: statusByStockId.get(s.id) ?? null,
+        return5d: return5dByStockId.get(s.id) ?? null,
+      }))
+      .sort((a, b) => (b.return5d ?? -Infinity) - (a.return5d ?? -Infinity));
 
     stages.push({
       stageKey: stage.stageKey,
@@ -110,6 +135,7 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
       statusBreakdown,
       avgReturn5d,
       light: decideLight(signalRate, avgReturn5d),
+      members,
     });
   }
 
