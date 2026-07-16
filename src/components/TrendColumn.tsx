@@ -144,9 +144,21 @@ export function TrendColumn({
                 )}
               </div>
 
-              <div className={`shrink-0 text-right text-sm font-semibold ${changeColorClass(item.changePctSinceSignal, market)}`}>
-                {formatChangePct(item.changePctSinceSignal)}
+              <div className="shrink-0 text-right">
+                <div className={`text-sm font-semibold ${changeColorClass(item.changePctSinceSignal, market)}`}>
+                  {formatChangePct(item.changePctSinceSignal)}
+                </div>
                 <p className="text-[10px] font-normal text-zinc-400">訊號後漲跌幅</p>
+                <div className="mt-1 text-xs text-zinc-500">
+                  {item.priceNow.toFixed(2)}
+                  <span className={`ml-1 font-medium ${changeColorClass(item.todayChangePct, market)}`}>
+                    {formatChangePct(item.todayChangePct)}
+                  </span>
+                </div>
+                <p className="text-[10px] font-normal text-zinc-400">
+                  今日收盤
+                  {item.volatilitySinceSignal !== null && <> · 波動率{item.volatilitySinceSignal.toFixed(1)}%</>}
+                </p>
               </div>
             </div>
           ))

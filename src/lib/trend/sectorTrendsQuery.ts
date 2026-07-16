@@ -37,6 +37,11 @@ export interface SectorTrendItem {
   priceNow: number;
   /** 訊號後漲跌幅 = (priceNow - priceAtSignal) / priceAtSignal * 100 */
   changePctSinceSignal: number | null;
+  /** 當天(最新交易日)漲跌幅 = (今天收盤 - 前一天收盤) / 前一天收盤 * 100，只有1筆歷史資料時是null */
+  todayChangePct: number | null;
+  /** 訊號後波動率：從訊號日(reversalPointDate)到今天，每日漲跌幅的標準差(%)。
+   * 沒有reversalPointDate就用能查到的全部歷史，資料不足3天時是null */
+  volatilitySinceSignal: number | null;
   /** 2026-07-11：最新一期月營收年增率(%)，TW限定，沒有資料是 null（見 monthlyRevenueClient.ts） */
   revenueYoyGrowthPct: number | null;
   /** 該筆月營收所屬月份，YYYY-MM，方便顯示「這是幾月的資料」 */
@@ -54,6 +59,7 @@ export interface SectorTrendsGrouped {
 }
 
 type SignalRow = {
+  stockId: number;
   coreScore: unknown;
   technicalScore: unknown;
   chipScore: unknown;
@@ -72,7 +78,12 @@ type SignalRow = {
   };
 };
 
-function toItem(row: SignalRow): SectorTrendItem {
+interface VolatilityStats {
+  todayChangePct: number | null;
+  volatilitySinceSignal: number | null;
+}
+
+function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
   const coreScore = Number(row.coreScore);
   const priceAtSignal = row.priceAtSignal !== null ? Number(row.priceAtSignal) : null;
   const priceNow = Number(row.closePrice);
@@ -102,9 +113,72 @@ function toItem(row: SignalRow): SectorTrendItem {
     priceAtSignal,
     priceNow,
     changePctSinceSignal,
+    todayChangePct: stats?.todayChangePct ?? null,
+    volatilitySinceSignal: stats?.volatilitySinceSignal ?? null,
     revenueYoyGrowthPct: latestRevenue?.yoyGrowthPct !== undefined && latestRevenue?.yoyGrowthPct !== null ? Number(latestRevenue.yoyGrowthPct) : null,
     revenueMonth: latestRevenue ? latestRevenue.revenueMonth.toISOString().slice(0, 7) : null,
   };
+}
+
+/** 抓寬鬆一點的歷史窗口，涵蓋大多數reversalPointDate的情況（沒有訊號日的就用能查到的全部） */
+const VOLATILITY_LOOKBACK_DAYS = 90;
+
+/**
+ * 批次算「當天漲跌幅」+「訊號後波動率」，只對最終要顯示的那一小批(已經slice過limit)股票查詢，
+ * 不對整個板塊全部股票算——這兩個指標都需要額外抓每檔股票的歷史序列，對還沒篩選過的
+ * 全板塊（可能300+檔）逐一算會是不必要的查詢量。
+ */
+async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, VolatilityStats>> {
+  if (rows.length === 0) return new Map();
+
+  const stockIds = [...new Set(rows.map((r) => r.stockId))];
+  const cutoff = new Date(Date.now() - VOLATILITY_LOOKBACK_DAYS * 86_400_000);
+  const history = await prisma.dailyTrendSignal.findMany({
+    where: { stockId: { in: stockIds }, tradeDate: { gte: cutoff } },
+    orderBy: [{ stockId: "asc" }, { tradeDate: "asc" }],
+    select: { stockId: true, tradeDate: true, closePrice: true },
+  });
+
+  const seriesByStock = new Map<number, { tradeDate: Date; close: number }[]>();
+  for (const h of history) {
+    const list = seriesByStock.get(h.stockId) ?? [];
+    list.push({ tradeDate: h.tradeDate, close: Number(h.closePrice) });
+    seriesByStock.set(h.stockId, list);
+  }
+  const reversalDateByStock = new Map(rows.map((r) => [r.stockId, r.reversalPointDate]));
+
+  const result = new Map<number, VolatilityStats>();
+  for (const [stockId, series] of seriesByStock) {
+    let todayChangePct: number | null = null;
+    if (series.length >= 2) {
+      const prev = series[series.length - 2].close;
+      const curr = series[series.length - 1].close;
+      if (prev !== 0) todayChangePct = Math.round(((curr - prev) / prev) * 10000) / 100;
+    }
+
+    const reversalDate = reversalDateByStock.get(stockId);
+    const sinceSignalSeries = reversalDate
+      ? series.filter((s) => s.tradeDate.getTime() >= reversalDate.getTime())
+      : series;
+
+    let volatilitySinceSignal: number | null = null;
+    if (sinceSignalSeries.length >= 3) {
+      const dailyReturns: number[] = [];
+      for (let i = 1; i < sinceSignalSeries.length; i++) {
+        const prev = sinceSignalSeries[i - 1].close;
+        const curr = sinceSignalSeries[i].close;
+        if (prev !== 0) dailyReturns.push(((curr - prev) / prev) * 100);
+      }
+      if (dailyReturns.length >= 2) {
+        const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
+        const variance = dailyReturns.reduce((a, b) => a + (b - mean) ** 2, 0) / dailyReturns.length;
+        volatilitySinceSignal = Math.round(Math.sqrt(variance) * 100) / 100;
+      }
+    }
+
+    result.set(stockId, { todayChangePct, volatilitySinceSignal });
+  }
+  return result;
 }
 
 export function clampLimit(raw: number | string | null | undefined): number {
@@ -230,6 +304,14 @@ export async function fetchSectorTrendsGrouped(options: {
     groups[status] = groups[status].slice(0, limit);
   }
   chipLeadingRows.sort((a, b) => Number(b.chipScore) - Number(a.chipScore));
+  const slicedChipLeading = chipLeadingRows.slice(0, CHIP_LEADING_LIMIT);
+
+  const statsByStockId = await computeVolatilityStats([
+    ...groups.reversal,
+    ...groups.pullback,
+    ...groups.bullish,
+    ...slicedChipLeading,
+  ]);
 
   return {
     asOfDate: asOfDate.toISOString().slice(0, 10),
@@ -237,11 +319,11 @@ export async function fetchSectorTrendsGrouped(options: {
     sector: sectorCode ?? "all",
     theme: themeCode ?? "all",
     groups: {
-      reversal: groups.reversal.map(toItem),
-      pullback: groups.pullback.map(toItem),
-      bullish: groups.bullish.map(toItem),
+      reversal: groups.reversal.map((r) => toItem(r, statsByStockId.get(r.stockId))),
+      pullback: groups.pullback.map((r) => toItem(r, statsByStockId.get(r.stockId))),
+      bullish: groups.bullish.map((r) => toItem(r, statsByStockId.get(r.stockId))),
     },
-    chipLeading: chipLeadingRows.slice(0, CHIP_LEADING_LIMIT).map(toItem),
+    chipLeading: slicedChipLeading.map((r) => toItem(r, statsByStockId.get(r.stockId))),
   };
 }
 
@@ -276,12 +358,14 @@ export async function fetchSectorTrendsForMode(options: {
     .sort((a, b) => Number(b.coreScore) - Number(a.coreScore))
     .slice(0, limit);
 
+  const statsByStockId = await computeVolatilityStats(rows);
+
   return {
     asOfDate: asOfDate.toISOString().slice(0, 10),
     market,
     sector: sectorCode ?? "all",
     theme: themeCode ?? "all",
     mode: options.mode,
-    items: rows.map(toItem),
+    items: rows.map((r) => toItem(r, statsByStockId.get(r.stockId))),
   };
 }
