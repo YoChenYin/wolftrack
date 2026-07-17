@@ -22,6 +22,7 @@ export interface VideoMentionSummary {
   title: string;
   publishedAt: string;
   summary: string | null;
+  keySignals: string[];
   mentions: VideoMentionItem[];
 }
 
@@ -63,8 +64,70 @@ export async function fetchRecentVideoMentions(limit = 10): Promise<VideoMention
     title: video.title,
     publishedAt: video.publishedAt.toISOString(),
     summary: video.summary,
+    keySignals: video.keySignals,
     mentions: video.mentions.map(toMentionItem),
   }));
+}
+
+export interface StockMentionOverviewItem {
+  stockId: number;
+  ticker: string;
+  companyName: string;
+  /** 提過這檔股票的頻道slug，已去重 */
+  channelIds: string[];
+  mentionCount: number;
+  latestSentiment: string;
+  latestPublishedAt: string;
+  latestAgreement: string | null;
+}
+
+/**
+ * 給首頁「網紅視角」總覽用：近N天內被提到的個股，跨頻道合併同一檔股票的重複提及，
+ * 依「幾個不同頻道都提到」排序（跨頻道一致性比單一頻道講很多次更有參考價值）。
+ * 只算已成功解析出stockId的提及；LLM判定不出對應股票的原始名稱不計入合併統計。
+ */
+export async function fetchStockMentionOverview(daysBack = 14): Promise<StockMentionOverviewItem[]> {
+  const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000);
+
+  const mentions = await prisma.youtubeStockMention.findMany({
+    where: { stockId: { not: null }, video: { publishedAt: { gte: since } } },
+    include: {
+      stock: { select: { ticker: true, companyName: true } },
+      video: { select: { channelId: true, publishedAt: true } },
+    },
+    orderBy: { video: { publishedAt: "desc" } },
+  });
+
+  const byStock = new Map<number, StockMentionOverviewItem>();
+  for (const m of mentions) {
+    if (!m.stock || m.stockId === null) continue;
+
+    let entry = byStock.get(m.stockId);
+    if (!entry) {
+      // mentions已依video.publishedAt desc排序，第一次遇到這檔股票時就是最新一筆提及
+      entry = {
+        stockId: m.stockId,
+        ticker: m.stock.ticker,
+        companyName: m.stock.companyName,
+        channelIds: [],
+        mentionCount: 0,
+        latestSentiment: m.sentiment,
+        latestPublishedAt: m.video.publishedAt.toISOString(),
+        latestAgreement: m.agreement,
+      };
+      byStock.set(m.stockId, entry);
+    }
+
+    entry.mentionCount += 1;
+    if (!entry.channelIds.includes(m.video.channelId)) {
+      entry.channelIds.push(m.video.channelId);
+    }
+  }
+
+  return Array.from(byStock.values()).sort((a, b) => {
+    if (b.channelIds.length !== a.channelIds.length) return b.channelIds.length - a.channelIds.length;
+    return b.latestPublishedAt.localeCompare(a.latestPublishedAt);
+  });
 }
 
 export interface StockMentionItem extends VideoMentionItem {

@@ -331,6 +331,8 @@ model YoutubeVideo {
   transcriptFailedAt DateTime?         @map("transcript_failed_at")
   /// LLM 判讀出的整體市場看法摘要
   summary            String?           @db.Text
+  /// LLM 額外整理出的3-5條具體關鍵訊號/數據重點，逐字稿內容空洞時可能是空陣列
+  keySignals         String[]          @default([]) @map("key_signals")
   processedAt        DateTime?         @map("processed_at")
   createdAt          DateTime          @default(now()) @map("created_at")
   updatedAt          DateTime          @updatedAt @map("updated_at")

@@ -91,6 +91,6 @@ export async function runYoutubeParseAndResolve(videoId: number): Promise<void> 
 
   await prisma.youtubeVideo.update({
     where: { id: video.id },
-    data: { summary: analysis.summary, processedAt: new Date() },
+    data: { summary: analysis.summary, keySignals: analysis.keySignals, processedAt: new Date() },
   });
 }

@@ -2,7 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { fetchSectorTrendsGrouped } from "@/lib/trend/sectorTrendsQuery";
 import { SectorTrendsBoard } from "@/components/SectorTrendsBoard";
 import { VideoMentionsSection } from "@/components/youtube/VideoMentionsSection";
-import { fetchRecentVideoMentions } from "@/lib/youtube/queries";
+import { StockMentionOverviewSection } from "@/components/youtube/StockMentionOverviewSection";
+import { fetchRecentVideoMentions, fetchStockMentionOverview } from "@/lib/youtube/queries";
 import {
   listAllThemeNames,
   getAllThemedTickers,
@@ -44,6 +45,7 @@ export default async function HomeTw() {
 
   const initialData = await fetchSectorTrendsGrouped({ market: "TW", sectorCode: "all", themeCode: "all" });
   const recentVideos = await fetchRecentVideoMentions();
+  const stockMentionOverview = await fetchStockMentionOverview();
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50">
@@ -57,6 +59,7 @@ export default async function HomeTw() {
 
         <SectorTrendsBoard market="TW" sectors={themeOptions} themes={[]} initialData={initialData} />
 
+        <StockMentionOverviewSection items={stockMentionOverview} />
         <VideoMentionsSection videos={recentVideos} />
       </main>
     </div>

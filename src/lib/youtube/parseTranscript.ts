@@ -20,6 +20,7 @@ export interface TranscriptMention {
 
 export interface TranscriptAnalysis {
   summary: string;
+  keySignals: string[];
   mentions: TranscriptMention[];
 }
 
@@ -29,6 +30,10 @@ const SYSTEM_PROMPT = `你是專業的財經內容分析師，任務是從台股
 萃取出主持人或來賓對個股的具體看法。只記錄逐字稿裡明確、有方向性判斷依據的個股提及
 （例如明確表態看多/看空、給出具體理由），不要把單純提到股票名稱但沒有立場的情況也算進去，
 也不要幻覺出逐字稿沒有提到的個股。summary欄位用2-3句話總結整支影片對大盤/總經的看法。
+
+keySignals欄位額外列出3-5條逐字稿裡明確提到、值得注意的具體訊號或數據（例如「Fed可能9月降息」
+「台積電法說會上修資本支出」「外資連續5天賣超電子股」），每條一句話、越具體越好，不要跟summary
+重複的空泛敘述；如果逐字稿內容真的很空洞、沒有具體訊號，回傳空陣列，不要硬湊。
 
 如果逐字稿有提到具體的進場理由（例如「季報優於預期」「法人開始加碼」「剛突破頸線」）就填entryReason，
 如果有提到出場條件/停損停利點（例如「跌破月線」「本益比超過20倍該獲利了結」「到目標價OO元」）就填
@@ -50,6 +55,11 @@ export async function parseTranscript(transcript: string): Promise<TranscriptAna
           type: "object",
           properties: {
             summary: { type: "string", description: "整支影片對大盤/總經的看法摘要，2-3句話" },
+            keySignals: {
+              type: "array",
+              items: { type: "string" },
+              description: "3-5條逐字稿明確提到的具體訊號/數據重點，沒有具體內容就回傳空陣列",
+            },
             mentions: {
               type: "array",
               items: {
@@ -72,7 +82,7 @@ export async function parseTranscript(transcript: string): Promise<TranscriptAna
               },
             },
           },
-          required: ["summary", "mentions"],
+          required: ["summary", "keySignals", "mentions"],
         },
       },
     ],

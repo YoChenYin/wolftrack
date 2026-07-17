@@ -13,6 +13,13 @@ export function VideoMentionCard({ video }: { video: VideoMentionSummary }) {
       </div>
       <p className="mt-1 text-sm font-medium text-zinc-800">{video.title}</p>
       {video.summary && <p className="mt-1 text-xs text-zinc-500">{video.summary}</p>}
+      {video.keySignals.length > 0 && (
+        <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-zinc-600">
+          {video.keySignals.map((signal, i) => (
+            <li key={i}>{signal}</li>
+          ))}
+        </ul>
+      )}
       {video.mentions.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {video.mentions.map((mention) => (
