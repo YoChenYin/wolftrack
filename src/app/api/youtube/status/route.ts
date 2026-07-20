@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [total, withTranscript, processed, permanentlyFailed, recentFailures] = await Promise.all([
+  const [total, withTranscript, processed, permanentlyFailed, recentFailures, allVideos] = await Promise.all([
     prisma.youtubeVideo.count(),
     prisma.youtubeVideo.count({ where: { transcript: { not: null } } }),
     prisma.youtubeVideo.count({ where: { processedAt: { not: null } } }),
@@ -22,7 +22,29 @@ export async function GET(request: NextRequest) {
       orderBy: { updatedAt: "desc" },
       take: 5,
     }),
+    prisma.youtubeVideo.findMany({
+      select: { channelId: true, transcript: true, processedAt: true, transcriptAttempts: true },
+    }),
   ]);
+
+  // 用來確認「只有某幾個頻道一直卡住」是不是特定頻道的下載/轉錄問題（例如某個Podcast host
+  // 的CDN在雲端runner IP上表現跟本地不同），而不是全體backlog的均勻延遲
+  const byChannel: Record<
+    string,
+    { total: number; withTranscript: number; processed: number; permanentlyFailedTranscript: number }
+  > = {};
+  for (const video of allVideos) {
+    const bucket = (byChannel[video.channelId] ??= {
+      total: 0,
+      withTranscript: 0,
+      processed: 0,
+      permanentlyFailedTranscript: 0,
+    });
+    bucket.total += 1;
+    if (video.transcript !== null) bucket.withTranscript += 1;
+    if (video.processedAt !== null) bucket.processed += 1;
+    if (video.transcript === null && video.transcriptAttempts >= 3) bucket.permanentlyFailedTranscript += 1;
+  }
 
   return NextResponse.json({
     total,
@@ -31,5 +53,6 @@ export async function GET(request: NextRequest) {
     permanentlyFailedTranscript: permanentlyFailed,
     stuckAfterTranscript: withTranscript - processed,
     sampleStuckAfterTranscript: recentFailures,
+    byChannel,
   });
 }
