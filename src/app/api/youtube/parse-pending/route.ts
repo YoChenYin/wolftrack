@@ -33,18 +33,22 @@ export async function POST(request: NextRequest) {
     select: { id: true },
   });
 
-  const results: { id: number; status: "parsed" | "failed" }[] = [];
+  const results: { id: number; status: "parsed" | "failed"; error?: string }[] = [];
   for (const video of targets) {
     try {
       await runYoutubeParseAndResolve(video.id);
       results.push({ id: video.id, status: "parsed" });
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       console.error(`[youtube/parse-pending] parse failed for video ${video.id}:`, err);
       await prisma.youtubeVideo.update({
         where: { id: video.id },
         data: { parseAttempts: { increment: 1 }, parseFailedAt: new Date() },
       });
-      results.push({ id: video.id, status: "failed" });
+      // error訊息直接回傳在response裡：這支只有CRON_SECRET持有者能打，且反覆手動翻Zeabur
+      // log交叉比對太慢，暴露Anthropic SDK的錯誤訊息（通常是auth/rate limit/model這類）
+      // 換來能一次看到failure原因划算很多
+      results.push({ id: video.id, status: "failed", error: message });
     }
   }
 
