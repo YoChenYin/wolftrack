@@ -40,6 +40,11 @@ export async function runYoutubeParseAndResolve(videoId: number): Promise<void> 
 
   const analysis = await parseTranscript(video.transcript);
 
+  // 這支function可能因為上一次呼叫中途失敗（例如某支mention的backfill丟例外、或
+  // container在跑到一半時被重啟）被同一支影片重複呼叫，先清掉舊的mentions才能安全
+  // 重跑，不然會插入重複的個股提及
+  await prisma.youtubeStockMention.deleteMany({ where: { videoId: video.id } });
+
   for (const mention of analysis.mentions) {
     const resolved = await resolveStockMention(mention.rawNameOrTicker, mention.market);
 

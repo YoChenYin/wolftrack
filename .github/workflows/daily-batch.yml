@@ -14,6 +14,12 @@ on:
     # YouTube 頻道新影片發現：每天（含週末，頻道週末也發文）約當台北時間 23:30，覆蓋3個頻道
     # 當天典型的發文時間（EBC 21:00、游庭皓 08:30 隔天才追上、Gooaye 不定期）
     - cron: "30 15 * * *"
+    # YouTube LLM解析：跑在 youtube-transcribe.yml（01:00台北時間，最長90分鐘）後面留足
+    # 緩衝，約當台北時間 03:00。2026-07-21改版：這步之前是fire-and-forget掛在ingest-transcript
+    # 裡執行，依賴Zeabur container活到背景Promise跑完，production實測成功率只有約1成
+    # （推測跟container重啟/自動部署有關）；改成跟transcribe一樣由GitHub Actions排程驅動、
+    # awaited呼叫/api/youtube/parse-pending，才能確保真的跑完才算數
+    - cron: "0 19 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -51,4 +57,13 @@ jobs:
       - name: Trigger YouTube video discovery
         run: |
           curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/youtube-discovery" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+  youtube-parse:
+    if: github.event.schedule == '0 19 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger pending LLM parse for already-transcribed videos
+        run: |
+          curl -sf -X POST "${{ secrets.APP_URL }}/api/youtube/parse-pending" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

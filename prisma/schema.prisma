@@ -334,6 +334,12 @@ model YoutubeVideo {
   /// LLM 額外整理出的3-5條具體關鍵訊號/數據重點，逐字稿內容空洞時可能是空陣列
   keySignals         String[]          @default([]) @map("key_signals")
   processedAt        DateTime?         @map("processed_at")
+  /// 2026-07-21新增：LLM解析失敗次數，超過3次不再重試。原本解析是在ingest-transcript裡
+  /// fire-and-forget觸發，依賴Zeabur container活到背景Promise跑完，production實測成功率
+  /// 只有約1成——改成跟transcribe一樣由GitHub Actions排程驅動、awaited呼叫，這兩個欄位讓
+  /// 這個retry loop可以安全地被重複觸發而不會無限重試已知會失敗的逐字稿
+  parseAttempts      Int               @default(0) @map("parse_attempts")
+  parseFailedAt      DateTime?         @map("parse_failed_at")
   createdAt          DateTime          @default(now()) @map("created_at")
   updatedAt          DateTime          @updatedAt @map("updated_at")
 
