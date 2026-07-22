@@ -8,7 +8,7 @@ import {
   scoreRelStrength,
   scoreVolume,
 } from "@/lib/trend/coreScore";
-import { classifyTrend } from "@/lib/trend/classify";
+import { classifyTrend, type ClassificationThresholds } from "@/lib/trend/classify";
 import { adjustPrice, type CorporateAction } from "./adjustPrice";
 import { isLimitMoveDay } from "./limitMove";
 import { calculateChipScore, type InstitutionalDay } from "./chipScore";
@@ -80,7 +80,9 @@ export function calculateTwTrendSignalAtIndex(
   targetIndex: number,
   institutionalDays: InstitutionalDay[],
   benchmarkSeries?: IndicatorSeries,
-  benchmarkTargetIndex?: number
+  benchmarkTargetIndex?: number,
+  /** scripts/backtest.ts 用這個跑不同參數組合比較，正式批次不傳，吃預設的 PULLBACK_MAX_DRAWDOWN_PCT_TW */
+  thresholdOverrides?: Partial<ClassificationThresholds>
 ): TwDailySignal {
   const isLimitMove = isLimitMoveDay(rawBars, targetIndex);
 
@@ -116,7 +118,13 @@ export function calculateTwTrendSignalAtIndex(
     volume: volumeScore,
   });
 
-  const classification = classifyTrend({ bars, series, targetIndex, isLimitMove, pullbackMaxDrawdownPct: PULLBACK_MAX_DRAWDOWN_PCT_TW });
+  const classification = classifyTrend({
+    bars,
+    series,
+    targetIndex,
+    isLimitMove,
+    thresholds: { pullbackMaxDrawdownPct: PULLBACK_MAX_DRAWDOWN_PCT_TW, ...thresholdOverrides },
+  });
   const { chipScore, subScores: chipSubScores } = calculateChipScore(institutionalDays);
   const { concentration5, concentration10, concentration20, momentum } = calculateChipConcentration(institutionalDays);
   const chipBadge = resolveChipBadge(classification.status, momentum);

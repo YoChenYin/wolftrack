@@ -179,6 +179,46 @@ export function adx(bars: OhlcvBar[], period = 14): (number | null)[] {
   return out;
 }
 
+export interface StochasticKD {
+  k: (number | null)[];
+  d: (number | null)[];
+}
+
+/**
+ * KD隨機指標，台股慣用參數與平滑方式：RSV(9) = (close-9日內最低)/(9日內最高-最低)*100，
+ * K = 前一日K*2/3 + RSV*1/3，D = 前一日D*2/3 + K*1/3（都是Wilder式平滑，第一筆用RSV自己當種子）。
+ * ⚠️假設：平滑係數(2/3, 1/3)是台股最常見的KD慣例，不同看盤軟體可能用略有差異的參數。
+ */
+export function stochasticKD(bars: OhlcvBar[], rsvPeriod = 9): StochasticKD {
+  const n = bars.length;
+  const k: (number | null)[] = new Array(n).fill(null);
+  const d: (number | null)[] = new Array(n).fill(null);
+
+  let prevK = 50;
+  let prevD = 50;
+  let seeded = false;
+
+  for (let i = rsvPeriod - 1; i < n; i++) {
+    let high = -Infinity;
+    let low = Infinity;
+    for (let j = i - rsvPeriod + 1; j <= i; j++) {
+      high = Math.max(high, bars[j].high);
+      low = Math.min(low, bars[j].low);
+    }
+    const rsv = high === low ? 50 : ((bars[i].close - low) / (high - low)) * 100;
+
+    const curK = seeded ? (prevK * 2 + rsv) / 3 : rsv;
+    const curD = seeded ? (prevD * 2 + curK) / 3 : curK;
+    k[i] = curK;
+    d[i] = curD;
+    prevK = curK;
+    prevD = curD;
+    seeded = true;
+  }
+
+  return { k, d };
+}
+
 /** 變動率 ROC(period) = (close[i]-close[i-period]) / close[i-period] * 100 */
 export function roc(closes: number[], period: number): (number | null)[] {
   return closes.map((c, i) =>

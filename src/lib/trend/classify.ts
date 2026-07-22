@@ -5,22 +5,55 @@ import type { IndicatorSeries } from "./indicators";
  * ⚠️假設：以下門檻值出自 docs/trend-core-implementation-logic.md 第2章，
  * 是常見趨勢跟蹤策略的合理起點，正式上線前務必用歷史資料回測校準。
  * TODO: 待業務端確認。
+ *
+ * 2026-07-22 全部門檻改成可覆寫的 ClassificationThresholds（見下方），這裡的常數變成
+ * DEFAULT_THRESHOLDS 的來源、也是目前 production 實際在用的值——scripts/backtest.ts
+ * 用這組介面跑多套參數比較，classifyTrend 呼叫端沒傳 thresholds 時行為完全不變。
  */
-const REVERSAL_LOOKBACK_DAYS = 5;
-const VOLUME_SPIKE_LOOKBACK_DAYS = 3;
-const VOLUME_SPIKE_MULTIPLIER = 1.5;
-const PULLBACK_MIN_DRAWDOWN_PCT = 5;
-const PULLBACK_MAX_DRAWDOWN_PCT = 15;
-const SUPPORT_BAND_PCT = 2;
-const RSI_COOL_LOOKBACK_DAYS = 20;
-const BULLISH_MAX_DRAWDOWN_PCT = 5;
-const BULLISH_NEW_HIGH_WINDOW_DAYS = 20;
-const BULLISH_NEW_HIGH_LOOKBACK_DAYS = 20;
-const BULLISH_MIN_NEW_HIGH_COUNT = 2;
-const SLOPE_LOOKBACK_DAYS = 5;
-/** "近期高點" 的回看天數，spec 未明確定義，⚠️假設用 60 個交易日（約一季） */
-const RECENT_HIGH_LOOKBACK_DAYS = 60;
-const ADX_TREND_THRESHOLD = 25;
+export interface ClassificationThresholds {
+  reversalLookbackDays: number;
+  volumeSpikeLookbackDays: number;
+  volumeSpikeMultiplier: number;
+  /** 反轉雷達額外的ADX下限，2026-07-22新增，預設0代表不檢查（維持原本行為） */
+  reversalMinAdx: number;
+  pullbackMinDrawdownPct: number;
+  pullbackMaxDrawdownPct: number;
+  supportBandPct: number;
+  rsiCoolLookbackDays: number;
+  /** RSI從超買區(>rsiOverboughtThreshold)冷卻後，要落在[rsiCoolMin, rsiCoolMax]區間 */
+  rsiCoolMin: number;
+  rsiCoolMax: number;
+  rsiOverboughtThreshold: number;
+  bullishMaxDrawdownPct: number;
+  bullishNewHighWindowDays: number;
+  bullishNewHighLookbackDays: number;
+  bullishMinNewHighCount: number;
+  slopeLookbackDays: number;
+  /** "近期高點" 的回看天數，spec 未明確定義，⚠️假設用 60 個交易日（約一季） */
+  recentHighLookbackDays: number;
+  adxTrendThreshold: number;
+}
+
+export const DEFAULT_THRESHOLDS: ClassificationThresholds = {
+  reversalLookbackDays: 5,
+  volumeSpikeLookbackDays: 3,
+  volumeSpikeMultiplier: 1.5,
+  reversalMinAdx: 0,
+  pullbackMinDrawdownPct: 5,
+  pullbackMaxDrawdownPct: 15,
+  supportBandPct: 2,
+  rsiCoolLookbackDays: 20,
+  rsiCoolMin: 40,
+  rsiCoolMax: 55,
+  rsiOverboughtThreshold: 70,
+  bullishMaxDrawdownPct: 5,
+  bullishNewHighWindowDays: 20,
+  bullishNewHighLookbackDays: 20,
+  bullishMinNewHighCount: 2,
+  slopeLookbackDays: 5,
+  recentHighLookbackDays: 60,
+  adxTrendThreshold: 25,
+};
 
 function crossSign(a: number, b: number): 1 | -1 | 0 {
   if (a > b) return 1;
@@ -85,13 +118,20 @@ function recentHigh(bars: OhlcvBar[], targetIndex: number, lookback: number): nu
   return high;
 }
 
-function rsiCooledFromOverbought(rsiSeries: (number | null)[], targetIndex: number, lookback: number): boolean {
+function rsiCooledFromOverbought(
+  rsiSeries: (number | null)[],
+  targetIndex: number,
+  lookback: number,
+  coolMin: number,
+  coolMax: number,
+  overboughtThreshold: number
+): boolean {
   const cur = rsiSeries[targetIndex];
-  if (cur === null || cur < 40 || cur > 55) return false;
+  if (cur === null || cur < coolMin || cur > coolMax) return false;
   const start = Math.max(0, targetIndex - lookback);
   for (let i = start; i < targetIndex; i++) {
     const v = rsiSeries[i];
-    if (v !== null && v > 70) return true;
+    if (v !== null && v > overboughtThreshold) return true;
   }
   return false;
 }
@@ -132,12 +172,11 @@ export interface ClassificationInput {
    */
   isLimitMove?: boolean;
   /**
-   * 蓄勢待發回檔幅度上限（%），2026-07-11 用 scripts/backtest.ts 對台股資料回測後發現
-   * 原本 5%~15% 區間 20日超額報酬中位數是負的(-0.43%)，收窄到 5%~10% 變成 +1.76%（樣本200筆）。
-   * 這個改動只有台股證據，沒有美股回測，所以刻意做成可覆寫參數、預設值維持原本 15%（美股行為不變），
-   * 只有 calculateTwDailySignal.ts 會傳 10 進來。
+   * 全部門檻皆可覆寫，不傳的欄位吃 DEFAULT_THRESHOLDS（= production 目前實際在用的值）。
+   * calculateTwDailySignal.ts 用這個機制覆寫 pullbackMaxDrawdownPct（2026-07-11 回測校準
+   * 過的台股專用值），scripts/backtest.ts 用這個機制跑多套參數比較。
    */
-  pullbackMaxDrawdownPct?: number;
+  thresholds?: Partial<ClassificationThresholds>;
 }
 
 export interface ClassificationResult {
@@ -155,11 +194,13 @@ export function classifyTrend({
   series,
   targetIndex,
   isLimitMove,
-  pullbackMaxDrawdownPct = PULLBACK_MAX_DRAWDOWN_PCT,
+  thresholds: thresholdOverrides,
 }: ClassificationInput): ClassificationResult {
   if (isLimitMove) {
     return { status: "limitMove", reversalPointDate: null, priceAtSignal: null };
   }
+
+  const t: ClassificationThresholds = { ...DEFAULT_THRESHOLDS, ...thresholdOverrides };
 
   const anchorIndex = findMostRecentCrossIndex(series.ma20, series.ma50, targetIndex);
   const reversalPointDate = anchorIndex !== null ? bars[anchorIndex].date : null;
@@ -171,46 +212,54 @@ export function classifyTrend({
   const ma200 = series.ma200[targetIndex];
   const adx14 = series.adx14[targetIndex];
 
-  const high = recentHigh(bars, targetIndex, RECENT_HIGH_LOOKBACK_DAYS);
+  const high = recentHigh(bars, targetIndex, t.recentHighLookbackDays);
   const drawdownPct = high > 0 ? ((high - close) / high) * 100 : 0;
 
   // 2.1 反轉雷達
-  const crossedWithinWindow = anchorIndex !== null && anchorIndex >= targetIndex - REVERSAL_LOOKBACK_DAYS + 1;
-  const macdFlippedWithinWindow = hasSignFlipWithinWindow(series.macdHist, targetIndex, REVERSAL_LOOKBACK_DAYS);
+  const crossedWithinWindow = anchorIndex !== null && anchorIndex >= targetIndex - t.reversalLookbackDays + 1;
+  const macdFlippedWithinWindow = hasSignFlipWithinWindow(series.macdHist, targetIndex, t.reversalLookbackDays);
   const volumeSpike = hasVolumeSpikeWithinWindow(
     bars,
     series.avgVolume20,
     targetIndex,
-    VOLUME_SPIKE_LOOKBACK_DAYS,
-    VOLUME_SPIKE_MULTIPLIER
+    t.volumeSpikeLookbackDays,
+    t.volumeSpikeMultiplier
   );
-  if (crossedWithinWindow && macdFlippedWithinWindow && volumeSpike) {
+  const reversalAdxOk = t.reversalMinAdx <= 0 || (adx14 !== null && adx14 >= t.reversalMinAdx);
+  if (crossedWithinWindow && macdFlippedWithinWindow && volumeSpike && reversalAdxOk) {
     return { status: "reversal", reversalPointDate, priceAtSignal };
   }
 
   const bullishStack = ma20 !== null && ma50 !== null && ma200 !== null && ma20 > ma50 && ma50 > ma200;
 
   // 2.2 蓄勢待發
-  const pullbackRange = drawdownPct >= PULLBACK_MIN_DRAWDOWN_PCT && drawdownPct <= pullbackMaxDrawdownPct;
+  const pullbackRange = drawdownPct >= t.pullbackMinDrawdownPct && drawdownPct <= t.pullbackMaxDrawdownPct;
   const nearSupport =
-    (ma20 !== null && Math.abs((close - ma20) / ma20) * 100 <= SUPPORT_BAND_PCT) ||
-    (ma50 !== null && Math.abs((close - ma50) / ma50) * 100 <= SUPPORT_BAND_PCT);
-  const rsiCooled = rsiCooledFromOverbought(series.rsi14, targetIndex, RSI_COOL_LOOKBACK_DAYS);
+    (ma20 !== null && Math.abs((close - ma20) / ma20) * 100 <= t.supportBandPct) ||
+    (ma50 !== null && Math.abs((close - ma50) / ma50) * 100 <= t.supportBandPct);
+  const rsiCooled = rsiCooledFromOverbought(
+    series.rsi14,
+    targetIndex,
+    t.rsiCoolLookbackDays,
+    t.rsiCoolMin,
+    t.rsiCoolMax,
+    t.rsiOverboughtThreshold
+  );
   if (bullishStack && pullbackRange && nearSupport && rsiCooled) {
     return { status: "pullback", reversalPointDate, priceAtSignal };
   }
 
   // 2.3 趨勢穩健
   const slopesRising =
-    isRisingSlope(series.ma20, targetIndex, SLOPE_LOOKBACK_DAYS) &&
-    isRisingSlope(series.ma50, targetIndex, SLOPE_LOOKBACK_DAYS) &&
-    isRisingSlope(series.ma200, targetIndex, SLOPE_LOOKBACK_DAYS);
+    isRisingSlope(series.ma20, targetIndex, t.slopeLookbackDays) &&
+    isRisingSlope(series.ma50, targetIndex, t.slopeLookbackDays) &&
+    isRisingSlope(series.ma200, targetIndex, t.slopeLookbackDays);
   const adxStrongAndRising =
-    adx14 !== null && adx14 > ADX_TREND_THRESHOLD && isRisingSlope(series.adx14, targetIndex, SLOPE_LOOKBACK_DAYS);
+    adx14 !== null && adx14 > t.adxTrendThreshold && isRisingSlope(series.adx14, targetIndex, t.slopeLookbackDays);
   const newHighs =
-    newHighCount(bars, targetIndex, BULLISH_NEW_HIGH_WINDOW_DAYS, BULLISH_NEW_HIGH_LOOKBACK_DAYS) >=
-    BULLISH_MIN_NEW_HIGH_COUNT;
-  const noSignificantDrawdown = drawdownPct < BULLISH_MAX_DRAWDOWN_PCT;
+    newHighCount(bars, targetIndex, t.bullishNewHighWindowDays, t.bullishNewHighLookbackDays) >=
+    t.bullishMinNewHighCount;
+  const noSignificantDrawdown = drawdownPct < t.bullishMaxDrawdownPct;
   if (bullishStack && slopesRising && adxStrongAndRising && newHighs && noSignificantDrawdown) {
     return { status: "bullish", reversalPointDate, priceAtSignal };
   }
