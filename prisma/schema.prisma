@@ -85,14 +85,25 @@ model StockTheme {
   @@map("stock_themes")
 }
 
-/// 三段式戰術狀態：反轉雷達 / 蓄勢待發 / 趨勢穩健 / limitMove（台股觸及漲跌停±10%的特殊狀態，不套用一般分類邏輯）
-/// / chipLeading（台股專用，2026-07-09：技術面未觸發但籌碼集中度加速轉強的觀察名單，見 types.ts 說明）
+/// 美股版三段式戰術狀態：反轉雷達 / 蓄勢待發 / 趨勢穩健（src/lib/trend/classify.ts，只有美股在用）。
+/// limitMove（台股觸及漲跌停±10%的特殊狀態，不套用一般分類邏輯）在兩個市場的enum裡共用。
+/// chipLeading 是舊版台股邏輯（2026-07-09~2026-07-23）留下的歷史值，2026-07-23改版後台股不再產生
+/// 新的chipLeading（籌碼流已經是主要訊號來源，不再是技術面之外的次要觀察名單），保留enum值只是
+/// 為了不用migration處理歷史資料，新資料不會再寫入。
+///
+/// 2026-07-23新增：entry / exit / buyDip 是台股版新的籌碼流策略三段式狀態（進場/出場/逢低布局，
+/// src/lib/trend/tw/classifyChipFlow.ts），取代台股原本共用的 reversal/pullback/bullish
+/// （美股不受影響，繼續用 classify.ts 的舊三段式）。TrendStatus 是兩個市場共用的enum，所以兩組
+/// 詞彙都保留在同一個enum裡，各自市場只會產生屬於自己那組的值。
 enum TrendStatus {
   reversal
   pullback
   bullish
   limitMove
   chipLeading
+  entry
+  exit
+  buyDip
 }
 
 /// 籌碼集中度動態訊號：轉強 / 持平 / 轉弱（docs/wolftrack-tw-spec.md 3.6）

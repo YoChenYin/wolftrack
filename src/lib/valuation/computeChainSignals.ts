@@ -16,7 +16,7 @@ export interface ChainStageSignal {
   label: string;
   /** 這個階段涵蓋的不重複股票數（跨底下所有 theme 聯集） */
   memberCount: number;
-  /** 有訊號（reversal/pullback/bullish/chipLeading 任一）的股票數 / memberCount */
+  /** 有訊號（daily_trend_signals裡任何status，"none"永遠不會寫入DB）的股票數 / memberCount */
   signalRate: number;
   /** 有訊號的股票裡，各狀態各幾檔 */
   statusBreakdown: Record<string, number>;
@@ -45,8 +45,8 @@ const RETURN_LOOKBACK_TRADING_DAYS = 6; // 算5日報酬要6筆
 const RETURN_LOOKBACK_CALENDAR_DAYS = 14;
 
 /** declining永遠優先判斷：族群平均報酬明顯是負的，不管signalRate多高都不該是green/活躍
- * （舊版bug：pullback/reversal這些技術面訊號本身就常伴隨近期價格走弱，signalRate高
- * 不代表現在在漲，兩者混在一起用OR判斷會讓「全部下跌」的族群顯示成綠燈）。 */
+ * （舊版bug：技術面訊號本身就常伴隨近期價格走弱，signalRate高不代表現在在漲，兩者混在一起
+ * 用OR判斷會讓「全部下跌」的族群顯示成綠燈）。 */
 function decideLight(signalRate: number, avgReturn5d: number | null): "green" | "yellow" | "gray" | "declining" {
   if (avgReturn5d !== null && avgReturn5d < -1) return "declining";
   if (avgReturn5d !== null && avgReturn5d >= 3) return "green";

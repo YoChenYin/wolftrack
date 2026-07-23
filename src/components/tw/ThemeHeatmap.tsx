@@ -26,22 +26,22 @@ const STAGE_COLORS: Record<string, string> = {
   support: "bg-zinc-100 text-zinc-600",
 };
 
-/** 報酬率映到熱圖底色：正值綠、負值紅，深淺依幅度（±5% 封頂，超過一樣是最深色） */
+/** 報酬率映到熱圖底色：台股慣例正值紅(漲)、負值綠(跌)，深淺依幅度（±5% 封頂，超過一樣是最深色） */
 function heatColor(value: number | null): string {
   if (value === null) return "transparent";
   const clamped = Math.max(-5, Math.min(5, value));
   const intensity = Math.abs(clamped) / 5; // 0~1
   if (clamped >= 0) {
     const alpha = 0.12 + intensity * 0.55;
-    return `rgba(16, 122, 90, ${alpha.toFixed(2)})`;
+    return `rgba(190, 60, 45, ${alpha.toFixed(2)})`;
   }
   const alpha = 0.12 + intensity * 0.55;
-  return `rgba(190, 60, 45, ${alpha.toFixed(2)})`;
+  return `rgba(16, 122, 90, ${alpha.toFixed(2)})`;
 }
 
 function textColor(value: number | null): string {
   if (value === null) return "#a1a1aa";
-  return Math.abs(value) >= 2.5 ? "#fff" : value >= 0 ? "#0f5c43" : "#8a2e20";
+  return Math.abs(value) >= 2.5 ? "#fff" : value >= 0 ? "#8a2e20" : "#0f5c43";
 }
 
 function formatPct(value: number | null): string {

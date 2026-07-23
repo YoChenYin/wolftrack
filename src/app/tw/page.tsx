@@ -53,7 +53,7 @@ export default async function HomeTw() {
         <header>
           <h1 className="text-2xl font-bold text-zinc-900">WolfTrack TW 狼蹤台股版</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            每日掃描台股，依板塊分類三種戰術狀態：反轉雷達 / 蓄勢待發 / 趨勢穩健（Core Score = 50% 技術面 + 50% 籌碼面）
+            每日掃描台股，依投信/外資籌碼流分類三種戰術狀態：進場 / 出場 / 逢低布局（Core Score = 50% 技術面 + 50% 籌碼面）
           </p>
         </header>
 

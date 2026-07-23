@@ -8,66 +8,29 @@ import {
   scoreRelStrength,
   scoreVolume,
 } from "@/lib/trend/coreScore";
-import { classifyTrend, type ClassificationThresholds } from "@/lib/trend/classify";
+import { computeChipFlowIndicators, classifyChipFlow } from "./classifyChipFlow";
 import { adjustPrice, type CorporateAction } from "./adjustPrice";
 import { isLimitMoveDay } from "./limitMove";
 import { calculateChipScore, type InstitutionalDay } from "./chipScore";
 import { calculateChipConcentration } from "./chipConcentration";
 import { combineCoreScoreTw } from "./coreScoreTw";
-import type { ChipBadge, TwDailySignal } from "./types";
-
-/**
- * 蓄勢待發回檔幅度上限，2026-07-11 用 scripts/backtest.ts 回測台股資料後從 classify.ts 原本的
- * 15% 收窄到 10%（20日超額報酬中位數從 -0.43% 變成 +1.76%，樣本200筆）。只套用台股，見
- * classify.ts 的 ClassificationInput.pullbackMaxDrawdownPct 說明——美股沒有對應回測證據，
- * 維持原本 15% 不變。
- */
-const PULLBACK_MAX_DRAWDOWN_PCT_TW = 10;
-
-/**
- * 籌碼確認/背離徽章（docs/wolftrack-tw-spec.md 3.6）：只在技術面判斷「趨勢穩健」時才有意義。
- * ⚠️假設：spec 原文寫「分類降級為蓄勢待發或標記籌碼背離」，用了「或」，語意不夠肯定。
- * 這裡採用較保守的做法：只標記徽章、不改動 status（避免弄亂 reversal_point_date/price_at_signal 的語意）。
- * TODO: 待業務端確認是否要真的把 status 降級。
- */
-function resolveChipBadge(status: TwDailySignal["status"], momentum: ReturnType<typeof calculateChipConcentration>["momentum"]): ChipBadge | null {
-  if (status !== "bullish") return null;
-  if (momentum === "strengthening") return "confirmed";
-  if (momentum === "weakening") return "divergence";
-  return null;
-}
-
-/**
- * 「籌碼領先」門檻（2026-07-11 用 scripts/backtest.ts 對 263 檔股票、跨2024-06至今的完整歷史
- * 回測校準過，method：用「同天進場、同持有天數的大盤超額報酬」而不是原始報酬判斷，避免誤把
- * 「搭多頭順風車」當成訊號本身有效）：
- * - 原本 chipScore>=60 門檻：965 筆樣本，20日勝率只有48.8%、中位數超額報酬 -0.50%（等於雜訊，比丟銅板還差）
- * - chipScore>=70：192 筆樣本，20日勝率58.9%、中位數超額報酬+2.77%，是目前資料能撐得住的甜蜜點
- * - chipScore>=75 開始衰退（51.9%/+0.06%），>=80 樣本數只剩45筆已經不可信（44.4%/-7.36%，過度篩選）
- * - concentration5 門檻在各級距完全不影響結果（chipScore本身已隱含集中度資訊），維持1%當基本合理性檢查即可，不用跟著拉高
- * TODO: 樣本期間幾乎全是多頭（2024-06起至今台股/半導體大多頭），沒經過空頭/大回檔驗證，之後有更長歷史要重新回測。
- */
-const CHIP_LEADING_SCORE_THRESHOLD = 70;
-const CHIP_LEADING_CONCENTRATION5_THRESHOLD = 1;
-
-function isChipLeadingCandidate(
-  chipScore: number,
-  concentration5: number,
-  momentum: ReturnType<typeof calculateChipConcentration>["momentum"]
-): boolean {
-  return (
-    momentum === "strengthening" &&
-    chipScore >= CHIP_LEADING_SCORE_THRESHOLD &&
-    concentration5 >= CHIP_LEADING_CONCENTRATION5_THRESHOLD
-  );
-}
+import type { TwDailySignal } from "./types";
 
 function diffOrNull(a: number | null, b: number | null): number | null {
   return a !== null && b !== null ? a - b : null;
 }
 
 /**
- * 計算台股某一天的 Core Score（技術面+籌碼面）與三段分類（含漲跌停特殊狀態）。
+ * 計算台股某一天的 Core Score（技術面+籌碼面）與籌碼流三段分類（含漲跌停特殊狀態）。
+ *
+ * 2026-07-23改版：分類邏輯從美股共用的 classify.ts 三段式（reversal/pullback/bullish）換成
+ * 台股專用的籌碼流策略（entry/exit/buyDip，見 classifyChipFlow.ts），已用真實 production
+ * 投信/外資資料回測驗證過。technicalScore/coreScore/chipScore 這些既有的分數欄位不受影響，
+ * 只有 status（分類結果）跟 reversalPointDate/priceAtSignal（現在代表「這個狀態連續成立的
+ * 起點」，不是MA交叉錨點）的計算方式改變。舊版的 chipBadge（籌碼確認/背離徽章）跟
+ * chipLeading（技術面未觸發但籌碼加速的觀察名單）概念在新版裡不再有意義——籌碼流已經是
+ * 主要訊號來源，不是疊加在技術面分類之上的次要訊號，兩者都停止產生新資料（欄位保留、
+ * 舊資料還能顯示，避免另外跑一次migration）。
  *
  * rawBars：**未還原**的原始日線（漲跌停判斷要用原始價格，見 limitMove.ts 說明）
  * institutionalDays：三大法人買賣超歷史，需涵蓋到 rawBars[targetIndex] 當天（含）往前至少20個交易日，
@@ -80,9 +43,7 @@ export function calculateTwTrendSignalAtIndex(
   targetIndex: number,
   institutionalDays: InstitutionalDay[],
   benchmarkSeries?: IndicatorSeries,
-  benchmarkTargetIndex?: number,
-  /** scripts/backtest.ts 用這個跑不同參數組合比較，正式批次不傳，吃預設的 PULLBACK_MAX_DRAWDOWN_PCT_TW */
-  thresholdOverrides?: Partial<ClassificationThresholds>
+  benchmarkTargetIndex?: number
 ): TwDailySignal {
   const isLimitMove = isLimitMoveDay(rawBars, targetIndex);
 
@@ -118,22 +79,14 @@ export function calculateTwTrendSignalAtIndex(
     volume: volumeScore,
   });
 
-  const classification = classifyTrend({
-    bars,
-    series,
-    targetIndex,
-    isLimitMove,
-    thresholds: { pullbackMaxDrawdownPct: PULLBACK_MAX_DRAWDOWN_PCT_TW, ...thresholdOverrides },
-  });
+  const chipFlowIndicators = computeChipFlowIndicators(bars);
+  const classification = classifyChipFlow(bars, chipFlowIndicators, targetIndex, institutionalDays, isLimitMove);
+
   const { chipScore, subScores: chipSubScores } = calculateChipScore(institutionalDays);
   const { concentration5, concentration10, concentration20, momentum } = calculateChipConcentration(institutionalDays);
-  const chipBadge = resolveChipBadge(classification.status, momentum);
   const coreScore = isLimitMove ? technicalScore : combineCoreScoreTw(technicalScore, chipScore);
 
-  const status =
-    classification.status === "none" && isChipLeadingCandidate(chipScore, concentration5, momentum)
-      ? "chipLeading"
-      : classification.status;
+  const status = isLimitMove ? "limitMove" : classification.status;
 
   return {
     tradeDate: bar.date,
@@ -160,13 +113,13 @@ export function calculateTwTrendSignalAtIndex(
     chipSubScores,
     coreScore,
     status,
-    reversalPointDate: classification.reversalPointDate,
+    reversalPointDate: classification.signalPointDate,
     priceAtSignal: classification.priceAtSignal,
     isLimitMove,
     chipConcentration5: concentration5,
     chipConcentration10: concentration10,
     chipConcentration20: concentration20,
     chipMomentum: momentum,
-    chipBadge,
+    chipBadge: null,
   };
 }

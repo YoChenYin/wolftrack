@@ -6,7 +6,6 @@ import { GroupValuationTable } from "./tw/GroupValuationTable";
 import { ThemeHeatmap } from "./tw/ThemeHeatmap";
 import { ThemeFlowChart } from "./tw/ThemeFlowChart";
 import { ChainSignalLights } from "./tw/ChainSignalLights";
-import { ChipLeadingList } from "./tw/ChipLeadingList";
 import { UNCATEGORIZED_THEME_CODE } from "@/lib/valuation/groupConfig";
 import type { SectorTrendsGrouped } from "@/lib/trend/sectorTrendsQuery";
 import type { GroupValuationResult } from "@/lib/valuation/computeGroupValuation";
@@ -154,13 +153,19 @@ export function SectorTrendsBoard({
           </section>
         )}
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <TrendColumn market={market} status="reversal" items={data.groups.reversal} loading={isPending} />
-          <TrendColumn market={market} status="pullback" items={data.groups.pullback} loading={isPending} />
-          <TrendColumn market={market} status="bullish" items={data.groups.bullish} loading={isPending} />
-        </div>
-
-        {market === "TW" && <ChipLeadingList items={data.chipLeading} />}
+        {market === "TW" ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <TrendColumn market={market} status="entry" items={data.groups.entry} loading={isPending} />
+            <TrendColumn market={market} status="exit" items={data.groups.exit} loading={isPending} />
+            <TrendColumn market={market} status="buyDip" items={data.groups.buyDip} loading={isPending} />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <TrendColumn market={market} status="reversal" items={data.groups.reversal} loading={isPending} />
+            <TrendColumn market={market} status="pullback" items={data.groups.pullback} loading={isPending} />
+            <TrendColumn market={market} status="bullish" items={data.groups.bullish} loading={isPending} />
+          </div>
+        )}
       </div>
     </div>
   );

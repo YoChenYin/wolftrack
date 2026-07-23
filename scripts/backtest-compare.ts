@@ -1,4 +1,11 @@
 /**
+ * ⚠️2026-07-23更新：台股已經改用 classifyChipFlow.ts 的籌碼流策略（entry/exit/buyDip），
+ * calculateTwTrendSignalAtIndex 不再呼叫 classify.ts，下面測試的 reversalMinAdx 等 classify.ts
+ * 門檻參數對台股 production 行為已經沒有任何影響（美股仍然使用 classify.ts，未受影響）。
+ * 這支腳本留著當歷史記錄，如果之後想調美股門檻可以參考同樣的方法論，但如果要繼續調台股
+ * 現在該去測 classifyChipFlow.ts 的參數（backtest-custom-strategy.ts 已經有這套多組態
+ * 比較的基礎架構）。
+ *
  * 2026-07-22：比較目前 production 三段式分類門檻 vs 候選調整方案，用同一份完整歷史資料
  * （跟 backtest.ts 一樣的方法論：只看訊號當天以前的資料、超額報酬扣掉同期大盤）。
  *
@@ -135,8 +142,7 @@ async function main() {
           targetIndex,
           institutionalDaysUpToTarget,
           benchmarkTargetIndex !== undefined ? benchmarkSeries : undefined,
-          benchmarkTargetIndex,
-          variant.overrides
+          benchmarkTargetIndex
         );
         if (signal.status === "none") continue;
 

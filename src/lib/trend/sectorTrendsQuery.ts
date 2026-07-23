@@ -5,13 +5,22 @@ import { findIndustryThemeByName, getAllThemedTickers, UNCATEGORIZED_THEME_CODE 
 
 /**
  * 三段式戰術面板顯示的狀態。刻意用明確列舉（不是 Exclude<TrendStatus, "limitMove"> 這種衍生型別）——
- * limitMove 是特殊狀態不算戰術分類，chipLeading（2026-07-09新增）是獨立的第四類「觀察名單」，
- * 用自己的排序邏輯（依 chipScore 而非 coreScore）和 UI 區塊呈現，不跟主要三欄混在一起，
- * 避免改 Prisma enum 時型別自動膨脹、影響到已經假設「只有三種」的 COLUMN_META 等地方。
+ * limitMove 是特殊狀態不算戰術分類，chipLeading 是舊版台股邏輯（2026-07-09~2026-07-23）留下的
+ * 歷史觀察名單狀態，改版後不再產生新資料。
+ *
+ * 2026-07-23：美股/台股各自有一套互不相同的三段式詞彙（見 src/lib/trend/types.ts 的 TrendStatus
+ * 說明），所以這裡的型別是兩組共6個literal的聯集，用 tacticalStatusesForMarket() 依market
+ * 動態決定實際要用哪一組，不是單一固定的3個literal。
  */
-export type TacticalStatus = "reversal" | "pullback" | "bullish";
+export type TacticalStatus = "reversal" | "pullback" | "bullish" | "entry" | "exit" | "buyDip";
 
-export const TREND_STATUSES: TacticalStatus[] = ["reversal", "pullback", "bullish"];
+const US_TACTICAL_STATUSES: TacticalStatus[] = ["reversal", "pullback", "bullish"];
+const TW_TACTICAL_STATUSES: TacticalStatus[] = ["entry", "exit", "buyDip"];
+/** 兩個市場實際用的三段式詞彙不同（見上方TacticalStatus說明），依market選對應那一組 */
+export function tacticalStatusesForMarket(market: Market): TacticalStatus[] {
+  return market === "TW" ? TW_TACTICAL_STATUSES : US_TACTICAL_STATUSES;
+}
+
 export const DEFAULT_LIMIT = 10;
 export const MAX_LIMIT = 50;
 /** 籌碼領先是觀察名單性質，給比主要三欄更寬的預設筆數 */
@@ -278,28 +287,38 @@ export async function fetchSectorTrendsGrouped(options: {
   const stockFilter = await buildStockFilter(market, sectorCode, themeCode);
   const asOfDate = await latestTradeDate(market, stockFilter);
 
+  const emptyGroups: Record<TacticalStatus, SectorTrendItem[]> = {
+    reversal: [],
+    pullback: [],
+    bullish: [],
+    entry: [],
+    exit: [],
+    buyDip: [],
+  };
+
   if (!asOfDate) {
     return {
       asOfDate: null,
       market,
       sector: sectorCode ?? "all",
       theme: themeCode ?? "all",
-      groups: { reversal: [], pullback: [], bullish: [] },
+      groups: emptyGroups,
       chipLeading: [],
     };
   }
 
+  const marketStatuses = tacticalStatusesForMarket(market);
   const latestPerStock = await fetchLatestSignalPerStock(stockFilter, asOfDate);
-  const groups: Record<TacticalStatus, SignalRow[]> = { reversal: [], pullback: [], bullish: [] };
+  const groups: Record<TacticalStatus, SignalRow[]> = { reversal: [], pullback: [], bullish: [], entry: [], exit: [], buyDip: [] };
   const chipLeadingRows: SignalRow[] = [];
   for (const row of latestPerStock) {
-    if (row.status === "reversal" || row.status === "pullback" || row.status === "bullish") {
-      groups[row.status].push(row);
+    if (marketStatuses.includes(row.status as TacticalStatus)) {
+      groups[row.status as TacticalStatus].push(row);
     } else if (row.status === "chipLeading") {
       chipLeadingRows.push(row);
     }
   }
-  for (const status of TREND_STATUSES) {
+  for (const status of marketStatuses) {
     groups[status].sort((a, b) => Number(b.coreScore) - Number(a.coreScore));
     groups[status] = groups[status].slice(0, limit);
   }
@@ -307,22 +326,21 @@ export async function fetchSectorTrendsGrouped(options: {
   const slicedChipLeading = chipLeadingRows.slice(0, CHIP_LEADING_LIMIT);
 
   const statsByStockId = await computeVolatilityStats([
-    ...groups.reversal,
-    ...groups.pullback,
-    ...groups.bullish,
+    ...marketStatuses.flatMap((status) => groups[status]),
     ...slicedChipLeading,
   ]);
+
+  const populatedGroups = { ...emptyGroups };
+  for (const status of marketStatuses) {
+    populatedGroups[status] = groups[status].map((r) => toItem(r, statsByStockId.get(r.stockId)));
+  }
 
   return {
     asOfDate: asOfDate.toISOString().slice(0, 10),
     market,
     sector: sectorCode ?? "all",
     theme: themeCode ?? "all",
-    groups: {
-      reversal: groups.reversal.map((r) => toItem(r, statsByStockId.get(r.stockId))),
-      pullback: groups.pullback.map((r) => toItem(r, statsByStockId.get(r.stockId))),
-      bullish: groups.bullish.map((r) => toItem(r, statsByStockId.get(r.stockId))),
-    },
+    groups: populatedGroups,
     chipLeading: slicedChipLeading.map((r) => toItem(r, statsByStockId.get(r.stockId))),
   };
 }

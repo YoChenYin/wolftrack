@@ -42,10 +42,9 @@ const LIGHT_STYLE: Record<string, { emoji: string; ring: string }> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  reversal: "反轉雷達",
-  pullback: "蓄勢待發",
-  bullish: "趨勢穩健",
-  chipLeading: "籌碼領先",
+  entry: "進場",
+  exit: "出場",
+  buyDip: "逢低布局",
   limitMove: "漲跌停",
 };
 
@@ -88,7 +87,7 @@ export function ChainSignalLights() {
       <h2 className="flex items-center gap-1 text-sm font-semibold text-zinc-900">
         產業鏈訊號燈號
         <InfoTooltip>
-          每個階段（上游/中游/下游/支援層）目前有多少比例的成員股票觸發戰術訊號（反轉雷達/蓄勢待發/趨勢穩健/籌碼領先），加上近5日族群平均報酬與實際上漲/下跌檔數，綜合判斷燈號：🔻走弱（近5日報酬&lt;-1%，不管訊號比例多高都優先判定，避免技術面訊號跟實際下跌方向矛盾）、🟢活躍（近5日報酬≥3%，或訊號比例≥30%且報酬沒有轉負）、🟡初動（有訊號或報酬&gt;0）、⚪平靜（都沒有）。點擊各階段可以展開看實際成員股票。
+          每個階段（上游/中游/下游/支援層）目前有多少比例的成員股票觸發籌碼流訊號（進場/出場/逢低布局），加上近5日族群平均報酬與實際上漲/下跌檔數，綜合判斷燈號：🔻走弱（近5日報酬&lt;-1%，不管訊號比例多高都優先判定，避免訊號跟實際下跌方向矛盾）、🟢活躍（近5日報酬≥3%，或訊號比例≥30%且報酬沒有轉負）、🟡初動（有訊號或報酬&gt;0）、⚪平靜（都沒有）。點擊各階段可以展開看實際成員股票。
         </InfoTooltip>
       </h2>
 

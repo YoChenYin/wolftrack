@@ -26,6 +26,10 @@ export interface TwDailySignal {
   chipConcentration10: number;
   chipConcentration20: number;
   chipMomentum: ChipMomentum;
-  /** 只有 status="bullish" 時才會有值：技術面穩健 + 籌碼轉強/轉弱的交叉驗證徽章 */
+  /**
+   * 舊版欄位（2026-07-23前，status="bullish"時才會有值：技術面穩健+籌碼轉強/轉弱的交叉驗證徽章）。
+   * 改版後籌碼流已經是台股主要訊號來源，不再是疊加在技術面分類之上的次要訊號，永遠是null，
+   * 只是保留欄位讓舊資料還能正常顯示，不用另外跑一次移除欄位的migration。
+   */
   chipBadge: ChipBadge | null;
 }
