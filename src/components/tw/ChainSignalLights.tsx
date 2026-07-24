@@ -10,6 +10,14 @@ interface ChainStageMember {
   companyName: string;
   status: string | null;
   return5d: number | null;
+  isLeader: boolean;
+}
+
+interface ChainTierStats {
+  count: number;
+  avgReturn5d: number | null;
+  risingCount: number;
+  fallingCount: number;
 }
 
 interface ChainStageSignal {
@@ -22,6 +30,9 @@ interface ChainStageSignal {
   risingCount: number;
   fallingCount: number;
   light: "green" | "yellow" | "gray" | "declining";
+  leaders: ChainTierStats;
+  followers: ChainTierStats;
+  phase: "leadersOnly" | "broadRally" | "followersCatchingUp" | "mixed";
   members: ChainStageMember[];
 }
 
@@ -46,6 +57,13 @@ const STATUS_LABELS: Record<string, string> = {
   exit: "出場",
   buyDip: "逢低布局",
   limitMove: "漲跌停",
+};
+
+/** mixed不顯示任何文字，避免多空不明/資料不足的情況硬湊一個沒有意義的標籤 */
+const PHASE_LABELS: Record<Exclude<ChainStageSignal["phase"], "mixed">, string> = {
+  leadersOnly: "🔥 龍頭領漲，二軍未動",
+  broadRally: "✅ 全面齊漲",
+  followersCatchingUp: "📈 二軍補漲",
 };
 
 function formatPct(value: number | null): string {
@@ -87,7 +105,10 @@ export function ChainSignalLights() {
       <h2 className="flex items-center gap-1 text-sm font-semibold text-zinc-900">
         產業鏈訊號燈號
         <InfoTooltip>
-          每個階段（上游/中游/下游/支援層）目前有多少比例的成員股票觸發籌碼流訊號（進場/出場/逢低布局），加上近5日族群平均報酬與實際上漲/下跌檔數，綜合判斷燈號：🔻走弱（近5日報酬&lt;-1%，不管訊號比例多高都優先判定，避免訊號跟實際下跌方向矛盾）、🟢活躍（近5日報酬≥3%，或訊號比例≥30%且報酬沒有轉負）、🟡初動（有訊號或報酬&gt;0）、⚪平靜（都沒有）。點擊各階段可以展開看實際成員股票。
+          每個階段（上游/中游/下游/支援層）目前有多少比例的成員股票觸發籌碼流訊號（進場/出場/逢低布局），加上近5日族群平均報酬與實際上漲/下跌檔數，綜合判斷燈號：🔻走弱（近5日報酬&lt;-1%，不管訊號比例多高都優先判定，避免訊號跟實際下跌方向矛盾）、🟢活躍（近5日報酬≥3%，或訊號比例≥30%且報酬沒有轉負）、🟡初動（有訊號或報酬&gt;0）、⚪平靜（都沒有）。
+          <br />
+          <br />
+          額外把龍頭股（group_config.json標記的leader）跟其餘成員（二軍）分開算近5日報酬，判斷現在漲的是誰：🔥龍頭領漲＝只有龍頭平均漲≥2%、二軍還沒動；✅全面齊漲＝龍頭二軍都漲≥2%，最強的擴散狀態；📈二軍補漲＝龍頭已經緩下來、換二軍漲≥2%，通常代表這波族群動能接近尾聲。同樣是30%訊號比例，「龍頭剛啟動」跟「連二軍都補漲完」代表的階段完全不同，只看聚合平均看不出這個差異。點擊各階段可以展開看實際成員股票（👑標記龍頭）。
         </InfoTooltip>
       </h2>
 
@@ -126,20 +147,31 @@ export function ChainSignalLights() {
                           )}
                         </div>
                         {stage.memberCount > 0 ? (
-                          <div className="mt-0.5 text-[10px] text-zinc-500">
-                            {stage.risingCount}漲{stage.fallingCount}跌 · 5日
-                            <span className={`font-medium ${returnColor(stage.avgReturn5d)}`}>
-                              {formatPct(stage.avgReturn5d)}
-                            </span>
-                            {Object.keys(stage.statusBreakdown).length > 0 && (
-                              <>
-                                {" · "}
-                                {Object.entries(stage.statusBreakdown)
-                                  .map(([status, count]) => `${STATUS_LABELS[status] ?? status}${count}`)
-                                  .join(" ")}
-                              </>
+                          <>
+                            <div className="mt-0.5 text-[10px] text-zinc-500">
+                              {stage.risingCount}漲{stage.fallingCount}跌 · 5日
+                              <span className={`font-medium ${returnColor(stage.avgReturn5d)}`}>
+                                {formatPct(stage.avgReturn5d)}
+                              </span>
+                              {Object.keys(stage.statusBreakdown).length > 0 && (
+                                <>
+                                  {" · "}
+                                  {Object.entries(stage.statusBreakdown)
+                                    .map(([status, count]) => `${STATUS_LABELS[status] ?? status}${count}`)
+                                    .join(" ")}
+                                </>
+                              )}
+                            </div>
+                            {stage.phase !== "mixed" && (
+                              <div className="mt-0.5 text-[10px] font-medium text-zinc-600">
+                                {PHASE_LABELS[stage.phase]}
+                              </div>
                             )}
-                          </div>
+                            <div className="mt-0.5 text-[10px] text-zinc-400">
+                              龍頭({stage.leaders.count}檔) {formatPct(stage.leaders.avgReturn5d)} · 二軍(
+                              {stage.followers.count}檔) {formatPct(stage.followers.avgReturn5d)}
+                            </div>
+                          </>
                         ) : (
                           <div className="mt-0.5 text-[10px] text-zinc-400">無成員資料</div>
                         )}
@@ -163,7 +195,8 @@ export function ChainSignalLights() {
                         className="flex items-center gap-1.5 rounded border border-zinc-200 bg-white px-2 py-1 text-[11px] hover:border-zinc-300"
                       >
                         <span className="font-medium text-zinc-700">
-                          {member.ticker} {stripCompanySuffix(member.companyName)}
+                          {member.isLeader && <span title="龍頭股">👑</span>} {member.ticker}{" "}
+                          {stripCompanySuffix(member.companyName)}
                         </span>
                         {member.status && (
                           <span className="text-zinc-400">{STATUS_LABELS[member.status] ?? member.status}</span>

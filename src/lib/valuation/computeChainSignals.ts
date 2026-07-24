@@ -9,6 +9,16 @@ export interface ChainStageMember {
   status: string | null;
   /** 近5日報酬(%)，null=沒有足夠股價資料 */
   return5d: number | null;
+  /** 是不是這個階段任一個theme標記的龍頭股（group_config.json的leader欄位） */
+  isLeader: boolean;
+}
+
+/** 龍頭/二軍分開統計用的小結構，避免ChainStageSignal裡龍頭跟二軍各四個同名欄位重複宣告 */
+export interface ChainTierStats {
+  count: number;
+  avgReturn5d: number | null;
+  risingCount: number;
+  fallingCount: number;
 }
 
 export interface ChainStageSignal {
@@ -30,6 +40,13 @@ export interface ChainStageSignal {
    * declining一定優先於其他判斷——不會因為signalRate高就蓋掉「族群其實在跌」這件事
    * （2026-07-17修正：被動元件全部個股下跌但因為signalRate夠高被判成綠燈的bug）。 */
   light: "green" | "yellow" | "gray" | "declining";
+  /** 2026-07-25新增：龍頭 vs 二軍各自的近5日表現，用來判斷噴的是「誰」不是只有「有沒有噴」 */
+  leaders: ChainTierStats;
+  followers: ChainTierStats;
+  /** 分階段訊號：leadersOnly=只有龍頭噴、二軍還沒動；broadRally=龍頭二軍一起漲，最強的狀態；
+   * followersCatchingUp=二軍補漲、龍頭已經緩下來；mixed=多空不明或資料不足，看不出階段。
+   * 判斷邏輯見 decidePhase()。 */
+  phase: "leadersOnly" | "broadRally" | "followersCatchingUp" | "mixed";
   /** 點開燈號要看的個別成員股票，依報酬率由高到低排序 */
   members: ChainStageMember[];
 }
@@ -56,8 +73,40 @@ function decideLight(signalRate: number, avgReturn5d: number | null): "green" | 
 }
 
 /**
- * 產業鏈訊號燈號（2026-07-12）：每個階段（上游/中游/下游/支援層）目前「有多少比例的成員股票
- * 觸發戰術訊號」+「近5日族群平均報酬」，用紅黃綠燈號呈現「這條鏈現在誰噴誰還沒動」。
+ * 2026-07-25新增：龍頭 vs 二軍分開看誰在漲，門檻刻意跟decideLight的+3%/-1%不同——這裡要
+ * 分辨「動了沒」，2%已經算有意義的動能，不用等到decideLight的3%活躍門檻那麼高。
+ * 順序：declining優先（族群整體走弱時，分不出階段沒有意義）> leadersOnly > broadRally >
+ * followersCatchingUp > mixed（其餘情況，包含資料不足或多空不明）。
+ */
+function decidePhase(leaders: ChainTierStats, followers: ChainTierStats): ChainStageSignal["phase"] {
+  const leaderUp = leaders.avgReturn5d !== null && leaders.avgReturn5d >= 2;
+  const followerUp = followers.avgReturn5d !== null && followers.avgReturn5d >= 2;
+  const leaderFlatOrDown = leaders.avgReturn5d === null || leaders.avgReturn5d < 1;
+  const followerFlatOrDown = followers.avgReturn5d === null || followers.avgReturn5d < 1;
+
+  if (leaderUp && followerFlatOrDown) return "leadersOnly";
+  if (leaderUp && followerUp) return "broadRally";
+  if (followerUp && leaderFlatOrDown) return "followersCatchingUp";
+  return "mixed";
+}
+
+function computeTierStats(returns: number[]): ChainTierStats {
+  const avgReturn5d = returns.length > 0 ? Math.round((returns.reduce((a, b) => a + b, 0) / returns.length) * 100) / 100 : null;
+  return {
+    count: returns.length,
+    avgReturn5d,
+    risingCount: returns.filter((r) => r > 0).length,
+    fallingCount: returns.filter((r) => r < 0).length,
+  };
+}
+
+/**
+ * 產業鏈訊號燈號（2026-07-12，2026-07-25加上龍頭/二軍分階）：每個階段（上游/中游/下游/支援層）
+ * 目前「有多少比例的成員股票觸發戰術訊號」+「近5日族群平均報酬」，用紅黃綠燈號呈現「這條鏈
+ * 現在誰噴誰還沒動」；額外把龍頭股（group_config.json的leader欄位）跟其餘成員（二軍）分開算，
+ * 判斷現在是「只有龍頭噴」「龍頭二軍一起噴」還是「二軍補漲、龍頭已經緩下來」——同樣都是
+ * signalRate 30%，「龍頭剛啟動」跟「連二軍都補漲完」代表的產業鏈階段完全不同，只看聚合平均
+ * 看不出這個差異。
  * 跟板塊熱圖（computeThemeHeatmap.ts）不同：熱圖是純報酬率，這裡疊加了戰術分類訊號比例，
  * 更貼近「訊號」這個詞本身的意思，不是只看價格。
  */
@@ -70,6 +119,8 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
 
   for (const stage of stagesWithThemes) {
     const tickers = [...new Set(stage.themes.flatMap((t) => t.members))];
+    const leaderTickers = new Set(stage.themes.flatMap((t) => t.leader));
+
     if (tickers.length === 0) {
       stages.push({
         stageKey: stage.stageKey,
@@ -81,6 +132,9 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
         risingCount: 0,
         fallingCount: 0,
         light: "gray",
+        leaders: { count: 0, avgReturn5d: null, risingCount: 0, fallingCount: 0 },
+        followers: { count: 0, avgReturn5d: null, risingCount: 0, fallingCount: 0 },
+        phase: "mixed",
         members: [],
       });
       continue;
@@ -133,14 +187,27 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
     const risingCount = returns.filter((r) => r > 0).length;
     const fallingCount = returns.filter((r) => r < 0).length;
 
+    const leaderReturns: number[] = [];
+    const followerReturns: number[] = [];
+    for (const s of stocks) {
+      const r = return5dByStockId.get(s.id);
+      if (r === undefined) continue;
+      (leaderTickers.has(s.ticker) ? leaderReturns : followerReturns).push(r);
+    }
+    const leaders = computeTierStats(leaderReturns);
+    const followers = computeTierStats(followerReturns);
+
     const members: ChainStageMember[] = stocks
       .map((s) => ({
         ticker: s.ticker,
         companyName: s.companyName,
         status: statusByStockId.get(s.id) ?? null,
         return5d: return5dByStockId.get(s.id) ?? null,
+        isLeader: leaderTickers.has(s.ticker),
       }))
       .sort((a, b) => (b.return5d ?? -Infinity) - (a.return5d ?? -Infinity));
+
+    const light = decideLight(signalRate, avgReturn5d);
 
     stages.push({
       stageKey: stage.stageKey,
@@ -151,7 +218,10 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
       avgReturn5d,
       risingCount,
       fallingCount,
-      light: decideLight(signalRate, avgReturn5d),
+      light,
+      leaders,
+      followers,
+      phase: light === "declining" ? "mixed" : decidePhase(leaders, followers),
       members,
     });
   }
