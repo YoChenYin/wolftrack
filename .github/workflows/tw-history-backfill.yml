@@ -1,0 +1,46 @@
+name: TW 10-year history backfill
+
+# 2026-07-25：把台股價格/籌碼/營收回補到10年歷史（entry/exit/buyDip策略需要的資料，見
+# classifyChipFlow.ts）。FinMind免費額度300次/小時，這裡故意用「小批次+反覆呼叫+sleep」
+# 的方式自行控速到約250次/小時（留安全margin），而不是在單一次request裡跑好幾小時——
+# 2026-07-21修YouTube LLM解析fire-and-forget問題時的教訓：長時間佔用單一個Zeabur request
+# 不可靠，container重啟會直接砍斷還沒跑完的工作。每次呼叫 /api/cron/tw-history-backfill
+# 只消耗一小批API額度（見 backfillTwHistory.ts 的 MAX_API_CALLS_PER_INVOCATION），
+# 很快回應，這裡在GitHub Actions runner上反覆呼叫很多次來達成長時間、可控速率的回補。
+#
+# 全部回補完成後（所有股票的三種資料都到達2016年或FinMind能給的最早日期）這個排程
+# 會自然變成每次呼叫都幾乎不消耗API額度的no-op，屆時可以考慮拿掉這個排程檔案。
+on:
+  schedule:
+    # 每天台北時間 02:00（跟youtube-transcribe的01:00錯開，避免同時佔用runner分鐘數）
+    - cron: "0 18 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - name: Run rate-limited backfill loop
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          END_TIME=$(( $(date +%s) + 300*60 ))
+          ROUND=0
+          while [ "$(date +%s)" -lt "$END_TIME" ]; do
+            ROUND=$((ROUND+1))
+            RESPONSE=$(curl -sf -X POST "$APP_URL/api/cron/tw-history-backfill" \
+              -H "Authorization: Bearer $CRON_SECRET")
+            echo "round $ROUND: $RESPONSE"
+
+            CALLS_USED=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('callsUsed', -1))")
+            REMAINING=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('candidatesRemaining', -1))")
+
+            if [ "$CALLS_USED" = "0" ] && [ "$REMAINING" = "0" ]; then
+              echo "已經完全回補完成，提早結束"
+              break
+            fi
+
+            sleep 220
+          done

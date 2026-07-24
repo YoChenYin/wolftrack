@@ -178,6 +178,47 @@ export async function fetchFinMindLatestValuation(ticker: string): Promise<FinMi
   return { date: latest.date, pe: latest.PER, pb: latest.PBR, dividendYield: latest.dividend_yield };
 }
 
+interface FinMindMonthRevenueRow {
+  date: string; // 每月固定回傳當月1號
+  stock_id: string;
+  revenue: number;
+  revenue_month: number;
+  revenue_year: number;
+}
+
+export interface FinMindMonthlyRevenue {
+  /** ISO date, 該月第一天 */
+  revenueMonth: string;
+  revenue: number;
+}
+
+/**
+ * TWSE/TPEx OpenAPI（monthlyRevenueClient.ts 用的那個）只能查「最新一期」，沒有日期區間查詢
+ * 能力，沒辦法拿來回補歷史。FinMind 的 TaiwanStockMonthRevenue 資料集支援任意日期區間查詢，
+ * 實測過2330可以查到2016年（10年以上），拿來做歷史回補用；只回傳當月營收數字，不像
+ * monthlyRevenueClient.ts那樣直接給年增率/月增率，呼叫端要自己拿相鄰月份的revenue去算。
+ * ETF/債券型ETF沒有營收資料，FinMind會回傳空陣列，呼叫端要能處理0筆的情況。
+ */
+export async function fetchFinMindMonthlyRevenue(
+  ticker: string,
+  startDate: string,
+  endDate: string
+): Promise<FinMindMonthlyRevenue[]> {
+  const url = `${FINMIND_BASE_URL}?dataset=TaiwanStockMonthRevenue&data_id=${encodeURIComponent(ticker)}&start_date=${startDate}&end_date=${endDate}`;
+  const res = await fetchWithRetry(url);
+  if (!res.ok) {
+    throw new Error(`[finmind] TaiwanStockMonthRevenue HTTP ${res.status} for ${ticker}`);
+  }
+  const body = (await res.json()) as FinMindResponse<FinMindMonthRevenueRow>;
+  if (body.status !== 200) {
+    throw new Error(`[finmind] TaiwanStockMonthRevenue error for ${ticker}: ${body.msg}`);
+  }
+  return body.data.map((row) => ({
+    revenueMonth: `${row.revenue_year}-${String(row.revenue_month).padStart(2, "0")}-01`,
+    revenue: row.revenue,
+  }));
+}
+
 interface FinMindStockInfoRow {
   industry_category: string;
   stock_id: string;

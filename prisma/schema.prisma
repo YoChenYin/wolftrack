@@ -44,15 +44,16 @@ model Stock {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  sector               SectorMapping             @relation(fields: [sectorId], references: [id])
-  signals              DailyTrendSignal[]
-  themes               StockTheme[]
-  institutionalTrading TwInstitutionalTrading[]
-  brokerBranchFlow     TwBrokerBranchFlow[]
-  dailyPrices          TwDailyPrice[]
-  fundamentals         TwStockFundamentals[]
-  monthlyRevenues      TwMonthlyRevenue[]
-  youtubeMentions      YoutubeStockMention[]
+  sector                SectorMapping             @relation(fields: [sectorId], references: [id])
+  signals               DailyTrendSignal[]
+  themes                StockTheme[]
+  institutionalTrading  TwInstitutionalTrading[]
+  brokerBranchFlow      TwBrokerBranchFlow[]
+  dailyPrices           TwDailyPrice[]
+  fundamentals          TwStockFundamentals[]
+  monthlyRevenues       TwMonthlyRevenue[]
+  youtubeMentions       YoutubeStockMention[]
+  historyBackfillStatus TwHistoryBackfillStatus[]
 
   @@unique([market, ticker])
   @@index([sectorId])
@@ -147,13 +148,13 @@ model DailyTrendSignal {
   volumeScore      Decimal? @map("volume_score") @db.Decimal(5, 2)
 
   // TW 版籌碼面（docs/wolftrack-tw-spec.md 第三章），US 版永遠是 null
-  technicalScore    Decimal?      @map("technical_score") @db.Decimal(5, 2)
-  chipScore         Decimal?      @map("chip_score") @db.Decimal(5, 2)
-  chipConcentration5  Decimal?    @map("chip_concentration_5") @db.Decimal(6, 2)
-  chipConcentration10 Decimal?    @map("chip_concentration_10") @db.Decimal(6, 2)
-  chipConcentration20 Decimal?    @map("chip_concentration_20") @db.Decimal(6, 2)
-  chipMomentum      ChipMomentum? @map("chip_momentum")
-  chipBadge         ChipBadge?    @map("chip_badge")
+  technicalScore      Decimal?      @map("technical_score") @db.Decimal(5, 2)
+  chipScore           Decimal?      @map("chip_score") @db.Decimal(5, 2)
+  chipConcentration5  Decimal?      @map("chip_concentration_5") @db.Decimal(6, 2)
+  chipConcentration10 Decimal?      @map("chip_concentration_10") @db.Decimal(6, 2)
+  chipConcentration20 Decimal?      @map("chip_concentration_20") @db.Decimal(6, 2)
+  chipMomentum        ChipMomentum? @map("chip_momentum")
+  chipBadge           ChipBadge?    @map("chip_badge")
 
   // 三段分類結果
   status TrendStatus
@@ -252,13 +253,13 @@ model TwMonthlyRevenue {
   revenueMonth DateTime @map("revenue_month") @db.Date
 
   /// 當月營收（千元）
-  revenue                  BigInt   @map("revenue")
-  revenuePriorMonth        BigInt?  @map("revenue_prior_month")
-  revenueSameMonthLastYear BigInt?  @map("revenue_same_month_last_year")
+  revenue                   BigInt   @map("revenue")
+  revenuePriorMonth         BigInt?  @map("revenue_prior_month")
+  revenueSameMonthLastYear  BigInt?  @map("revenue_same_month_last_year")
   /// 月增率(%)
-  momGrowthPct             Decimal? @map("mom_growth_pct") @db.Decimal(8, 2)
+  momGrowthPct              Decimal? @map("mom_growth_pct") @db.Decimal(8, 2)
   /// 年增率(%)——台股投資人最常看的營收指標
-  yoyGrowthPct             Decimal? @map("yoy_growth_pct") @db.Decimal(8, 2)
+  yoyGrowthPct              Decimal? @map("yoy_growth_pct") @db.Decimal(8, 2)
   cumulativeRevenue         BigInt?  @map("cumulative_revenue")
   cumulativeRevenueLastYear BigInt?  @map("cumulative_revenue_last_year")
   /// 累計營收年增率(%)
@@ -391,4 +392,25 @@ model YoutubeStockMention {
   @@index([videoId])
   @@index([stockId])
   @@map("youtube_stock_mentions")
+}
+
+/// 2026-07-25新增：追蹤「price/institutional/revenue 這三種資料各自回補到10年歷史的進度」，
+/// 避免每天排程重跑時，對已經回補到FinMind能提供的最早日期（例如新掛牌股票沒有更早資料）
+/// 的股票，每次都白白浪費一次API呼叫去重新確認「還是沒有更早的資料」。
+/// isFullyBackfilled=true 代表「已經回補到TARGET_START_DATE，或已經確認FinMind沒有更早
+/// 的資料了」，之後排程會跳過這筆，不會再消耗API額度。
+model TwHistoryBackfillStatus {
+  id      Int    @id @default(autoincrement())
+  stockId Int    @map("stock_id")
+  /// "price" | "institutional" | "revenue"
+  dataset String
+
+  earliestDateFetched DateTime? @map("earliest_date_fetched") @db.Date
+  isFullyBackfilled   Boolean   @default(false) @map("is_fully_backfilled")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  stock Stock @relation(fields: [stockId], references: [id])
+
+  @@unique([stockId, dataset])
+  @@map("tw_history_backfill_status")
 }
