@@ -54,6 +54,7 @@ model Stock {
   monthlyRevenues       TwMonthlyRevenue[]
   youtubeMentions       YoutubeStockMention[]
   historyBackfillStatus TwHistoryBackfillStatus[]
+  earningsCallAnalyses  EarningsCallAnalysis[]
 
   @@unique([market, ticker])
   @@index([sectorId])
@@ -413,4 +414,38 @@ model TwHistoryBackfillStatus {
 
   @@unique([stockId, dataset])
   @@map("tw_history_backfill_status")
+}
+
+/// 法說會基本面訊號整體評估：正面(獲利成長+展望樂觀)/中性/負面(獲利衰退或風險升高)
+enum FundamentalSignal {
+  positive
+  neutral
+  negative
+}
+
+/// 2026-07-25新增：龍頭股法說會（MOPS公開資訊觀測站，見 mopsClient.ts）簡報PDF的LLM解析結果。
+/// 只涵蓋 group_config.json 裡各theme標記的leader股票（目前48檔），不是全市場——法說會一季
+/// 一次，全市場等級的量太大也沒必要，龍頭股的展望/風險最能代表整條產業鏈的方向。
+model EarningsCallAnalysis {
+  id      Int @id @default(autoincrement())
+  stockId Int @map("stock_id")
+
+  conferenceDate DateTime @map("conference_date") @db.Date
+  /// MOPS的中文簡報檔名（例如233020260716M001.pdf），拿來判斷這場法說會有沒有處理過，避免重複
+  pdfFileName    String   @unique @map("pdf_file_name")
+
+  /// LLM整理的獲利成長重點（營收/毛利率/淨利等數字與趨勢），簡報沒提到具體數字就描述定性判斷
+  profitGrowthSummary String            @map("profit_growth_summary") @db.Text
+  /// 下一季/下一年度的展望與guidance
+  outlookSummary      String            @map("outlook_summary") @db.Text
+  /// 簡報裡提到的具體風險因素，不是Safe Harbor那種制式法律免責聲明
+  riskSummary         String            @map("risk_summary") @db.Text
+  signal              FundamentalSignal
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  stock Stock @relation(fields: [stockId], references: [id])
+
+  @@index([stockId])
+  @@map("earnings_call_analyses")
 }

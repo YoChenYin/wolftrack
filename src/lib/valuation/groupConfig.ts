@@ -92,6 +92,21 @@ export function listAllThemeNames(): string[] {
   return names;
 }
 
+/**
+ * 跨所有 theme 的不重複「龍頭股」代號聯集（2026-07-25新增，給法說會基本面訊號抓取範圍用，
+ * 見 runEarningsCallAnalysis.ts）——只解析龍頭股的法說會，不是全市場，龍頭股的展望/風險
+ * 最能代表整條產業鏈的方向，量也可控（目前48檔，一季一次）。
+ */
+export function getAllLeaderTickers(): string[] {
+  const result = new Set<string>();
+  for (const themes of Object.values(groupConfig.industry_concepts)) {
+    for (const theme of themes) {
+      for (const t of theme.leader) result.add(t);
+    }
+  }
+  return [...result];
+}
+
 /** 跨所有 theme 的不重複股票代號聯集，用來算「未分類」= 有追蹤但沒被任何 theme 收錄的股票 */
 export function getAllThemedTickers(): Set<string> {
   const result = new Set<string>();

@@ -7,6 +7,7 @@ import { ValuationSidePanel } from "@/components/tw/ValuationSidePanel";
 import { MonthlyRevenuePanel } from "@/components/tw/MonthlyRevenuePanel";
 import { StockMentionsPanel } from "@/components/youtube/StockMentionsPanel";
 import { fetchStockMentions } from "@/lib/youtube/queries";
+import { EarningsCallPanel } from "@/components/tw/EarningsCallPanel";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,12 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
   });
 
   const stockMentions = await fetchStockMentions(stock.id);
+
+  const earningsCallAnalyses = await prisma.earningsCallAnalysis.findMany({
+    where: { stockId: stock.id },
+    orderBy: { conferenceDate: "desc" },
+    take: 4,
+  });
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50">
@@ -69,6 +76,16 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
             yoyGrowthPct: r.yoyGrowthPct !== null ? Number(r.yoyGrowthPct) : null,
             momGrowthPct: r.momGrowthPct !== null ? Number(r.momGrowthPct) : null,
             cumulativeYoyGrowthPct: r.cumulativeYoyGrowthPct !== null ? Number(r.cumulativeYoyGrowthPct) : null,
+          }))}
+        />
+
+        <EarningsCallPanel
+          analyses={earningsCallAnalyses.map((a) => ({
+            conferenceDate: a.conferenceDate.toISOString().slice(0, 10),
+            profitGrowthSummary: a.profitGrowthSummary,
+            outlookSummary: a.outlookSummary,
+            riskSummary: a.riskSummary,
+            signal: a.signal,
           }))}
         />
 
