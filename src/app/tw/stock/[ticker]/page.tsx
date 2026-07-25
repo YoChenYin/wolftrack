@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { findIndustryThemesForTicker } from "@/lib/valuation/groupConfig";
 import { computeGroupValuation } from "@/lib/valuation/computeGroupValuation";
@@ -49,7 +50,14 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
     <div className="flex flex-1 flex-col bg-zinc-50">
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-6 py-10">
         <header>
-          <p className="text-sm text-zinc-500">{stock.sector.sectorNameZh ?? stock.sector.sectorName}</p>
+          <Link
+            href="/tw"
+            className="group inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900"
+          >
+            <span className="transition-transform group-hover:-translate-x-0.5">←</span>
+            返回台股總覽
+          </Link>
+          <p className="mt-3 text-sm text-zinc-500">{stock.sector.sectorNameZh ?? stock.sector.sectorName}</p>
           <h1 className="text-2xl font-bold text-zinc-900">
             {stock.ticker} {stripCompanySuffix(stock.companyName)}
           </h1>

@@ -12,6 +12,7 @@
 import "dotenv/config";
 import { prisma } from "../src/lib/prisma";
 import { fetchFinMindStockInfo } from "../src/lib/marketData/finmindClient";
+import { fetchTwCompanyShortNames } from "../src/lib/marketData/twCompanyNames";
 
 const FALLBACK_SECTOR_CODE = "TW20";
 
@@ -25,6 +26,9 @@ async function main() {
 
   const allInfo = await fetchFinMindStockInfo();
   const infoByTicker = new Map(allInfo.map((s) => [s.ticker, s]));
+  // 2026-07-26：優先用TWSE/TPEx官方簡稱（例如「瑞昱半導體」->「瑞昱」），比FinMind的全名
+  // 更貼近平常講的名字，見 twCompanyNames.ts 說明。查無對應（多半是ETF）就退回FinMind全名。
+  const shortNames = await fetchTwCompanyShortNames();
 
   const fallbackSector = await prisma.sectorMapping.findFirst({
     where: { market: "TW", sectorCode: FALLBACK_SECTOR_CODE },
@@ -57,7 +61,7 @@ async function main() {
       data: {
         market: "TW",
         ticker: info.ticker,
-        companyName: info.name,
+        companyName: shortNames.get(info.ticker) ?? info.name,
         sectorId: (sector ?? fallbackSector).id,
         industry: info.industryCategory,
         isActive: true,

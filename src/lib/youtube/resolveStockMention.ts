@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { fetchFinMindStockInfo } from "@/lib/marketData/finmindClient";
+import { fetchTwCompanyShortNames } from "@/lib/marketData/twCompanyNames";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 
 const TICKER_PATTERN = /^[0-9]{4,6}[A-Z]?$/;
@@ -19,6 +20,16 @@ async function getFinMindRegistry() {
     finMindRegistryCache = await fetchFinMindStockInfo();
   }
   return finMindRegistryCache;
+}
+
+/** 2026-07-26：TWSE/TPEx官方簡稱，比FinMind全名更貼近平常講的名字，見 twCompanyNames.ts */
+let shortNameCache: Map<string, string> | null = null;
+
+async function getShortNames() {
+  if (!shortNameCache) {
+    shortNameCache = await fetchTwCompanyShortNames();
+  }
+  return shortNameCache;
 }
 
 /**
@@ -83,11 +94,12 @@ export async function resolveStockMention(
     };
   }
 
+  const shortNames = await getShortNames();
   const newStock = await prisma.stock.create({
     data: {
       market: "TW",
       ticker: candidate.ticker,
-      companyName: candidate.name,
+      companyName: shortNames.get(candidate.ticker) ?? candidate.name,
       sectorId: fallbackSector.id,
       industry: candidate.industryCategory,
       isActive: true,
