@@ -23,6 +23,7 @@ interface StockResult {
   processed: number;
   skipped: number;
   errors: number;
+  errorMessages: string[];
 }
 
 async function processStock(
@@ -38,6 +39,7 @@ async function processStock(
   let skipped = 0;
   let errors = 0;
   let budgetUsed = 0;
+  const errorMessages: string[] = [];
 
   for (const entry of entries) {
     if (budgetUsed >= budgetRemaining) break;
@@ -72,12 +74,14 @@ async function processStock(
       });
       processed++;
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       console.error(`[earningsCall] ${ticker}/${entry.pdfFileName} failed:`, err);
+      errorMessages.push(`${entry.pdfFileName}: ${message}`);
       errors++;
     }
   }
 
-  return { result: { ticker, processed, skipped, errors }, budgetUsed };
+  return { result: { ticker, processed, skipped, errors, errorMessages }, budgetUsed };
 }
 
 export interface EarningsCallBatchResult {
@@ -112,8 +116,9 @@ export async function runEarningsCallAnalysisBatch(): Promise<EarningsCallBatchR
       results.push(result);
       budgetRemaining -= budgetUsed;
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       console.error(`[earningsCall] failed to check conference list for ${stock.ticker}:`, err);
-      results.push({ ticker: stock.ticker, processed: 0, skipped: 0, errors: 1 });
+      results.push({ ticker: stock.ticker, processed: 0, skipped: 0, errors: 1, errorMessages: [message] });
     }
   }
 
