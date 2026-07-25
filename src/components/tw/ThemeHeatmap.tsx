@@ -14,6 +14,9 @@ interface ThemeHeatmapCell {
   return5d: number | null;
   return10d: number | null;
   return20d: number | null;
+  concentration5d: number | null;
+  concentration10d: number | null;
+  concentration20d: number | null;
   sampleSize: number;
   chainStages: ThemeChainStage[];
 }
@@ -44,10 +47,34 @@ function textColor(value: number | null): string {
   return Math.abs(value) >= 2.5 ? "#fff" : value >= 0 ? "#8a2e20" : "#0f5c43";
 }
 
+/** 台股慣例：買超(正)=紅、賣超(負)=綠，跟報酬率配色邏輯一致 */
+function concentrationColor(value: number | null): string {
+  if (value === null) return "text-zinc-300";
+  if (value > 0) return "text-red-600";
+  if (value < 0) return "text-emerald-600";
+  return "text-zinc-400";
+}
+
 function formatPct(value: number | null): string {
   if (value === null) return "—";
   const sign = value > 0 ? "+" : "";
   return `${sign}${value.toFixed(1)}%`;
+}
+
+function ReturnCell({ return: r, concentration }: { return: number | null; concentration: number | null }) {
+  return (
+    <div className="flex flex-col items-end gap-0.5">
+      <span
+        className="inline-block w-16 rounded px-1.5 py-0.5 text-right font-medium"
+        style={{ background: heatColor(r), color: textColor(r) }}
+      >
+        {formatPct(r)}
+      </span>
+      <span className={`text-[10px] font-medium ${concentrationColor(concentration)}`}>
+        籌{formatPct(concentration)}
+      </span>
+    </div>
+  );
 }
 
 export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: string) => void }) {
@@ -93,7 +120,9 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
           ))}
         </div>
       </div>
-      <p className="mt-1 text-[11px] text-zinc-400">族群成員平均報酬率，點列可直接篩選該板塊；標籤是該板塊在產業鏈上的位置</p>
+      <p className="mt-1 text-[11px] text-zinc-400">
+        族群成員平均報酬率（上）與籌碼集中度（下，籌碼領先股價，投信外資買超佔量能比例），點列可直接篩選該板塊；標籤是該板塊在產業鏈上的位置
+      </p>
 
       <div className="mt-2 flex flex-wrap gap-1">
         <button
@@ -148,29 +177,14 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
                     </span>
                   ))}
                 </td>
-                <td className="py-1 text-right">
-                  <span
-                    className="inline-block w-16 rounded px-1.5 py-0.5 text-right font-medium"
-                    style={{ background: heatColor(cell.return5d), color: textColor(cell.return5d) }}
-                  >
-                    {formatPct(cell.return5d)}
-                  </span>
+                <td className="py-1">
+                  <ReturnCell return={cell.return5d} concentration={cell.concentration5d} />
                 </td>
-                <td className="py-1 text-right">
-                  <span
-                    className="inline-block w-16 rounded px-1.5 py-0.5 text-right font-medium"
-                    style={{ background: heatColor(cell.return10d), color: textColor(cell.return10d) }}
-                  >
-                    {formatPct(cell.return10d)}
-                  </span>
+                <td className="py-1">
+                  <ReturnCell return={cell.return10d} concentration={cell.concentration10d} />
                 </td>
-                <td className="py-1 text-right">
-                  <span
-                    className="inline-block w-16 rounded px-1.5 py-0.5 text-right font-medium"
-                    style={{ background: heatColor(cell.return20d), color: textColor(cell.return20d) }}
-                  >
-                    {formatPct(cell.return20d)}
-                  </span>
+                <td className="py-1">
+                  <ReturnCell return={cell.return20d} concentration={cell.concentration20d} />
                 </td>
               </tr>
             ))}

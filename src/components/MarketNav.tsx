@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/", label: "🇺🇸 WolfTrack 狼蹤" },
+  { href: "/", label: "🇺🇸 WolfTrack 狼蹤 🚧" },
   { href: "/tw", label: "🇹🇼 WolfTrack TW" },
 ] as const;
 
