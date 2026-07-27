@@ -1,3 +1,4 @@
+import { Flame } from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
 import { findYoutubeChannel } from "@/config/youtubeChannels";
 import type { StockMentionItem } from "@/lib/youtube/queries";
@@ -5,7 +6,7 @@ import type { StockMentionItem } from "@/lib/youtube/queries";
 const SENTIMENT_LABEL: Record<string, string> = { bullish: "看多", bearish: "看空", neutral: "中性" };
 const AGREEMENT_LABEL: Record<string, string> = {
   agree: "系統已同步",
-  aheadOfSystem: "🔥 領先系統",
+  aheadOfSystem: "領先系統",
   noData: "無法比對",
 };
 
@@ -40,7 +41,14 @@ export function StockMentionsPanel({ mentions }: { mentions: StockMentionItem[] 
                 {m.agreement && (
                   <>
                     <span>·</span>
-                    <span className={m.agreement === "aheadOfSystem" ? "font-medium text-amber-600" : ""}>
+                    <span
+                      className={
+                        m.agreement === "aheadOfSystem"
+                          ? "inline-flex items-center gap-0.5 font-medium text-amber-600"
+                          : ""
+                      }
+                    >
+                      {m.agreement === "aheadOfSystem" && <Flame className="h-2.5 w-2.5" strokeWidth={2.25} />}
                       {AGREEMENT_LABEL[m.agreement] ?? m.agreement}
                     </span>
                   </>

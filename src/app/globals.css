@@ -3,6 +3,10 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* 2026-07-26：/tw 首頁的品牌色——琥珀銅，呼應「狼蹤」夜間追蹤的意象，只在/tw這個
+     route subtree當accent用，紅漲綠跌這種資料語意色不受影響 */
+  --tw-accent: #b45309;
+  --tw-accent-foreground: #fffbeb;
 }
 
 @theme inline {
@@ -22,5 +26,21 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* 2026-07-26：/tw 首頁進場動畫，區塊依序淡入+輕微上移，取代一次全部彈出 */
+@keyframes tw-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tw-reveal {
+  animation: tw-reveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }

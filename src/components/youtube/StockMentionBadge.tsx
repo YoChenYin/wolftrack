@@ -1,3 +1,4 @@
+import { ClipboardList, Flame } from "lucide-react";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 import type { VideoMentionItem } from "@/lib/youtube/queries";
 
@@ -9,7 +10,7 @@ const SENTIMENT_STYLE: Record<string, { label: string; className: string }> = {
 
 const AGREEMENT_LABEL: Record<string, string> = {
   agree: "系統已同步",
-  aheadOfSystem: "🔥 領先系統",
+  aheadOfSystem: "領先系統",
   noData: "無法比對",
 };
 
@@ -37,14 +38,25 @@ export function StockMentionBadge({ mention }: { mention: VideoMentionItem }) {
         <span>{displayName}</span>
         {mention.isNewStock && <span className="text-[10px] font-normal text-amber-600">新股</span>}
         {!mention.ticker && <span className="text-[10px] font-normal text-zinc-400">待確認</span>}
-        {entryExitTitle && <span className="text-[10px]" title={entryExitTitle}>📋</span>}
+        {entryExitTitle && (
+          <span title={entryExitTitle}>
+            <ClipboardList className="h-2.5 w-2.5 shrink-0 text-zinc-400" strokeWidth={2.25} />
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-1.5 text-[10px] font-normal text-zinc-500">
         <span>{sentiment.label}</span>
         {mention.agreement && (
           <>
             <span>·</span>
-            <span className={mention.agreement === "aheadOfSystem" ? "font-medium text-amber-600" : ""}>
+            <span
+              className={
+                mention.agreement === "aheadOfSystem"
+                  ? "inline-flex items-center gap-0.5 font-medium text-amber-600"
+                  : ""
+              }
+            >
+              {mention.agreement === "aheadOfSystem" && <Flame className="h-2.5 w-2.5" strokeWidth={2.25} />}
               {AGREEMENT_LABEL[mention.agreement] ?? mention.agreement}
             </span>
           </>

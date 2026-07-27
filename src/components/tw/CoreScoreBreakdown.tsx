@@ -1,3 +1,5 @@
+import { CheckCircle2, AlertTriangle } from "lucide-react";
+
 export function CoreScoreBreakdown({
   coreScore,
   technicalScore,
@@ -20,10 +22,16 @@ export function CoreScoreBreakdown({
         <ScoreBar label="籌碼面 (50%)" value={chipScore} color="bg-amber-500" />
       </div>
       {chipBadge === "confirmed" && (
-        <p className="mt-3 text-xs font-medium text-emerald-600">籌碼確認 ✅ 技術面與法人籌碼同步走強</p>
+        <p className="mt-3 flex items-center gap-1 text-xs font-medium text-emerald-600">
+          <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.25} />
+          籌碼確認 技術面與法人籌碼同步走強
+        </p>
       )}
       {chipBadge === "divergence" && (
-        <p className="mt-3 text-xs font-medium text-amber-600">籌碼背離 ⚠️ 價格續強但法人籌碼轉弱</p>
+        <p className="mt-3 flex items-center gap-1 text-xs font-medium text-amber-600">
+          <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2.25} />
+          籌碼背離 價格續強但法人籌碼轉弱
+        </p>
       )}
     </section>
   );

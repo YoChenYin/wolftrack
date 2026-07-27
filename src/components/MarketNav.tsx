@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Construction } from "lucide-react";
 
 const TABS = [
-  { href: "/", label: "🇺🇸 WolfTrack 狼蹤 🚧" },
-  { href: "/tw", label: "🇹🇼 WolfTrack TW" },
+  { href: "/", flag: "🇺🇸", label: "WolfTrack 狼蹤", underConstruction: true },
+  { href: "/tw", flag: "🇹🇼", label: "WolfTrack TW", underConstruction: false },
 ] as const;
 
 export function MarketNav() {
@@ -20,13 +21,19 @@ export function MarketNav() {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
+              className={`flex items-center gap-1.5 border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
                 active
                   ? "border-zinc-900 text-zinc-900"
                   : "border-transparent text-zinc-500 hover:text-zinc-800"
               }`}
             >
+              <span>{tab.flag}</span>
               {tab.label}
+              {tab.underConstruction && (
+                <span title="施工中">
+                  <Construction className="h-3.5 w-3.5 text-amber-500" strokeWidth={2.25} />
+                </span>
+              )}
             </Link>
           );
         })}

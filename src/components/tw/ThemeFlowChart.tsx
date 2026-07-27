@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Flame, Snowflake } from "lucide-react";
 
 interface ThemeFlowSeries {
   category: string;
@@ -218,8 +219,8 @@ export function ThemeFlowChart() {
                       className="inline-block h-2 w-2 rounded-full"
                       style={{ background: CATEGORY_COLORS[category] ?? "#71717a" }}
                     />
-                    {isStrongest && "🔥"}
-                    {isWeakest && "🧊"}
+                    {isStrongest && <Flame className="h-3 w-3 text-orange-600" strokeWidth={2.25} />}
+                    {isWeakest && <Snowflake className="h-3 w-3 text-sky-600" strokeWidth={2.25} />}
                     {category}
                     <span className={v !== null && v >= 100 ? "text-red-600" : "text-emerald-600"}>
                       {v !== null ? `${(v - 100).toFixed(1)}%` : "—"}

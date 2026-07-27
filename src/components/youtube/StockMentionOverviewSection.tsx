@@ -1,3 +1,4 @@
+import { Flame } from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
 import { findYoutubeChannel } from "@/config/youtubeChannels";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
@@ -48,7 +49,10 @@ export function StockMentionOverviewSection({ items }: { items: StockMentionOver
                     <td className={`py-1.5 pr-3 font-medium ${sentiment.className}`}>
                       {sentiment.label}
                       {item.latestAgreement === "aheadOfSystem" && (
-                        <span className="ml-1 font-medium text-amber-600">🔥領先系統</span>
+                        <span className="ml-1 inline-flex items-center gap-0.5 font-medium text-amber-600">
+                          <Flame className="h-3 w-3" strokeWidth={2.25} />
+                          領先系統
+                        </span>
                       )}
                     </td>
                     <td className="py-1.5 text-zinc-400">{item.latestPublishedAt.slice(0, 10)}</td>

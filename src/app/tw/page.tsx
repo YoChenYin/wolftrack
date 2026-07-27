@@ -48,19 +48,49 @@ export default async function HomeTw() {
   const stockMentionOverview = await fetchStockMentionOverview();
 
   return (
-    <div className="flex flex-1 flex-col bg-zinc-50">
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-10">
-        <header>
-          <h1 className="text-2xl font-bold text-zinc-900">WolfTrack TW 狼蹤台股版</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            每日掃描台股，依投信/外資籌碼流分類三種戰術狀態：進場 / 出場 / 逢低布局（Core Score = 50% 技術面 + 50% 籌碼面）
+    <div
+      className="relative flex flex-1 flex-col overflow-hidden font-[family:var(--font-tw-sans)]"
+      style={{
+        background:
+          "radial-gradient(1200px 480px at 15% -10%, rgba(180,83,9,0.08), transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(180,83,9,0.05), transparent 55%), #fafaf9",
+      }}
+    >
+      <main className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-10">
+        <header className="tw-reveal">
+          <div className="flex items-baseline gap-3">
+            <h1
+              className="font-[family:var(--font-tw-display)] text-3xl font-semibold tracking-tight text-zinc-900"
+              style={{
+                backgroundImage: "linear-gradient(100deg, #78350f, #b45309 55%, #78350f)",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                color: "transparent",
+              }}
+            >
+              狼蹤台股版
+            </h1>
+            <span className="font-[family:var(--font-tw-mono)] text-xs font-medium tracking-wide text-amber-800/60">
+              WOLFTRACK · TW
+            </span>
+          </div>
+          <div className="mt-2 h-px w-24 bg-gradient-to-r from-amber-700/50 to-transparent" />
+          <p className="mt-3 max-w-2xl text-sm text-zinc-500">
+            每日掃描台股，依投信/外資籌碼流分類三種戰術狀態：
+            <span className="font-medium text-zinc-700">進場 / 出場 / 逢低布局</span>
+            （Core Score = 50% 技術面 + 50% 籌碼面）
           </p>
         </header>
 
-        <SectorTrendsBoard market="TW" sectors={themeOptions} themes={[]} initialData={initialData} />
+        <div className="tw-reveal" style={{ animationDelay: "80ms" }}>
+          <SectorTrendsBoard market="TW" sectors={themeOptions} themes={[]} initialData={initialData} />
+        </div>
 
-        <StockMentionOverviewSection items={stockMentionOverview} />
-        <VideoMentionsSection videos={recentVideos} />
+        <div className="tw-reveal" style={{ animationDelay: "140ms" }}>
+          <StockMentionOverviewSection items={stockMentionOverview} />
+        </div>
+        <div className="tw-reveal" style={{ animationDelay: "200ms" }}>
+          <VideoMentionsSection videos={recentVideos} />
+        </div>
       </main>
     </div>
   );

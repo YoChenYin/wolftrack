@@ -1,4 +1,16 @@
 import Link from "next/link";
+import {
+  Radar,
+  Hourglass,
+  TrendingUp,
+  LogIn,
+  LogOut,
+  ArrowDownToLine,
+  CheckCircle2,
+  AlertTriangle,
+  Rocket,
+  type LucideIcon,
+} from "lucide-react";
 import type { SectorTrendItem, TacticalStatus } from "@/lib/trend/sectorTrendsQuery";
 import type { Market } from "@/generated/prisma/enums";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
@@ -6,10 +18,20 @@ import { InfoTooltip } from "./InfoTooltip";
 
 const COLUMN_META: Record<
   TacticalStatus,
-  { emoji: string; title: string; subtitle: string; accent: string; badge: string; criteria: string; signalLabel: string }
+  {
+    icon: LucideIcon;
+    iconClassName: string;
+    title: string;
+    subtitle: string;
+    accent: string;
+    badge: string;
+    criteria: string;
+    signalLabel: string;
+  }
 > = {
   reversal: {
-    emoji: "🔵",
+    icon: Radar,
+    iconClassName: "text-blue-600",
     title: "反轉雷達",
     subtitle: "接近趨勢切換點，變盤初期 — 提早佈局",
     accent: "border-t-blue-500",
@@ -19,7 +41,8 @@ const COLUMN_META: Record<
     signalLabel: "反轉點",
   },
   pullback: {
-    emoji: "🟡",
+    icon: Hourglass,
+    iconClassName: "text-amber-600",
     title: "蓄勢待發",
     subtitle: "回檔整理中 — 等拉回上車",
     accent: "border-t-amber-500",
@@ -29,7 +52,8 @@ const COLUMN_META: Record<
     signalLabel: "反轉點",
   },
   bullish: {
-    emoji: "🟢",
+    icon: TrendingUp,
+    iconClassName: "text-emerald-600",
     title: "趨勢穩健",
     subtitle: "已進入上升軌道、動能延續 — 續抱追蹤",
     accent: "border-t-emerald-500",
@@ -39,17 +63,19 @@ const COLUMN_META: Record<
     signalLabel: "反轉點",
   },
   entry: {
-    emoji: "🔵",
+    icon: LogIn,
+    iconClassName: "text-blue-600",
     title: "進場",
     subtitle: "籌碼+技術面同步轉強 — 符合條件，效果待驗證",
     accent: "border-t-blue-500",
     badge: "bg-blue-50 text-blue-700",
     criteria:
-      "① 投信/外資近3個月合計買超 ② 買超力道與籌碼集中度呈5日>10日>20日加速排列 ③ MA5>MA10>MA20多頭排列 ④ KD黃金交叉、K持續走強、且KD<80未過熱。⚠️用真實production資料回測過：這組條件本身的20日超額報酬中位數約-0.04%（接近打平，不是驗證有效的alpha訊號），只是「符合這組條件」，出現不代表歷史上會賺錢，請搭配「出場」訊號嚴格執行風控。",
+      "① 投信/外資近3個月合計買超 ② 買超力道與籌碼集中度呈5日>10日>20日加速排列 ③ MA5>MA10>MA20多頭排列 ④ KD黃金交叉、K持續走強、且KD<80未過熱。注意：用真實production資料回測過，這組條件本身的20日超額報酬中位數約-0.04%（接近打平，不是驗證有效的alpha訊號），只是「符合這組條件」，出現不代表歷史上會賺錢，請搭配「出場」訊號嚴格執行風控。",
     signalLabel: "訊號起點",
   },
   exit: {
-    emoji: "🔴",
+    icon: LogOut,
+    iconClassName: "text-rose-600",
     title: "出場",
     subtitle: "至少一項風控條件觸發 — 建議減碼或出場",
     accent: "border-t-rose-500",
@@ -59,13 +85,14 @@ const COLUMN_META: Record<
     signalLabel: "訊號起點",
   },
   buyDip: {
-    emoji: "🟡",
+    icon: ArrowDownToLine,
+    iconClassName: "text-amber-600",
     title: "逢低布局",
     subtitle: "回落季線的健康拉回 — 目前唯一驗證有效的訊號",
     accent: "border-t-amber-500",
     badge: "bg-amber-50 text-amber-700",
     criteria:
-      "① 股價落在季線(MA60)±1.5%範圍內 ② 近5日籌碼集中度≥15%。✅用真實production資料回測過，是目前這套策略裡唯一有穩健正超額報酬的訊號：20日中位超額報酬約+2.1%~+2.3%，勝率70%以上。",
+      "① 股價落在季線(MA60)±1.5%範圍內 ② 近5日籌碼集中度≥15%。用真實production資料回測過，是目前這套策略裡唯一有穩健正超額報酬的訊號：20日中位超額報酬約+2.1%~+2.3%，勝率70%以上。",
     signalLabel: "訊號起點",
   },
 };
@@ -98,12 +125,13 @@ export function TrendColumn({
   loading?: boolean;
 }) {
   const meta = COLUMN_META[status];
+  const Icon = meta.icon;
 
   return (
     <section className={`flex flex-col rounded-lg border border-t-4 border-zinc-200 bg-white ${meta.accent} shadow-sm`}>
       <header className="border-b border-zinc-100 px-4 py-3">
         <h2 className="flex items-center gap-2 text-base font-semibold text-zinc-900">
-          <span>{meta.emoji}</span>
+          <Icon className={`h-4 w-4 ${meta.iconClassName}`} strokeWidth={2.25} />
           {meta.title}
           <InfoTooltip>{meta.criteria}</InfoTooltip>
         </h2>
@@ -133,21 +161,30 @@ export function TrendColumn({
                     {item.coreScore.toFixed(0)}
                   </span>
                   {item.chipBadge === "confirmed" && (
-                    <span className="text-xs" title="籌碼確認：技術面與法人籌碼同步走強">
-                      籌碼確認 ✅
+                    <span
+                      className="inline-flex items-center gap-0.5 text-xs text-emerald-600"
+                      title="籌碼確認：技術面與法人籌碼同步走強"
+                    >
+                      <CheckCircle2 className="h-3 w-3" strokeWidth={2.25} />
+                      籌碼確認
                     </span>
                   )}
                   {item.chipBadge === "divergence" && (
-                    <span className="text-xs" title="籌碼背離：價格續強但法人籌碼轉弱">
-                      籌碼背離 ⚠️
+                    <span
+                      className="inline-flex items-center gap-0.5 text-xs text-amber-600"
+                      title="籌碼背離：價格續強但法人籌碼轉弱"
+                    >
+                      <AlertTriangle className="h-3 w-3" strokeWidth={2.25} />
+                      籌碼背離
                     </span>
                   )}
                   {item.revenueYoyGrowthPct !== null && (
                     <span
-                      className={`text-xs font-medium ${changeColorClass(item.revenueYoyGrowthPct, market)}`}
+                      className={`inline-flex items-center gap-0.5 text-xs font-medium ${changeColorClass(item.revenueYoyGrowthPct, market)}`}
                       title={`${item.revenueMonth} 月營收年增率`}
                     >
-                      {item.revenueYoyGrowthPct >= 20 ? "🚀" : ""}營收{item.revenueYoyGrowthPct >= 0 ? "+" : ""}
+                      {item.revenueYoyGrowthPct >= 20 && <Rocket className="h-3 w-3" strokeWidth={2.25} />}
+                      營收{item.revenueYoyGrowthPct >= 0 ? "+" : ""}
                       {item.revenueYoyGrowthPct.toFixed(0)}%
                     </span>
                   )}
