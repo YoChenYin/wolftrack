@@ -10,6 +10,13 @@ name: TW 10-year history backfill
 #
 # 全部回補完成後（所有股票的三種資料都到達2016年或FinMind能給的最早日期）這個排程
 # 會自然變成每次呼叫都幾乎不消耗API額度的no-op，屆時可以考慮拿掉這個排程檔案。
+#
+# 2026-07-28：連續3天執行都以failure收場（跑1~1.5小時就整個step掛掉，離300分鐘預算還早）。
+# 原因是curl -sf遇到任何非2xx回應（Zeabur冷啟動502、暫時性DB連線問題等）會讓curl
+# 回傳非0 exit code，GitHub Actions的run:預設用「bash -e」執行，單一輪暫時性錯誤
+# 就會讓整個step、進而整個5小時排程直接中止——即使程式本身每支股票都有try/catch、
+# 不會真的因為單一標的資料異常而整批失敗。改成量測HTTP狀態碼、失敗時記錄+sleep+
+# 重試，只有連續失敗夠多輪（代表真的掛了，不是暫時性問題）才提早結束。
 on:
   schedule:
     # 每天台北時間 02:00（跟youtube-transcribe的01:00錯開，避免同時佔用runner分鐘數）
@@ -28,14 +35,28 @@ jobs:
         run: |
           END_TIME=$(( $(date +%s) + 300*60 ))
           ROUND=0
+          FAIL_STREAK=0
           while [ "$(date +%s)" -lt "$END_TIME" ]; do
             ROUND=$((ROUND+1))
-            RESPONSE=$(curl -sf -X POST "$APP_URL/api/cron/tw-history-backfill" \
-              -H "Authorization: Bearer $CRON_SECRET")
-            echo "round $ROUND: $RESPONSE"
+            HTTP_CODE=$(curl -s -o /tmp/tw-backfill-response.json -w "%{http_code}" -X POST \
+              "$APP_URL/api/cron/tw-history-backfill" -H "Authorization: Bearer $CRON_SECRET" || echo "000")
+            RESPONSE=$(cat /tmp/tw-backfill-response.json 2>/dev/null || echo "")
+            echo "round $ROUND (http $HTTP_CODE): $RESPONSE"
 
-            CALLS_USED=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('callsUsed', -1))")
-            REMAINING=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('candidatesRemaining', -1))")
+            if [ "$HTTP_CODE" != "200" ]; then
+              FAIL_STREAK=$((FAIL_STREAK+1))
+              echo "本輪呼叫失敗（http $HTTP_CODE），視為暫時性問題，sleep後重試（連續失敗第 $FAIL_STREAK 次）"
+              if [ "$FAIL_STREAK" -ge 10 ]; then
+                echo "連續失敗達10次，判定不是暫時性問題，提早結束"
+                exit 1
+              fi
+              sleep 220
+              continue
+            fi
+            FAIL_STREAK=0
+
+            CALLS_USED=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('callsUsed', -1))" 2>/dev/null || echo "-1")
+            REMAINING=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('candidatesRemaining', -1))" 2>/dev/null || echo "-1")
 
             if [ "$CALLS_USED" = "0" ] && [ "$REMAINING" = "0" ]; then
               echo "已經完全回補完成，提早結束"
