@@ -1,8 +1,10 @@
-import { Flame } from "lucide-react";
+import { Flame, Users } from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
 import { findYoutubeChannel } from "@/config/youtubeChannels";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 import type { StockMentionOverviewItem } from "@/lib/youtube/queries";
+import { Card } from "../ui/Card";
+import { SectionHeader } from "../ui/SectionHeader";
 
 const SENTIMENT_LABEL: Record<string, { label: string; className: string }> = {
   bullish: { label: "看多", className: "text-emerald-700" },
@@ -13,13 +15,17 @@ const SENTIMENT_LABEL: Record<string, { label: string; className: string }> = {
 /** v1不需要client互動，server component直接render，比照這個專案其他TW-only區塊的做法 */
 export function StockMentionOverviewSection({ items }: { items: StockMentionOverviewItem[] }) {
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-4">
-      <h2 className="flex items-center gap-1 text-sm font-semibold text-zinc-900">
-        網紅視角總覽
-        <InfoTooltip>
-          近2週內3個頻道提到的個股，同一檔股票在不同影片被提到會合併成一筆，依「幾個不同頻道都提到」排序——跨頻道一致提到的股票通常比單一頻道反覆講更值得留意。看多看空是最新一次提及的立場。
-        </InfoTooltip>
-      </h2>
+    <Card>
+      <SectionHeader
+        icon={Users}
+        iconColor="amber"
+        title="網紅視角總覽"
+        tooltip={
+          <InfoTooltip>
+            近2週內3個頻道提到的個股，同一檔股票在不同影片被提到會合併成一筆，依「幾個不同頻道都提到」排序——跨頻道一致提到的股票通常比單一頻道反覆講更值得留意。看多看空是最新一次提及的立場。
+          </InfoTooltip>
+        }
+      />
       {items.length === 0 ? (
         <p className="mt-2 text-xs text-zinc-400">近2週還沒有已處理完的個股提及。</p>
       ) : (
@@ -63,6 +69,6 @@ export function StockMentionOverviewSection({ items }: { items: StockMentionOver
           </table>
         </div>
       )}
-    </section>
+    </Card>
   );
 }

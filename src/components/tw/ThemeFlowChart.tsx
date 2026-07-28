@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Flame, Snowflake } from "lucide-react";
+import { Flame, Snowflake, Activity } from "lucide-react";
+import { Card } from "../ui/Card";
+import { SectionHeader } from "../ui/SectionHeader";
 
 interface ThemeFlowSeries {
   category: string;
@@ -48,10 +50,10 @@ export function ThemeFlowChart() {
 
   if (!data || data.dates.length === 0) {
     return (
-      <section className="rounded-lg border border-zinc-200 bg-white p-4">
-        <h2 className="text-sm font-semibold text-zinc-900">板塊資金流動</h2>
+      <Card>
+        <SectionHeader icon={Activity} iconColor="blue" title="板塊資金流動" />
         <p className="mt-2 text-xs text-zinc-400">載入中…</p>
-      </section>
+      </Card>
     );
   }
 
@@ -115,8 +117,8 @@ export function ThemeFlowChart() {
   const tickValues = Array.from({ length: yTicks + 1 }, (_, i) => yMin + ((yMax - yMin) * i) / yTicks);
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-zinc-900">板塊資金流動</h2>
+    <Card>
+      <SectionHeader icon={Activity} iconColor="blue" title="板塊資金流動" />
       <p className="mt-0.5 text-[11px] text-zinc-400">
         14 大分類近{dates.length}個交易日的族群平均累積報酬指數（起點=100），看資金往哪個板塊移動。點圖例可隱藏/顯示該線。
       </p>
@@ -250,6 +252,6 @@ export function ThemeFlowChart() {
           </button>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }

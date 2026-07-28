@@ -15,12 +15,13 @@ import type { SectorTrendItem, TacticalStatus } from "@/lib/trend/sectorTrendsQu
 import type { Market } from "@/generated/prisma/enums";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 import { InfoTooltip } from "./InfoTooltip";
+import { IconBadge } from "./ui/IconBadge";
 
 const COLUMN_META: Record<
   TacticalStatus,
   {
     icon: LucideIcon;
-    iconClassName: string;
+    iconColor: "blue" | "amber" | "emerald" | "rose";
     title: string;
     subtitle: string;
     accent: string;
@@ -31,7 +32,7 @@ const COLUMN_META: Record<
 > = {
   reversal: {
     icon: Radar,
-    iconClassName: "text-blue-600",
+    iconColor: "blue",
     title: "反轉雷達",
     subtitle: "接近趨勢切換點，變盤初期 — 提早佈局",
     accent: "border-t-blue-500",
@@ -42,7 +43,7 @@ const COLUMN_META: Record<
   },
   pullback: {
     icon: Hourglass,
-    iconClassName: "text-amber-600",
+    iconColor: "amber",
     title: "蓄勢待發",
     subtitle: "回檔整理中 — 等拉回上車",
     accent: "border-t-amber-500",
@@ -53,7 +54,7 @@ const COLUMN_META: Record<
   },
   bullish: {
     icon: TrendingUp,
-    iconClassName: "text-emerald-600",
+    iconColor: "emerald",
     title: "趨勢穩健",
     subtitle: "已進入上升軌道、動能延續 — 續抱追蹤",
     accent: "border-t-emerald-500",
@@ -64,7 +65,7 @@ const COLUMN_META: Record<
   },
   entry: {
     icon: LogIn,
-    iconClassName: "text-blue-600",
+    iconColor: "blue",
     title: "進場",
     subtitle: "籌碼+技術面同步轉強 — 符合條件，效果待驗證",
     accent: "border-t-blue-500",
@@ -75,7 +76,7 @@ const COLUMN_META: Record<
   },
   exit: {
     icon: LogOut,
-    iconClassName: "text-rose-600",
+    iconColor: "rose",
     title: "出場",
     subtitle: "至少一項風控條件觸發 — 建議減碼或出場",
     accent: "border-t-rose-500",
@@ -86,7 +87,7 @@ const COLUMN_META: Record<
   },
   buyDip: {
     icon: ArrowDownToLine,
-    iconClassName: "text-amber-600",
+    iconColor: "amber",
     title: "逢低布局",
     subtitle: "回落季線的健康拉回 — 目前唯一驗證有效的訊號",
     accent: "border-t-amber-500",
@@ -125,13 +126,14 @@ export function TrendColumn({
   loading?: boolean;
 }) {
   const meta = COLUMN_META[status];
-  const Icon = meta.icon;
 
   return (
-    <section className={`flex flex-col rounded-lg border border-t-4 border-zinc-200 bg-white ${meta.accent} shadow-sm`}>
-      <header className="border-b border-zinc-100 px-4 py-3">
+    <section
+      className={`flex flex-col rounded-2xl border-t-4 bg-white shadow-[0_1px_2px_rgba(24,24,27,0.04),0_10px_28px_-14px_rgba(24,24,27,0.14)] ring-1 ring-zinc-900/[0.05] ${meta.accent}`}
+    >
+      <header className="border-b border-zinc-100 px-4 py-3.5">
         <h2 className="flex items-center gap-2 text-base font-semibold text-zinc-900">
-          <Icon className={`h-4 w-4 ${meta.iconClassName}`} strokeWidth={2.25} />
+          <IconBadge icon={meta.icon} color={meta.iconColor} />
           {meta.title}
           <InfoTooltip>{meta.criteria}</InfoTooltip>
         </h2>

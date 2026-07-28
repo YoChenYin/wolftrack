@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { LayoutGrid } from "lucide-react";
+import { Card } from "../ui/Card";
+import { SectionHeader } from "../ui/SectionHeader";
 
 interface ThemeChainStage {
   chainName: string;
@@ -90,10 +93,10 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
 
   if (!cells) {
     return (
-      <section className="rounded-lg border border-zinc-200 bg-white p-4">
-        <h2 className="text-sm font-semibold text-zinc-900">板塊熱圖</h2>
+      <Card>
+        <SectionHeader icon={LayoutGrid} iconColor="violet" title="板塊熱圖" />
         <p className="mt-2 text-xs text-zinc-400">載入中…</p>
-      </section>
+      </Card>
     );
   }
 
@@ -102,9 +105,9 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
   const sorted = [...filtered].sort((a, b) => (b[sortBy] ?? -999) - (a[sortBy] ?? -999));
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-4">
+    <Card>
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-zinc-900">板塊熱圖</h2>
+        <SectionHeader icon={LayoutGrid} iconColor="violet" title="板塊熱圖" />
         <div className="flex gap-1 text-[11px]">
           {(["return5d", "return10d", "return20d"] as const).map((key) => (
             <button
@@ -191,6 +194,6 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
           </tbody>
         </table>
       </div>
-    </section>
+    </Card>
   );
 }

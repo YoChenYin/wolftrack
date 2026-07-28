@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Flame, Zap, Circle, TrendingDown, TrendingUp, CheckCircle2, Crown, type LucideIcon } from "lucide-react";
+import { Flame, Zap, Circle, TrendingDown, TrendingUp, CheckCircle2, Crown, Workflow, type LucideIcon } from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
+import { Card, SubCard } from "../ui/Card";
+import { SectionHeader } from "../ui/SectionHeader";
 
 interface ChainStageMember {
   ticker: string;
@@ -97,24 +99,28 @@ export function ChainSignalLights() {
 
   if (!chains) {
     return (
-      <section className="rounded-lg border border-zinc-200 bg-white p-4">
-        <h2 className="text-sm font-semibold text-zinc-900">產業鏈訊號燈號</h2>
+      <Card>
+        <SectionHeader icon={Workflow} iconColor="violet" title="產業鏈訊號燈號" />
         <p className="mt-2 text-xs text-zinc-400">載入中…</p>
-      </section>
+      </Card>
     );
   }
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-4">
-      <h2 className="flex items-center gap-1 text-sm font-semibold text-zinc-900">
-        產業鏈訊號燈號
-        <InfoTooltip>
-          每個階段（上游/中游/下游/支援層）目前有多少比例的成員股票觸發籌碼流訊號（進場/出場/逢低布局），加上近5日族群平均報酬與實際上漲/下跌檔數，綜合判斷燈號：走弱（近5日報酬&lt;-1%，不管訊號比例多高都優先判定，避免訊號跟實際下跌方向矛盾）、活躍（近5日報酬≥3%，或訊號比例≥30%且報酬沒有轉負）、初動（有訊號或報酬&gt;0）、平靜（都沒有）。
-          <br />
-          <br />
-          額外把龍頭股（group_config.json標記的leader）跟其餘成員（二軍）分開算近5日報酬，判斷現在漲的是誰：龍頭領漲＝只有龍頭平均漲≥2%、二軍還沒動；全面齊漲＝龍頭二軍都漲≥2%，最強的擴散狀態；二軍補漲＝龍頭已經緩下來、換二軍漲≥2%，通常代表這波族群動能接近尾聲。同樣是30%訊號比例，「龍頭剛啟動」跟「連二軍都補漲完」代表的階段完全不同，只看聚合平均看不出這個差異。點擊各階段可以展開看實際成員股票（皇冠圖示標記龍頭）。
-        </InfoTooltip>
-      </h2>
+    <Card>
+      <SectionHeader
+        icon={Workflow}
+        iconColor="violet"
+        title="產業鏈訊號燈號"
+        tooltip={
+          <InfoTooltip>
+            每個階段（上游/中游/下游/支援層）目前有多少比例的成員股票觸發籌碼流訊號（進場/出場/逢低布局），加上近5日族群平均報酬與實際上漲/下跌檔數，綜合判斷燈號：走弱（近5日報酬&lt;-1%，不管訊號比例多高都優先判定，避免訊號跟實際下跌方向矛盾）、活躍（近5日報酬≥3%，或訊號比例≥30%且報酬沒有轉負）、初動（有訊號或報酬&gt;0）、平靜（都沒有）。
+            <br />
+            <br />
+            額外把龍頭股（group_config.json標記的leader）跟其餘成員（二軍）分開算近5日報酬，判斷現在漲的是誰：龍頭領漲＝只有龍頭平均漲≥2%、二軍還沒動；全面齊漲＝龍頭二軍都漲≥2%，最強的擴散狀態；二軍補漲＝龍頭已經緩下來、換二軍漲≥2%，通常代表這波族群動能接近尾聲。同樣是30%訊號比例，「龍頭剛啟動」跟「連二軍都補漲完」代表的階段完全不同，只看聚合平均看不出這個差異。點擊各階段可以展開看實際成員股票（皇冠圖示標記龍頭）。
+          </InfoTooltip>
+        }
+      />
 
       <div className="mt-3 flex flex-col gap-4">
         {chains.map((chain) => {
@@ -127,7 +133,7 @@ export function ChainSignalLights() {
           const activeStage = sortedStages.find((s) => `${chain.chainName}::${s.stageKey}` === activeKey);
 
           return (
-            <div key={chain.chainName} className="rounded border border-zinc-100 p-3">
+            <SubCard key={chain.chainName}>
               <p className="text-sm font-medium text-zinc-800">{chain.chainNameFull}</p>
               <div className="mt-2 flex flex-wrap items-stretch gap-2">
                 {sortedStages.map((stage, i) => {
@@ -204,7 +210,7 @@ export function ChainSignalLights() {
               </div>
 
               {activeStage && (
-                <div className="mt-2 rounded border border-zinc-100 bg-zinc-50 p-2">
+                <div className="mt-2 rounded-lg bg-white p-2 ring-1 ring-zinc-900/[0.04]">
                   <p className="mb-1.5 text-[11px] font-medium text-zinc-500">
                     {activeStage.label.split("：")[0]} 成員股票（依近5日報酬排序）
                   </p>
@@ -213,7 +219,7 @@ export function ChainSignalLights() {
                       <Link
                         key={member.ticker}
                         href={`/tw/stock/${member.ticker}`}
-                        className="flex items-center gap-1.5 rounded border border-zinc-200 bg-white px-2 py-1 text-[11px] hover:border-zinc-300"
+                        className="flex items-center gap-1.5 rounded-md bg-zinc-50 px-2 py-1 text-[11px] ring-1 ring-zinc-900/[0.04] transition-colors hover:bg-zinc-100"
                       >
                         <span className="inline-flex items-center gap-1 font-medium text-zinc-700">
                           {member.isLeader && (
@@ -234,10 +240,10 @@ export function ChainSignalLights() {
                   </div>
                 </div>
               )}
-            </div>
+            </SubCard>
           );
         })}
       </div>
-    </section>
+    </Card>
   );
 }

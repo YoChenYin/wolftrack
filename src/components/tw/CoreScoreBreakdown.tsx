@@ -1,4 +1,6 @@
-import { CheckCircle2, AlertTriangle } from "lucide-react";
+import { Gauge, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Card } from "../ui/Card";
+import { SectionHeader } from "../ui/SectionHeader";
 
 export function CoreScoreBreakdown({
   coreScore,
@@ -12,10 +14,12 @@ export function CoreScoreBreakdown({
   chipBadge: "confirmed" | "divergence" | null;
 }) {
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-4">
+    <Card>
       <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-semibold text-zinc-900">Core Score</h2>
-        <span className="text-2xl font-bold text-zinc-900">{coreScore.toFixed(1)}</span>
+        <SectionHeader icon={Gauge} iconColor="amber" title="Core Score" />
+        <span className="font-[family:var(--font-tw-display)] text-3xl font-semibold text-zinc-900">
+          {coreScore.toFixed(1)}
+        </span>
       </div>
       <div className="mt-3 flex flex-col gap-2 text-xs text-zinc-500">
         <ScoreBar label="技術面 (50%)" value={technicalScore} color="bg-blue-500" />
@@ -33,7 +37,7 @@ export function CoreScoreBreakdown({
           籌碼背離 價格續強但法人籌碼轉弱
         </p>
       )}
-    </section>
+    </Card>
   );
 }
 

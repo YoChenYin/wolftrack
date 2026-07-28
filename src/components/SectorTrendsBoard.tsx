@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { Scale } from "lucide-react";
 import { TrendColumn } from "./TrendColumn";
 import { GroupValuationTable } from "./tw/GroupValuationTable";
 import { ThemeHeatmap } from "./tw/ThemeHeatmap";
 import { ThemeFlowChart } from "./tw/ThemeFlowChart";
 import { ChainSignalLights } from "./tw/ChainSignalLights";
 import { UNCATEGORIZED_THEME_CODE } from "@/lib/valuation/groupConfig";
+import { Card } from "./ui/Card";
+import { SectionHeader } from "./ui/SectionHeader";
 import type { SectorTrendsGrouped } from "@/lib/trend/sectorTrendsQuery";
 import type { GroupValuationResult } from "@/lib/valuation/computeGroupValuation";
 import type { Market } from "@/generated/prisma/enums";
@@ -109,7 +112,7 @@ export function SectorTrendsBoard({
               id="sector-select"
               value={selectedSector}
               onChange={(e) => handleSelectSector(e.target.value)}
-              className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700"
+              className="rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-[0_1px_2px_rgba(24,24,27,0.04)] ring-1 ring-zinc-900/[0.06]"
             >
               <option value="all">全部板塊</option>
               {sectors.map((sector) => (
@@ -139,8 +142,8 @@ export function SectorTrendsBoard({
         {data.asOfDate && <p className="text-xs text-zinc-400">資料日期（as of）：{data.asOfDate}</p>}
 
         {showValuation && (
-          <section className="rounded-lg border border-zinc-200 bg-white p-4">
-            <h3 className="text-sm font-semibold text-zinc-900">{selectedSector} · PE/PB 估值比較</h3>
+          <Card>
+            <SectionHeader icon={Scale} iconColor="blue" title={`${selectedSector} · PE/PB 估值比較`} />
             {valuationLoading && <p className="mt-2 text-xs text-zinc-400">載入中…</p>}
             {!valuationLoading && groupValuation && (
               <div className="mt-3">
@@ -150,7 +153,7 @@ export function SectorTrendsBoard({
             {!valuationLoading && !groupValuation && (
               <p className="mt-2 text-xs text-zinc-400">這個板塊目前沒有估值資料。</p>
             )}
-          </section>
+          </Card>
         )}
 
         {market === "TW" ? (

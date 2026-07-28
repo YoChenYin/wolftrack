@@ -1,4 +1,7 @@
+import { BarChart3 } from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
+import { Card } from "../ui/Card";
+import { SectionHeader } from "../ui/SectionHeader";
 
 export interface MonthlyRevenueRow {
   revenueMonth: string; // YYYY-MM
@@ -34,21 +37,25 @@ function pctColor(value: number | null): string {
 export function MonthlyRevenuePanel({ rows }: { rows: MonthlyRevenueRow[] }) {
   if (rows.length === 0) {
     return (
-      <section className="rounded-lg border border-zinc-200 bg-white p-4">
-        <h2 className="text-sm font-semibold text-zinc-900">月營收</h2>
+      <Card>
+        <SectionHeader icon={BarChart3} iconColor="emerald" title="月營收" />
         <p className="mt-2 text-xs text-zinc-400">這檔股票目前沒有月營收資料。</p>
-      </section>
+      </Card>
     );
   }
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-zinc-900">
-        月營收
-        <InfoTooltip>
-          資料來源：TWSE/TPEx 官方每月營收彙總表。年增率(YoY)是台股最常用的成長性指標；累計營收年增率把今年以來所有月份加總跟去年同期比，比單月數字更不容易被單月異常值誤導。這兩個端點只回傳最新一期，多月資料是排程累積出來的，剛上線時可能只有1筆。
-        </InfoTooltip>
-      </h2>
+    <Card>
+      <SectionHeader
+        icon={BarChart3}
+        iconColor="emerald"
+        title="月營收"
+        tooltip={
+          <InfoTooltip>
+            資料來源：TWSE/TPEx 官方每月營收彙總表。年增率(YoY)是台股最常用的成長性指標；累計營收年增率把今年以來所有月份加總跟去年同期比，比單月數字更不容易被單月異常值誤導。這兩個端點只回傳最新一期，多月資料是排程累積出來的，剛上線時可能只有1筆。
+          </InfoTooltip>
+        }
+      />
       <div className="mt-2 overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -75,6 +82,6 @@ export function MonthlyRevenuePanel({ rows }: { rows: MonthlyRevenueRow[] }) {
           </tbody>
         </table>
       </div>
-    </section>
+    </Card>
   );
 }

@@ -1,6 +1,8 @@
+import { Crown } from "lucide-react";
 import type { GroupValuationResult } from "@/lib/valuation/computeGroupValuation";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 import { InfoTooltip } from "../InfoTooltip";
+import { SubCard } from "../ui/Card";
 
 function formatPct(value: number | null): string {
   if (value === null) return "N/A";
@@ -32,7 +34,7 @@ export function GroupValuationTable({ group }: { group: GroupValuationResult }) 
     group.groupAvgReturn20d > group.marketAvgReturn20d;
 
   return (
-    <div className="rounded border border-zinc-100 p-3">
+    <SubCard>
       <div className="flex items-baseline justify-between">
         <p className="text-sm font-medium text-zinc-800">
           {group.themeName}
@@ -96,7 +98,15 @@ export function GroupValuationTable({ group }: { group: GroupValuationResult }) 
                 <td className="py-1 pr-2 font-medium text-zinc-800">
                   {m.ticker}
                   {m.companyName && <span className="ml-1 font-normal text-zinc-500">{stripCompanySuffix(m.companyName)}</span>}
-                  {m.isLeader && <span className="ml-1 rounded bg-zinc-100 px-1 text-[10px] text-zinc-500">龍頭</span>}
+                  {m.isLeader && (
+                    <span
+                      className="ml-1 inline-flex items-center gap-0.5 rounded bg-amber-50 px-1 text-[10px] text-amber-700"
+                      title="龍頭股"
+                    >
+                      <Crown className="h-2.5 w-2.5" strokeWidth={2.25} />
+                      龍頭
+                    </span>
+                  )}
                 </td>
                 <td className="pr-2 text-zinc-600">{formatNum(m.pe)}</td>
                 <td className="pr-2 text-zinc-600">{m.pePercentile !== null ? `${m.pePercentile.toFixed(0)}%` : "N/A"}</td>
@@ -114,6 +124,6 @@ export function GroupValuationTable({ group }: { group: GroupValuationResult }) 
           </tbody>
         </table>
       </div>
-    </div>
+    </SubCard>
   );
 }
