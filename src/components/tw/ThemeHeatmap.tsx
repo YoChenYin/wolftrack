@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { LayoutGrid } from "lucide-react";
 import { Card } from "../ui/Card";
 import { SectionHeader } from "../ui/SectionHeader";
+import { FetchError } from "../ui/FetchError";
+import { useJsonFetch } from "@/lib/useJsonFetch";
 
 interface ThemeChainStage {
   chainName: string;
@@ -81,15 +83,19 @@ function ReturnCell({ return: r, concentration }: { return: number | null; conce
 }
 
 export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: string) => void }) {
-  const [cells, setCells] = useState<ThemeHeatmapCell[] | null>(null);
+  const { data, error, retry } = useJsonFetch<{ cells: ThemeHeatmapCell[] }>("/api/theme-heatmap");
   const [sortBy, setSortBy] = useState<"return5d" | "return10d" | "return20d">("return20d");
   const [chainFilter, setChainFilter] = useState<string | null>(null);
+  const cells = data?.cells ?? null;
 
-  useEffect(() => {
-    fetch("/api/theme-heatmap")
-      .then((res) => res.json())
-      .then((data: { cells: ThemeHeatmapCell[] }) => setCells(data.cells));
-  }, []);
+  if (error) {
+    return (
+      <Card>
+        <SectionHeader icon={LayoutGrid} iconColor="violet" title="板塊熱圖" />
+        <FetchError message={error} onRetry={retry} />
+      </Card>
+    );
+  }
 
   if (!cells) {
     return (
@@ -106,9 +112,9 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
 
   return (
     <Card>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <SectionHeader icon={LayoutGrid} iconColor="violet" title="板塊熱圖" />
-        <div className="flex gap-1 text-[11px]">
+        <div className="flex flex-wrap gap-1 text-[11px]">
           {(["return5d", "return10d", "return20d"] as const).map((key) => (
             <button
               key={key}
@@ -152,7 +158,7 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
       </div>
 
       <div className="mt-3 max-h-80 overflow-y-auto overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full min-w-[420px] text-xs">
           <thead className="sticky top-0 bg-white">
             <tr className="text-left text-zinc-400">
               <th className="pb-1.5 font-normal">板塊</th>

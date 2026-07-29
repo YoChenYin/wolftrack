@@ -55,6 +55,8 @@ export interface SectorTrendItem {
   revenueYoyGrowthPct: number | null;
   /** 該筆月營收所屬月份，YYYY-MM，方便顯示「這是幾月的資料」 */
   revenueMonth: string | null;
+  /** 近20個交易日收盤價，給表格內的迷你走勢圖用；沿用computeVolatilityStats已經抓好的90日歷史，不多打一次查詢 */
+  sparkline: number[] | null;
 }
 
 export interface SectorTrendsGrouped {
@@ -87,9 +89,12 @@ type SignalRow = {
   };
 };
 
+const SPARKLINE_POINTS = 20;
+
 interface VolatilityStats {
   todayChangePct: number | null;
   volatilitySinceSignal: number | null;
+  sparkline: number[] | null;
 }
 
 function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
@@ -126,6 +131,7 @@ function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
     volatilitySinceSignal: stats?.volatilitySinceSignal ?? null,
     revenueYoyGrowthPct: latestRevenue?.yoyGrowthPct !== undefined && latestRevenue?.yoyGrowthPct !== null ? Number(latestRevenue.yoyGrowthPct) : null,
     revenueMonth: latestRevenue ? latestRevenue.revenueMonth.toISOString().slice(0, 7) : null,
+    sparkline: stats?.sparkline ?? null,
   };
 }
 
@@ -185,7 +191,9 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
       }
     }
 
-    result.set(stockId, { todayChangePct, volatilitySinceSignal });
+    const sparkline = series.length >= 2 ? series.slice(-SPARKLINE_POINTS).map((s) => s.close) : null;
+
+    result.set(stockId, { todayChangePct, volatilitySinceSignal, sparkline });
   }
   return result;
 }

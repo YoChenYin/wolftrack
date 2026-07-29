@@ -30,7 +30,7 @@ export function StockMentionOverviewSection({ items }: { items: StockMentionOver
         <p className="mt-2 text-xs text-zinc-400">近2週還沒有已處理完的個股提及。</p>
       ) : (
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[480px] text-left text-xs">
             <thead>
               <tr className="text-zinc-400">
                 <th className="pb-1.5 pr-3 font-medium">個股</th>

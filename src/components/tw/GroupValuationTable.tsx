@@ -54,7 +54,7 @@ export function GroupValuationTable({ group }: { group: GroupValuationResult }) 
       </div>
 
       <div className="mt-2 overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full min-w-[560px] text-xs">
           <thead>
             <tr className="text-left text-zinc-400">
               <th className="pr-2 font-normal">代號</th>

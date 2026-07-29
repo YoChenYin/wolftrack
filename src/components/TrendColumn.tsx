@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Rocket,
+  CircleAlert,
   type LucideIcon,
 } from "lucide-react";
 import type { SectorTrendItem, TacticalStatus } from "@/lib/trend/sectorTrendsQuery";
@@ -16,6 +17,7 @@ import type { Market } from "@/generated/prisma/enums";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 import { InfoTooltip } from "./InfoTooltip";
 import { IconBadge } from "./ui/IconBadge";
+import { Sparkline } from "./ui/Sparkline";
 
 const COLUMN_META: Record<
   TacticalStatus,
@@ -28,6 +30,9 @@ const COLUMN_META: Record<
     badge: string;
     criteria: string;
     signalLabel: string;
+    /** 用真實production資料回測過、目前沒有正超額報酬的訊號，要在不用hover tooltip的情況下也看得到，
+     * 不能只寫在tooltip裡——這是「這個訊號值不值得信任」的重要資訊，不是細節補充 */
+    unproven?: boolean;
   }
 > = {
   reversal: {
@@ -70,6 +75,7 @@ const COLUMN_META: Record<
     subtitle: "籌碼+技術面同步轉強 — 符合條件，效果待驗證",
     accent: "border-t-blue-500",
     badge: "bg-blue-50 text-blue-700",
+    unproven: true,
     criteria:
       "① 投信/外資近3個月合計買超 ② 買超力道與籌碼集中度呈5日>10日>20日加速排列 ③ MA5>MA10>MA20多頭排列 ④ KD黃金交叉、K持續走強、且KD<80未過熱。注意：用真實production資料回測過，這組條件本身的20日超額報酬中位數約-0.04%（接近打平，不是驗證有效的alpha訊號），只是「符合這組條件」，出現不代表歷史上會賺錢，請搭配「出場」訊號嚴格執行風控。",
     signalLabel: "訊號起點",
@@ -135,6 +141,15 @@ export function TrendColumn({
         <h2 className="flex items-center gap-2 text-base font-semibold text-zinc-900">
           <IconBadge icon={meta.icon} color={meta.iconColor} />
           {meta.title}
+          {meta.unproven && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500"
+              title="用真實production資料回測過：這組條件本身沒有穩健正超額報酬，出現不代表歷史上會賺錢"
+            >
+              <CircleAlert className="h-3 w-3" strokeWidth={2.25} />
+              效果未驗證
+            </span>
+          )}
           <InfoTooltip>{meta.criteria}</InfoTooltip>
         </h2>
         <p className="mt-0.5 text-xs text-zinc-500">{meta.subtitle}</p>
@@ -217,6 +232,17 @@ export function TrendColumn({
               </div>
 
               <div className="shrink-0 text-right">
+                {item.sparkline && item.sparkline.length >= 2 && (
+                  <div className="mb-1 flex justify-end" title="近20日收盤走勢">
+                    <Sparkline
+                      values={item.sparkline}
+                      colorClassName={changeColorClass(
+                        item.sparkline[item.sparkline.length - 1] - item.sparkline[0],
+                        market
+                      )}
+                    />
+                  </div>
+                )}
                 <div className={`text-sm font-semibold ${changeColorClass(item.changePctSinceSignal, market)}`}>
                   {formatChangePct(item.changePctSinceSignal)}
                 </div>

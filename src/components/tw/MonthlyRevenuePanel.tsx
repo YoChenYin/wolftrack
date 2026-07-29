@@ -57,7 +57,7 @@ export function MonthlyRevenuePanel({ rows }: { rows: MonthlyRevenueRow[] }) {
         }
       />
       <div className="mt-2 overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full min-w-[480px] text-xs">
           <thead>
             <tr className="text-left text-zinc-400">
               <th className="pr-2 font-normal">月份</th>

@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Flame, Snowflake, Activity } from "lucide-react";
 import { Card } from "../ui/Card";
 import { SectionHeader } from "../ui/SectionHeader";
+import { FetchError } from "../ui/FetchError";
+import { useJsonFetch } from "@/lib/useJsonFetch";
 
 interface ThemeFlowSeries {
   category: string;
@@ -38,15 +40,18 @@ const CHART_HEIGHT = 280;
 const PADDING = { top: 12, right: 12, bottom: 24, left: 44 };
 
 export function ThemeFlowChart() {
-  const [data, setData] = useState<ThemeFlowResult | null>(null);
+  const { data, error, retry } = useJsonFetch<ThemeFlowResult>("/api/theme-flow");
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    fetch("/api/theme-flow")
-      .then((res) => res.json())
-      .then(setData);
-  }, []);
+  if (error) {
+    return (
+      <Card>
+        <SectionHeader icon={Activity} iconColor="blue" title="板塊資金流動" />
+        <FetchError message={error} onRetry={retry} />
+      </Card>
+    );
+  }
 
   if (!data || data.dates.length === 0) {
     return (

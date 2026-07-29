@@ -1,12 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { Flame, Zap, Circle, TrendingDown, TrendingUp, CheckCircle2, Crown, Workflow, type LucideIcon } from "lucide-react";
+import {
+  Flame,
+  Zap,
+  Circle,
+  TrendingDown,
+  TrendingUp,
+  CheckCircle2,
+  Crown,
+  Workflow,
+  ChevronDown,
+  ChevronRight,
+  type LucideIcon,
+} from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 import { Card, SubCard } from "../ui/Card";
 import { SectionHeader } from "../ui/SectionHeader";
+import { FetchError } from "../ui/FetchError";
+import { useJsonFetch } from "@/lib/useJsonFetch";
 
 interface ChainStageMember {
   ticker: string;
@@ -87,15 +101,19 @@ function returnColor(value: number | null): string {
 }
 
 export function ChainSignalLights() {
-  const [chains, setChains] = useState<ChainSignalResult[] | null>(null);
+  const { data, error, retry } = useJsonFetch<{ chains: ChainSignalResult[] }>("/api/chain-signals");
   // key格式："<chainName>::<stageKey>"，同時間只展開一個階段的成員清單
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const chains = data?.chains ?? null;
 
-  useEffect(() => {
-    fetch("/api/chain-signals")
-      .then((res) => res.json())
-      .then((data: { chains: ChainSignalResult[] }) => setChains(data.chains));
-  }, []);
+  if (error) {
+    return (
+      <Card>
+        <SectionHeader icon={Workflow} iconColor="violet" title="產業鏈訊號燈號" />
+        <FetchError message={error} onRetry={retry} />
+      </Card>
+    );
+  }
 
   if (!chains) {
     return (
@@ -135,17 +153,17 @@ export function ChainSignalLights() {
           return (
             <SubCard key={chain.chainName}>
               <p className="text-sm font-medium text-zinc-800">{chain.chainNameFull}</p>
-              <div className="mt-2 flex flex-wrap items-stretch gap-2">
+              <div className="mt-2 flex flex-col sm:flex-row sm:flex-wrap sm:items-stretch gap-2">
                 {sortedStages.map((stage, i) => {
                   const key = `${chain.chainName}::${stage.stageKey}`;
                   const isOpen = key === expandedKey;
                   return (
-                    <div key={stage.stageKey} className="flex items-center gap-2">
+                    <div key={stage.stageKey} className="flex flex-col sm:flex-row sm:items-center gap-2">
                       <button
                         type="button"
                         onClick={() => setExpandedKey(isOpen ? null : key)}
                         disabled={stage.memberCount === 0}
-                        className={`rounded-md px-2.5 py-1.5 text-left text-xs ring-1 transition-shadow disabled:cursor-default ${
+                        className={`w-full rounded-md px-2.5 py-1.5 text-left text-xs ring-1 transition-shadow disabled:cursor-default sm:w-auto ${
                           LIGHT_STYLE[stage.light].ring
                         } ${isOpen ? "ring-2 ring-zinc-400" : "hover:ring-zinc-300"}`}
                       >
@@ -203,7 +221,12 @@ export function ChainSignalLights() {
                           <div className="mt-0.5 text-[10px] text-zinc-400">無成員資料</div>
                         )}
                       </button>
-                      {i < sortedStages.length - 1 && <span className="text-zinc-300">→</span>}
+                      {i < sortedStages.length - 1 && (
+                        <>
+                          <ChevronDown className="h-3.5 w-3.5 self-center text-zinc-300 sm:hidden" strokeWidth={2.25} />
+                          <ChevronRight className="hidden h-3.5 w-3.5 text-zinc-300 sm:block" strokeWidth={2.25} />
+                        </>
+                      )}
                     </div>
                   );
                 })}
