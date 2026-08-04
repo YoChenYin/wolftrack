@@ -17,11 +17,12 @@ const BAR_CHART_WIDTH = 720;
 const BAR_CHART_HEIGHT = 160;
 const BAR_PADDING = { top: 10, right: 12, bottom: 20, left: 40 };
 
-/** 三條參考序列固定配色，跟頁面上其他圖表色系區隔開來 */
+/** 參考序列固定配色，跟頁面上其他圖表色系區隔開來 */
 const SERIES_COLORS: Record<string, string> = {
   TAIEX: "light-dark(#78350f, #f0b866)",
   TPEX: "light-dark(#2563eb, #60a5fa)",
   "2330": "light-dark(#7c3aed, #c4b5fd)",
+  SPX: "light-dark(#0f7a5c, #34d399)",
 };
 
 function formatPct(value: number | null): string {
@@ -40,8 +41,8 @@ function cellBg(value: number | null): string {
 }
 
 /**
- * 總經頁「台股歷年月份表現」：上方是 TAIEX/櫃買指數/權值股(2330) 三條參考序列的「年度週期」疊圖
- * （每月平均報酬從1月累加到12月），一眼看出一年中哪幾個月是上漲期、哪幾個月容易拉回；
+ * 總經頁「台股歷年月份表現」：上方是 TAIEX/櫃買指數/權值股(2330)/S&P500(美股對照) 幾條參考序列的
+ * 「年度週期」疊圖（每月平均報酬從1月累加到12月），一眼看出一年中哪幾個月是上漲期、哪幾個月容易拉回；
  * 下方是切換單一序列看月份平均報酬長條圖 + 年份×月份熱力圖的細節。
  */
 export function MonthlySeasonalityPanel({ series }: { series: MonthlySeasonalityResult[] }) {
@@ -128,7 +129,7 @@ export function MonthlySeasonalityPanel({ series }: { series: MonthlySeasonality
     <Card>
       <SectionHeader icon={CalendarRange} iconColor="blue" title="台股歷年月份表現" />
       <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-500">
-        年度週期：三條參考序列從1月累加到12月的平均報酬曲線，看一年中哪幾個月是上漲期、哪幾個月容易拉回。點圖例可隱藏/顯示。
+        年度週期：各參考序列從1月累加到12月的平均報酬曲線，看一年中哪幾個月是上漲期、哪幾個月容易拉回。點圖例可隱藏/顯示。
       </p>
 
       <div className="mt-3 overflow-x-auto">

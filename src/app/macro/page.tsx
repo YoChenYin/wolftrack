@@ -5,12 +5,14 @@ import { MonthlySeasonalityPanel } from "@/components/macro/MonthlySeasonalityPa
 export const dynamic = "force-dynamic";
 
 export default async function MacroPage() {
-  // 三條參考序列：TAIEX(上市大盤) / TPEX(櫃買指數，上櫃大盤對照) / 2330台積電(權值股參考，
-  // 大盤裡單一權重最高的個股，用來看季節性是不是被它主導)
+  // 四條參考序列：TAIEX(上市大盤) / TPEX(櫃買指數，上櫃大盤對照) / 2330台積電(權值股參考，
+  // 大盤裡單一權重最高的個股，用來看季節性是不是被它主導) / SPX(S&P 500，美股對照組，資料源是FRED
+  // 只能回溯10年，比台股三個序列短，但符合「至少5年」的樣本需求)
   const seasonality = await Promise.all([
     computeMonthlySeasonality("TAIEX", "加權指數(TAIEX)"),
     computeMonthlySeasonality("TPEX", "櫃買指數(TPEX)"),
     computeMonthlySeasonality("2330", "台積電(2330)"),
+    computeMonthlySeasonality("SPX", "S&P 500(美股對照)", "US"),
   ]);
 
   return (

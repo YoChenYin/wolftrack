@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Market } from "@/generated/prisma/enums";
 
 export interface MonthlyReturnCell {
   year: number;
@@ -37,13 +38,14 @@ function median(values: number[]): number {
 }
 
 /**
- * 台股歷年月份表現：給定一檔（合成或真實）股票，算每個月的報酬率 = 月底收盤 vs 上個月月底收盤，
+ * 歷年月份表現：給定一檔（合成或真實）股票，算每個月的報酬率 = 月底收盤 vs 上個月月底收盤，
  * 依日曆月分組後看每個月份（1-12月）橫跨多年的平均/中位數/勝率/累加週期，抓「歷史上哪個月份比較容易漲/跌」
- * 的季節性。可以是大盤指數（TAIEX/TPEX）也可以是個股（例如權值股 2330），三者用同一套算法才能互相對照。
+ * 的季節性。可以是大盤指數（TAIEX/TPEX/SPX)也可以是個股（例如權值股 2330），market 預設 TW，
+ * 加 SPX(S&P 500) 當美股對照組時傳 "US"——三者共用同一套算法才能互相對照。
  */
-export async function computeMonthlySeasonality(ticker: string, label: string): Promise<MonthlySeasonalityResult> {
+export async function computeMonthlySeasonality(ticker: string, label: string, market: Market = "TW"): Promise<MonthlySeasonalityResult> {
   const stock = await prisma.stock.findUnique({
-    where: { market_ticker: { market: "TW", ticker } },
+    where: { market_ticker: { market, ticker } },
   });
   if (!stock) return emptyResult(ticker, label);
 

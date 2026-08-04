@@ -15,6 +15,7 @@ const SECTORS = [
   { sectorCode: "COMM", sectorName: "Communication Services", sectorNameZh: "通訊服務", displayOrder: 9 },
   { sectorCode: "UTIL", sectorName: "Utilities", sectorNameZh: "公用事業", displayOrder: 10 },
   { sectorCode: "REALESTATE", sectorName: "Real Estate", sectorNameZh: "不動產", displayOrder: 11 },
+  { sectorCode: "INDEX", sectorName: "Index", sectorNameZh: "指數", displayOrder: 12 },
 ] as const;
 
 // ~100 檔美股大型股，每個板塊 9-10 檔，涵蓋完整 11 個 GICS 板塊
@@ -159,6 +160,11 @@ const STOCKS = [
   { ticker: "ANET", companyName: "Arista Networks, Inc.", sectorCode: "TECH", industry: "Communication Equipment" },
   { ticker: "DELL", companyName: "Dell Technologies Inc.", sectorCode: "TECH", industry: "Computer Hardware" },
   { ticker: "TTMI", companyName: "TTM Technologies, Inc.", sectorCode: "TECH", industry: "Electronic Components" },
+
+  // 大盤指數（合成股票紀錄，重用 tw_daily_price 存歷史，總經頁季節性分析用來對照台股），
+  // 資料來源是 FRED 的 SP500 官方序列（見 backfill-sp500-history.ts），不是任何一檔可交易的股票/ETF，
+  // isActive=false 不會出現在美股版的戰術面板/選股清單
+  { ticker: "SPX", companyName: "S&P 500 Index", sectorCode: "INDEX", industry: "Index", isActive: false },
 ] as const;
 
 // 跨板塊題材標籤（一檔股票可以有多個）
@@ -213,12 +219,14 @@ async function main() {
     if (!sectorId) {
       throw new Error(`Unknown sectorCode ${stock.sectorCode} for ${stock.ticker}`);
     }
+    const isActive = "isActive" in stock ? stock.isActive : true;
     const row = await prisma.stock.upsert({
       where: { market_ticker: { market: "US", ticker: stock.ticker } },
       update: {
         companyName: stock.companyName,
         sectorId,
         industry: stock.industry,
+        isActive,
       },
       create: {
         ticker: stock.ticker,
@@ -226,6 +234,7 @@ async function main() {
         companyName: stock.companyName,
         sectorId,
         industry: stock.industry,
+        isActive,
       },
     });
     stockIdByTicker.set(stock.ticker, row.id);
