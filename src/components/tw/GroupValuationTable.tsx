@@ -16,10 +16,10 @@ function formatNum(value: number | null, digits = 1): string {
 
 /** 鏈位階配色，跟 ThemeHeatmap.tsx 用同一套（上游藍/中游紫/下游橘/支援層灰） */
 const STAGE_COLORS: Record<string, string> = {
-  upstream: "bg-blue-50 text-blue-700",
-  midstream: "bg-violet-50 text-violet-700",
-  downstream: "bg-amber-50 text-amber-700",
-  support: "bg-zinc-100 text-zinc-600",
+  upstream: "bg-blue-50 text-blue-700 dark:bg-blue-400/10 dark:text-blue-400",
+  midstream: "bg-violet-50 text-violet-700 dark:bg-violet-400/10 dark:text-violet-400",
+  downstream: "bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-400",
+  support: "bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-400",
 };
 
 /**
@@ -36,19 +36,22 @@ export function GroupValuationTable({ group }: { group: GroupValuationResult }) 
   return (
     <SubCard>
       <div className="flex items-baseline justify-between">
-        <p className="text-sm font-medium text-zinc-800">
+        <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
           {group.themeName}
           {group.chainStages.map((s) => (
             <span
               key={`${s.chainName}-${s.stageKey}`}
-              className={`ml-1.5 rounded px-1 py-0.5 text-[10px] font-normal ${STAGE_COLORS[s.stageKey] ?? "bg-zinc-100 text-zinc-500"}`}
+              className={`ml-1.5 rounded px-1 py-0.5 text-[10px] font-normal ${STAGE_COLORS[s.stageKey] ?? "bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-400"}`}
             >
               {s.chainName}·{s.label.split("：")[0]}
             </span>
           ))}
         </p>
-        <p className="text-xs text-zinc-400">
-          族群近20日 <span className={groupHot ? "font-medium text-red-600" : ""}>{formatPct(group.groupAvgReturn20d)}</span>
+        <p className="text-xs text-zinc-400 dark:text-zinc-500">
+          族群近20日{" "}
+          <span className={groupHot ? "font-medium text-red-600 dark:text-red-400" : ""}>
+            {formatPct(group.groupAvgReturn20d)}
+          </span>
           {" · "}大盤 {formatPct(group.marketAvgReturn20d)}
         </p>
       </div>
@@ -56,7 +59,7 @@ export function GroupValuationTable({ group }: { group: GroupValuationResult }) 
       <div className="mt-2 overflow-x-auto">
         <table className="w-full min-w-[560px] text-xs">
           <thead>
-            <tr className="text-left text-zinc-400">
+            <tr className="text-left text-zinc-400 dark:text-zinc-500">
               <th className="pr-2 font-normal">代號</th>
               <th className="pr-2 font-normal">
                 PE
@@ -94,13 +97,17 @@ export function GroupValuationTable({ group }: { group: GroupValuationResult }) 
           </thead>
           <tbody>
             {group.members.map((m) => (
-              <tr key={m.ticker} className="border-t border-zinc-50">
-                <td className="py-1 pr-2 font-medium text-zinc-800">
+              <tr key={m.ticker} className="border-t border-zinc-50 dark:border-white/5">
+                <td className="py-1 pr-2 font-medium text-zinc-800 dark:text-zinc-200">
                   {m.ticker}
-                  {m.companyName && <span className="ml-1 font-normal text-zinc-500">{stripCompanySuffix(m.companyName)}</span>}
+                  {m.companyName && (
+                    <span className="ml-1 font-normal text-zinc-500 dark:text-zinc-400">
+                      {stripCompanySuffix(m.companyName)}
+                    </span>
+                  )}
                   {m.isLeader && (
                     <span
-                      className="ml-1 inline-flex items-center gap-0.5 rounded bg-amber-50 px-1 text-[10px] text-amber-700"
+                      className="ml-1 inline-flex items-center gap-0.5 rounded bg-amber-50 px-1 text-[10px] text-amber-700 dark:bg-amber-400/10 dark:text-amber-400"
                       title="龍頭股"
                     >
                       <Crown className="h-2.5 w-2.5" strokeWidth={2.25} />
@@ -108,13 +115,15 @@ export function GroupValuationTable({ group }: { group: GroupValuationResult }) 
                     </span>
                   )}
                 </td>
-                <td className="pr-2 text-zinc-600">{formatNum(m.pe)}</td>
-                <td className="pr-2 text-zinc-600">{m.pePercentile !== null ? `${m.pePercentile.toFixed(0)}%` : "N/A"}</td>
-                <td className="pr-2 text-zinc-600">{formatNum(m.pb, 2)}</td>
-                <td className="pr-2 text-zinc-600">{formatPct(m.return20d)}</td>
+                <td className="pr-2 text-zinc-600 dark:text-zinc-400">{formatNum(m.pe)}</td>
+                <td className="pr-2 text-zinc-600 dark:text-zinc-400">
+                  {m.pePercentile !== null ? `${m.pePercentile.toFixed(0)}%` : "N/A"}
+                </td>
+                <td className="pr-2 text-zinc-600 dark:text-zinc-400">{formatNum(m.pb, 2)}</td>
+                <td className="pr-2 text-zinc-600 dark:text-zinc-400">{formatPct(m.return20d)}</td>
                 <td>
                   {m.isLagging && (
-                    <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                    <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-400/10 dark:text-amber-400">
                       供應鏈落後股
                     </span>
                   )}

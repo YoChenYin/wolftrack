@@ -57,7 +57,7 @@ export function ThemeFlowChart() {
     return (
       <Card>
         <SectionHeader icon={Activity} iconColor="blue" title="板塊資金流動" />
-        <p className="mt-2 text-xs text-zinc-400">載入中…</p>
+        <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">載入中…</p>
       </Card>
     );
   }
@@ -124,7 +124,7 @@ export function ThemeFlowChart() {
   return (
     <Card>
       <SectionHeader icon={Activity} iconColor="blue" title="板塊資金流動" />
-      <p className="mt-0.5 text-[11px] text-zinc-400">
+      <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-500">
         14 大分類近{dates.length}個交易日的族群平均累積報酬指數（起點=100），看資金往哪個板塊移動。點圖例可隱藏/顯示該線。
       </p>
 
@@ -141,10 +141,16 @@ export function ThemeFlowChart() {
                 x2={CHART_WIDTH - PADDING.right}
                 y1={yFor(v)}
                 y2={yFor(v)}
-                stroke="#f4f4f5"
+                stroke="light-dark(#f4f4f5, #27272a)"
                 strokeWidth={1}
               />
-              <text x={PADDING.left - 6} y={yFor(v) + 3} textAnchor="end" fontSize="9" fill="#a1a1aa">
+              <text
+                x={PADDING.left - 6}
+                y={yFor(v) + 3}
+                textAnchor="end"
+                fontSize="9"
+                fill="light-dark(#a1a1aa, #71717a)"
+              >
                 {v.toFixed(0)}
               </text>
             </g>
@@ -154,7 +160,7 @@ export function ThemeFlowChart() {
             x2={CHART_WIDTH - PADDING.right}
             y1={yFor(100)}
             y2={yFor(100)}
-            stroke="#d4d4d8"
+            stroke="light-dark(#d4d4d8, #3f3f46)"
             strokeWidth={1}
             strokeDasharray="3,3"
           />
@@ -181,7 +187,7 @@ export function ThemeFlowChart() {
               x2={xFor(hoverIndex)}
               y1={PADDING.top}
               y2={CHART_HEIGHT - PADDING.bottom}
-              stroke="#d4d4d8"
+              stroke="light-dark(#d4d4d8, #3f3f46)"
               strokeWidth={1}
             />
           )}
@@ -199,7 +205,14 @@ export function ThemeFlowChart() {
           ))}
 
           {[0, Math.floor(dates.length / 2), dates.length - 1].map((i) => (
-            <text key={i} x={xFor(i)} y={CHART_HEIGHT - 6} textAnchor="middle" fontSize="9" fill="#a1a1aa">
+            <text
+              key={i}
+              x={xFor(i)}
+              y={CHART_HEIGHT - 6}
+              textAnchor="middle"
+              fontSize="9"
+              fill="light-dark(#a1a1aa, #71717a)"
+            >
               {dates[i]?.slice(5)}
             </text>
           ))}
@@ -207,8 +220,8 @@ export function ThemeFlowChart() {
       </div>
 
       {hoverIndex !== null && (
-        <div className="mt-1 rounded bg-zinc-50 p-2 text-[11px]">
-          <span className="font-medium text-zinc-600">{dates[hoverIndex]}</span>
+        <div className="mt-1 rounded bg-zinc-50 p-2 text-[11px] dark:bg-white/5">
+          <span className="font-medium text-zinc-600 dark:text-zinc-300">{dates[hoverIndex]}</span>
           <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 sm:grid-cols-3">
             {series
               .filter((s) => !hiddenCategories.has(s.category))
@@ -220,16 +233,18 @@ export function ThemeFlowChart() {
                 return (
                   <span
                     key={category}
-                    className={`flex items-center gap-1 ${isStrongest || isWeakest ? "font-medium text-zinc-700" : "text-zinc-500"}`}
+                    className={`flex items-center gap-1 ${isStrongest || isWeakest ? "font-medium text-zinc-700 dark:text-zinc-200" : "text-zinc-500 dark:text-zinc-400"}`}
                   >
                     <span
                       className="inline-block h-2 w-2 rounded-full"
                       style={{ background: CATEGORY_COLORS[category] ?? "#71717a" }}
                     />
-                    {isStrongest && <Flame className="h-3 w-3 text-orange-600" strokeWidth={2.25} />}
-                    {isWeakest && <Snowflake className="h-3 w-3 text-sky-600" strokeWidth={2.25} />}
+                    {isStrongest && <Flame className="h-3 w-3 text-orange-600 dark:text-orange-400" strokeWidth={2.25} />}
+                    {isWeakest && <Snowflake className="h-3 w-3 text-sky-600 dark:text-sky-400" strokeWidth={2.25} />}
                     {category}
-                    <span className={v !== null && v >= 100 ? "text-red-600" : "text-emerald-600"}>
+                    <span
+                      className={v !== null && v >= 100 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}
+                    >
                       {v !== null ? `${(v - 100).toFixed(1)}%` : "—"}
                     </span>
                   </span>
@@ -246,7 +261,7 @@ export function ThemeFlowChart() {
             type="button"
             onClick={() => toggleCategory(s.category)}
             className={`flex items-center gap-1 text-[11px] ${
-              hiddenCategories.has(s.category) ? "text-zinc-300" : "text-zinc-600"
+              hiddenCategories.has(s.category) ? "text-zinc-300 dark:text-zinc-600" : "text-zinc-600 dark:text-zinc-300"
             }`}
           >
             <span

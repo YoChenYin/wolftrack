@@ -12,9 +12,12 @@ export interface EarningsCallAnalysisItem {
 }
 
 const SIGNAL_STYLE: Record<string, { label: string; className: string }> = {
-  positive: { label: "正面", className: "bg-red-50 text-red-700 ring-red-200" },
-  negative: { label: "負面", className: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-  neutral: { label: "中性", className: "bg-zinc-50 text-zinc-600 ring-zinc-200" },
+  positive: { label: "正面", className: "bg-red-50 text-red-700 ring-red-200 dark:bg-red-400/10 dark:text-red-400 dark:ring-red-400/20" },
+  negative: {
+    label: "負面",
+    className: "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/20",
+  },
+  neutral: { label: "中性", className: "bg-zinc-50 text-zinc-600 ring-zinc-200 dark:bg-white/5 dark:text-zinc-400 dark:ring-white/10" },
 };
 
 /**
@@ -42,21 +45,21 @@ export function EarningsCallPanel({ analyses }: { analyses: EarningsCallAnalysis
           return (
             <SubCard key={a.conferenceDate} className="text-xs">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-zinc-400">{a.conferenceDate}</span>
+                <span className="text-zinc-400 dark:text-zinc-500">{a.conferenceDate}</span>
                 <span className={`rounded px-1.5 py-0.5 font-medium ring-1 ${style.className}`}>{style.label}</span>
               </div>
               <div className="mt-2 flex flex-col gap-1.5">
                 <p>
-                  <span className="font-medium text-zinc-500">獲利成長：</span>
-                  <span className="text-zinc-700">{a.profitGrowthSummary}</span>
+                  <span className="font-medium text-zinc-500 dark:text-zinc-400">獲利成長：</span>
+                  <span className="text-zinc-700 dark:text-zinc-300">{a.profitGrowthSummary}</span>
                 </p>
                 <p>
-                  <span className="font-medium text-zinc-500">展望：</span>
-                  <span className="text-zinc-700">{a.outlookSummary}</span>
+                  <span className="font-medium text-zinc-500 dark:text-zinc-400">展望：</span>
+                  <span className="text-zinc-700 dark:text-zinc-300">{a.outlookSummary}</span>
                 </p>
                 <p>
-                  <span className="font-medium text-zinc-500">風險：</span>
-                  <span className="text-zinc-700">{a.riskSummary}</span>
+                  <span className="font-medium text-zinc-500 dark:text-zinc-400">風險：</span>
+                  <span className="text-zinc-700 dark:text-zinc-300">{a.riskSummary}</span>
                 </p>
               </div>
             </SubCard>

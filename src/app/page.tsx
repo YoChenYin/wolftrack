@@ -6,16 +6,16 @@ import { Construction } from "lucide-react";
 // SectorTrendsBoard的版本即可（見git history）。
 export default function Home() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center bg-zinc-50 px-6">
+    <div className="flex flex-1 flex-col items-center justify-center bg-zinc-50 px-6 dark:bg-zinc-950">
       <div className="flex max-w-md flex-col items-center text-center">
         <Construction className="h-10 w-10 text-amber-500" strokeWidth={1.75} />
-        <h1 className="mt-4 text-xl font-bold text-zinc-900">美股版施工中</h1>
-        <p className="mt-2 text-sm text-zinc-500">
+        <h1 className="mt-4 text-xl font-bold text-zinc-900 dark:text-zinc-100">美股版施工中</h1>
+        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
           目前開發資源集中在台股版，美股版的戰術訊號/籌碼分析正在重新設計中，之後會回來。
         </p>
         <a
           href="/tw"
-          className="mt-6 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
+          className="mt-6 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
         >
           前往台股版 →
         </a>

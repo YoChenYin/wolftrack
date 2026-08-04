@@ -7,7 +7,7 @@
 export function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <section
-      className={`rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_10px_28px_-14px_rgba(24,24,27,0.14)] ring-1 ring-zinc-900/[0.05] ${className}`}
+      className={`rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_10px_28px_-14px_rgba(24,24,27,0.14)] ring-1 ring-zinc-900/[0.05] dark:bg-zinc-900 dark:shadow-[0_1px_2px_rgba(0,0,0,0.2),0_10px_28px_-14px_rgba(0,0,0,0.5)] dark:ring-white/[0.06] ${className}`}
     >
       {children}
     </section>
@@ -16,6 +16,10 @@ export function Card({ children, className = "" }: { children: React.ReactNode; 
 
 export function SubCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl bg-zinc-50/70 p-3 ring-1 ring-zinc-900/[0.04] ${className}`}>{children}</div>
+    <div
+      className={`rounded-xl bg-zinc-50/70 p-3 ring-1 ring-zinc-900/[0.04] dark:bg-white/[0.04] dark:ring-white/[0.06] ${className}`}
+    >
+      {children}
+    </div>
   );
 }

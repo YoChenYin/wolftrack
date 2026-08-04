@@ -14,7 +14,7 @@ export function SectionHeader({
   tooltip?: React.ReactNode;
 }) {
   return (
-    <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+    <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
       <IconBadge icon={icon} color={iconColor} />
       {title}
       {tooltip}

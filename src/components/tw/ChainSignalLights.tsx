@@ -63,10 +63,26 @@ interface ChainSignalResult {
 const STAGE_ORDER = ["upstream", "midstream", "downstream", "support"];
 
 const LIGHT_STYLE: Record<string, { icon: LucideIcon; iconClassName: string; ring: string }> = {
-  green: { icon: Flame, iconClassName: "text-emerald-600", ring: "ring-emerald-200 bg-emerald-50" },
-  yellow: { icon: Zap, iconClassName: "text-amber-600", ring: "ring-amber-200 bg-amber-50" },
-  gray: { icon: Circle, iconClassName: "text-zinc-400", ring: "ring-zinc-200 bg-zinc-50" },
-  declining: { icon: TrendingDown, iconClassName: "text-sky-600", ring: "ring-sky-200 bg-sky-50" },
+  green: {
+    icon: Flame,
+    iconClassName: "text-emerald-600 dark:text-emerald-400",
+    ring: "ring-emerald-200 bg-emerald-50 dark:ring-emerald-400/20 dark:bg-emerald-400/10",
+  },
+  yellow: {
+    icon: Zap,
+    iconClassName: "text-amber-600 dark:text-amber-400",
+    ring: "ring-amber-200 bg-amber-50 dark:ring-amber-400/20 dark:bg-amber-400/10",
+  },
+  gray: {
+    icon: Circle,
+    iconClassName: "text-zinc-400 dark:text-zinc-500",
+    ring: "ring-zinc-200 bg-zinc-50 dark:ring-white/10 dark:bg-white/5",
+  },
+  declining: {
+    icon: TrendingDown,
+    iconClassName: "text-sky-600 dark:text-sky-400",
+    ring: "ring-sky-200 bg-sky-50 dark:ring-sky-400/20 dark:bg-sky-400/10",
+  },
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -81,9 +97,9 @@ const PHASE_LABELS: Record<
   Exclude<ChainStageSignal["phase"], "mixed">,
   { icon: LucideIcon; iconClassName: string; label: string }
 > = {
-  leadersOnly: { icon: Flame, iconClassName: "text-orange-600", label: "龍頭領漲，二軍未動" },
-  broadRally: { icon: CheckCircle2, iconClassName: "text-emerald-600", label: "全面齊漲" },
-  followersCatchingUp: { icon: TrendingUp, iconClassName: "text-blue-600", label: "二軍補漲" },
+  leadersOnly: { icon: Flame, iconClassName: "text-orange-600 dark:text-orange-400", label: "龍頭領漲，二軍未動" },
+  broadRally: { icon: CheckCircle2, iconClassName: "text-emerald-600 dark:text-emerald-400", label: "全面齊漲" },
+  followersCatchingUp: { icon: TrendingUp, iconClassName: "text-blue-600 dark:text-blue-400", label: "二軍補漲" },
 };
 
 function formatPct(value: number | null): string {
@@ -94,10 +110,10 @@ function formatPct(value: number | null): string {
 
 /** 台股慣例：漲=紅、跌=綠（跟美股相反） */
 function returnColor(value: number | null): string {
-  if (value === null) return "text-zinc-400";
-  if (value > 0) return "text-red-600";
-  if (value < 0) return "text-emerald-600";
-  return "text-zinc-500";
+  if (value === null) return "text-zinc-400 dark:text-zinc-500";
+  if (value > 0) return "text-red-600 dark:text-red-400";
+  if (value < 0) return "text-emerald-600 dark:text-emerald-400";
+  return "text-zinc-500 dark:text-zinc-400";
 }
 
 export function ChainSignalLights() {
@@ -119,7 +135,7 @@ export function ChainSignalLights() {
     return (
       <Card>
         <SectionHeader icon={Workflow} iconColor="violet" title="產業鏈訊號燈號" />
-        <p className="mt-2 text-xs text-zinc-400">載入中…</p>
+        <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">載入中…</p>
       </Card>
     );
   }
@@ -152,7 +168,7 @@ export function ChainSignalLights() {
 
           return (
             <SubCard key={chain.chainName}>
-              <p className="text-sm font-medium text-zinc-800">{chain.chainNameFull}</p>
+              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{chain.chainNameFull}</p>
               <div className="mt-2 flex flex-col sm:flex-row sm:flex-wrap sm:items-stretch gap-2">
                 {sortedStages.map((stage, i) => {
                   const key = `${chain.chainName}::${stage.stageKey}`;
@@ -165,9 +181,9 @@ export function ChainSignalLights() {
                         disabled={stage.memberCount === 0}
                         className={`w-full rounded-md px-2.5 py-1.5 text-left text-xs ring-1 transition-shadow disabled:cursor-default sm:w-auto ${
                           LIGHT_STYLE[stage.light].ring
-                        } ${isOpen ? "ring-2 ring-zinc-400" : "hover:ring-zinc-300"}`}
+                        } ${isOpen ? "ring-2 ring-zinc-400 dark:ring-zinc-500" : "hover:ring-zinc-300 dark:hover:ring-white/20"}`}
                       >
-                        <div className="flex items-center gap-1 font-medium text-zinc-700">
+                        <div className="flex items-center gap-1 font-medium text-zinc-700 dark:text-zinc-300">
                           {(() => {
                             const LightIcon = LIGHT_STYLE[stage.light].icon;
                             return (
@@ -179,12 +195,12 @@ export function ChainSignalLights() {
                           })()}
                           {stage.label.split("：")[0]}
                           {stage.memberCount > 0 && (
-                            <span className="text-zinc-400">{isOpen ? "▲" : "▼"}</span>
+                            <span className="text-zinc-400 dark:text-zinc-500">{isOpen ? "▲" : "▼"}</span>
                           )}
                         </div>
                         {stage.memberCount > 0 ? (
                           <>
-                            <div className="mt-0.5 text-[10px] text-zinc-500">
+                            <div className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
                               {stage.risingCount}漲{stage.fallingCount}跌 · 5日
                               <span className={`font-medium ${returnColor(stage.avgReturn5d)}`}>
                                 {formatPct(stage.avgReturn5d)}
@@ -199,7 +215,7 @@ export function ChainSignalLights() {
                               )}
                             </div>
                             {stage.phase !== "mixed" && (
-                              <div className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-zinc-600">
+                              <div className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-zinc-600 dark:text-zinc-400">
                                 {(() => {
                                   const PhaseIcon = PHASE_LABELS[stage.phase].icon;
                                   return (
@@ -212,19 +228,25 @@ export function ChainSignalLights() {
                                 {PHASE_LABELS[stage.phase].label}
                               </div>
                             )}
-                            <div className="mt-0.5 text-[10px] text-zinc-400">
+                            <div className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-500">
                               龍頭({stage.leaders.count}檔) {formatPct(stage.leaders.avgReturn5d)} · 二軍(
                               {stage.followers.count}檔) {formatPct(stage.followers.avgReturn5d)}
                             </div>
                           </>
                         ) : (
-                          <div className="mt-0.5 text-[10px] text-zinc-400">無成員資料</div>
+                          <div className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-500">無成員資料</div>
                         )}
                       </button>
                       {i < sortedStages.length - 1 && (
                         <>
-                          <ChevronDown className="h-3.5 w-3.5 self-center text-zinc-300 sm:hidden" strokeWidth={2.25} />
-                          <ChevronRight className="hidden h-3.5 w-3.5 text-zinc-300 sm:block" strokeWidth={2.25} />
+                          <ChevronDown
+                            className="h-3.5 w-3.5 self-center text-zinc-300 dark:text-zinc-600 sm:hidden"
+                            strokeWidth={2.25}
+                          />
+                          <ChevronRight
+                            className="hidden h-3.5 w-3.5 text-zinc-300 dark:text-zinc-600 sm:block"
+                            strokeWidth={2.25}
+                          />
                         </>
                       )}
                     </div>
@@ -233,8 +255,8 @@ export function ChainSignalLights() {
               </div>
 
               {activeStage && (
-                <div className="mt-2 rounded-lg bg-white p-2 ring-1 ring-zinc-900/[0.04]">
-                  <p className="mb-1.5 text-[11px] font-medium text-zinc-500">
+                <div className="mt-2 rounded-lg bg-white p-2 ring-1 ring-zinc-900/[0.04] dark:bg-white/[0.03] dark:ring-white/[0.06]">
+                  <p className="mb-1.5 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
                     {activeStage.label.split("：")[0]} 成員股票（依近5日報酬排序）
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -242,9 +264,9 @@ export function ChainSignalLights() {
                       <Link
                         key={member.ticker}
                         href={`/tw/stock/${member.ticker}`}
-                        className="flex items-center gap-1.5 rounded-md bg-zinc-50 px-2 py-1 text-[11px] ring-1 ring-zinc-900/[0.04] transition-colors hover:bg-zinc-100"
+                        className="flex items-center gap-1.5 rounded-md bg-zinc-50 px-2 py-1 text-[11px] ring-1 ring-zinc-900/[0.04] transition-colors hover:bg-zinc-100 dark:bg-white/[0.04] dark:ring-white/[0.06] dark:hover:bg-white/10"
                       >
-                        <span className="inline-flex items-center gap-1 font-medium text-zinc-700">
+                        <span className="inline-flex items-center gap-1 font-medium text-zinc-700 dark:text-zinc-300">
                           {member.isLeader && (
                             <span title="龍頭股">
                               <Crown className="h-3 w-3 text-amber-500" />
@@ -253,7 +275,9 @@ export function ChainSignalLights() {
                           {member.ticker} {stripCompanySuffix(member.companyName)}
                         </span>
                         {member.status && (
-                          <span className="text-zinc-400">{STATUS_LABELS[member.status] ?? member.status}</span>
+                          <span className="text-zinc-400 dark:text-zinc-500">
+                            {STATUS_LABELS[member.status] ?? member.status}
+                          </span>
                         )}
                         <span className={`font-medium ${returnColor(member.return5d)}`}>
                           {formatPct(member.return5d)}

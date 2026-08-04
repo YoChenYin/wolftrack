@@ -3,9 +3,18 @@ import { stripCompanySuffix } from "@/lib/formatCompanyName";
 import type { VideoMentionItem } from "@/lib/youtube/queries";
 
 const SENTIMENT_STYLE: Record<string, { label: string; className: string }> = {
-  bullish: { label: "看多", className: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-  bearish: { label: "看空", className: "bg-red-50 text-red-700 ring-red-200" },
-  neutral: { label: "中性", className: "bg-zinc-50 text-zinc-600 ring-zinc-200" },
+  bullish: {
+    label: "看多",
+    className: "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/20",
+  },
+  bearish: {
+    label: "看空",
+    className: "bg-red-50 text-red-700 ring-red-200 dark:bg-red-400/10 dark:text-red-400 dark:ring-red-400/20",
+  },
+  neutral: {
+    label: "中性",
+    className: "bg-zinc-50 text-zinc-600 ring-zinc-200 dark:bg-white/5 dark:text-zinc-400 dark:ring-white/10",
+  },
 };
 
 const AGREEMENT_LABEL: Record<string, string> = {
@@ -36,15 +45,15 @@ export function StockMentionBadge({ mention }: { mention: VideoMentionItem }) {
     >
       <div className="flex items-center gap-1.5 font-medium">
         <span>{displayName}</span>
-        {mention.isNewStock && <span className="text-[10px] font-normal text-amber-600">新股</span>}
-        {!mention.ticker && <span className="text-[10px] font-normal text-zinc-400">待確認</span>}
+        {mention.isNewStock && <span className="text-[10px] font-normal text-amber-600 dark:text-amber-400">新股</span>}
+        {!mention.ticker && <span className="text-[10px] font-normal text-zinc-400 dark:text-zinc-500">待確認</span>}
         {entryExitTitle && (
           <span title={entryExitTitle}>
-            <ClipboardList className="h-2.5 w-2.5 shrink-0 text-zinc-400" strokeWidth={2.25} />
+            <ClipboardList className="h-2.5 w-2.5 shrink-0 text-zinc-400 dark:text-zinc-500" strokeWidth={2.25} />
           </span>
         )}
       </div>
-      <div className="flex items-center gap-1.5 text-[10px] font-normal text-zinc-500">
+      <div className="flex items-center gap-1.5 text-[10px] font-normal text-zinc-500 dark:text-zinc-400">
         <span>{sentiment.label}</span>
         {mention.agreement && (
           <>
@@ -52,7 +61,7 @@ export function StockMentionBadge({ mention }: { mention: VideoMentionItem }) {
             <span
               className={
                 mention.agreement === "aheadOfSystem"
-                  ? "inline-flex items-center gap-0.5 font-medium text-amber-600"
+                  ? "inline-flex items-center gap-0.5 font-medium text-amber-600 dark:text-amber-400"
                   : ""
               }
             >

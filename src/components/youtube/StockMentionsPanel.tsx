@@ -17,7 +17,7 @@ export function StockMentionsPanel({ mentions }: { mentions: StockMentionItem[] 
     return (
       <Card>
         <SectionHeader icon={PlaySquare} iconColor="rose" title="近期媒體提及" />
-        <p className="mt-2 text-xs text-zinc-400">這檔股票目前沒有被追蹤的YouTube頻道提到。</p>
+        <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">這檔股票目前沒有被追蹤的YouTube頻道提到。</p>
       </Card>
     );
   }
@@ -36,11 +36,11 @@ export function StockMentionsPanel({ mentions }: { mentions: StockMentionItem[] 
           return (
             <SubCard key={m.id} className="text-xs">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="font-medium text-zinc-600">{channel?.displayName ?? m.channelId}</span>
-                <span className="text-zinc-400">{m.videoPublishedAt.slice(0, 10)}</span>
+                <span className="font-medium text-zinc-600 dark:text-zinc-300">{channel?.displayName ?? m.channelId}</span>
+                <span className="text-zinc-400 dark:text-zinc-500">{m.videoPublishedAt.slice(0, 10)}</span>
               </div>
-              <p className="mt-1 text-zinc-800">{m.videoTitle}</p>
-              <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-zinc-500">
+              <p className="mt-1 text-zinc-800 dark:text-zinc-200">{m.videoTitle}</p>
+              <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
                 <span>{SENTIMENT_LABEL[m.sentiment] ?? m.sentiment}</span>
                 {m.agreement && (
                   <>
@@ -48,7 +48,7 @@ export function StockMentionsPanel({ mentions }: { mentions: StockMentionItem[] 
                     <span
                       className={
                         m.agreement === "aheadOfSystem"
-                          ? "inline-flex items-center gap-0.5 font-medium text-amber-600"
+                          ? "inline-flex items-center gap-0.5 font-medium text-amber-600 dark:text-amber-400"
                           : ""
                       }
                     >
@@ -58,19 +58,19 @@ export function StockMentionsPanel({ mentions }: { mentions: StockMentionItem[] 
                   </>
                 )}
               </div>
-              <p className="mt-1 text-zinc-500">{m.reasoningExcerpt}</p>
+              <p className="mt-1 text-zinc-500 dark:text-zinc-400">{m.reasoningExcerpt}</p>
               {(m.entryReason || m.exitCondition) && (
-                <div className="mt-1.5 flex flex-col gap-0.5 rounded-lg bg-white p-1.5 text-[11px] ring-1 ring-zinc-900/[0.04]">
+                <div className="mt-1.5 flex flex-col gap-0.5 rounded-lg bg-white p-1.5 text-[11px] ring-1 ring-zinc-900/[0.04] dark:bg-white/[0.03] dark:ring-white/[0.06]">
                   {m.entryReason && (
                     <p>
-                      <span className="font-medium text-zinc-500">進場理由：</span>
-                      <span className="text-zinc-600">{m.entryReason}</span>
+                      <span className="font-medium text-zinc-500 dark:text-zinc-400">進場理由：</span>
+                      <span className="text-zinc-600 dark:text-zinc-300">{m.entryReason}</span>
                     </p>
                   )}
                   {m.exitCondition && (
                     <p>
-                      <span className="font-medium text-zinc-500">出場條件：</span>
-                      <span className="text-zinc-600">{m.exitCondition}</span>
+                      <span className="font-medium text-zinc-500 dark:text-zinc-400">出場條件：</span>
+                      <span className="text-zinc-600 dark:text-zinc-300">{m.exitCondition}</span>
                     </p>
                   )}
                 </div>

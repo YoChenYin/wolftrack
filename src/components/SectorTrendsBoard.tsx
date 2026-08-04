@@ -91,7 +91,7 @@ export function SectorTrendsBoard({
     <div className="flex flex-col gap-6">
       {market === "TW" && (
         <div className="flex flex-col gap-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
             全市場總覽（不受下方篩選影響）
           </h2>
           <ChainSignalLights />
@@ -101,18 +101,18 @@ export function SectorTrendsBoard({
       )}
 
       <div className="flex flex-col gap-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">依板塊篩選選股結果</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">依板塊篩選選股結果</h2>
 
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <label htmlFor="sector-select" className="w-14 shrink-0 text-xs font-medium text-zinc-400">
+            <label htmlFor="sector-select" className="w-14 shrink-0 text-xs font-medium text-zinc-400 dark:text-zinc-500">
               板塊
             </label>
             <select
               id="sector-select"
               value={selectedSector}
               onChange={(e) => handleSelectSector(e.target.value)}
-              className="rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-[0_1px_2px_rgba(24,24,27,0.04)] ring-1 ring-zinc-900/[0.06]"
+              className="rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-[0_1px_2px_rgba(24,24,27,0.04)] ring-1 ring-zinc-900/[0.06] dark:bg-zinc-900 dark:text-zinc-300 dark:ring-white/10"
             >
               <option value="all">全部板塊</option>
               {sectors.map((sector) => (
@@ -125,7 +125,7 @@ export function SectorTrendsBoard({
 
           {themes.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="w-14 shrink-0 text-xs font-medium text-zinc-400">題材</span>
+              <span className="w-14 shrink-0 text-xs font-medium text-zinc-400 dark:text-zinc-500">題材</span>
               <FilterPill label="全部題材" active={selectedTheme === "all"} onClick={() => handleSelectTheme("all")} />
               {themes.map((theme) => (
                 <FilterPill
@@ -139,19 +139,21 @@ export function SectorTrendsBoard({
           )}
         </div>
 
-        {data.asOfDate && <p className="text-xs text-zinc-400">資料日期（as of）：{data.asOfDate}</p>}
+        {data.asOfDate && (
+          <p className="text-xs text-zinc-400 dark:text-zinc-500">資料日期（as of）：{data.asOfDate}</p>
+        )}
 
         {showValuation && (
           <Card>
             <SectionHeader icon={Scale} iconColor="blue" title={`${selectedSector} · PE/PB 估值比較`} />
-            {valuationLoading && <p className="mt-2 text-xs text-zinc-400">載入中…</p>}
+            {valuationLoading && <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">載入中…</p>}
             {!valuationLoading && groupValuation && (
               <div className="mt-3">
                 <GroupValuationTable group={groupValuation} />
               </div>
             )}
             {!valuationLoading && !groupValuation && (
-              <p className="mt-2 text-xs text-zinc-400">這個板塊目前沒有估值資料。</p>
+              <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">這個板塊目前沒有估值資料。</p>
             )}
           </Card>
         )}
@@ -180,7 +182,9 @@ function FilterPill({ label, active, onClick }: { label: string; active: boolean
       type="button"
       onClick={onClick}
       className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-        active ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+        active
+          ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+          : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-white/10 dark:text-zinc-300 dark:hover:bg-white/15"
       }`}
     >
       {label}

@@ -13,11 +13,11 @@ export function InfoTooltip({
 }) {
   return (
     <span className="group relative inline-flex cursor-help items-center align-middle">
-      <span className="ml-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-zinc-200 text-[9px] font-bold leading-none text-zinc-500 group-hover:bg-zinc-400 group-hover:text-white">
+      <span className="ml-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-zinc-200 text-[9px] font-bold leading-none text-zinc-500 group-hover:bg-zinc-400 group-hover:text-white dark:bg-white/10 dark:text-zinc-400 dark:group-hover:bg-zinc-500">
         ?
       </span>
       <span
-        className={`invisible absolute bottom-full z-30 mb-1.5 w-64 rounded-md bg-zinc-900 p-2.5 text-[11px] font-normal normal-case leading-relaxed text-zinc-100 opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 ${
+        className={`invisible absolute bottom-full z-30 mb-1.5 w-64 rounded-md bg-zinc-900 p-2.5 text-[11px] font-normal normal-case leading-relaxed text-zinc-100 opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 dark:bg-zinc-800 dark:ring-1 dark:ring-white/10 ${
           align === "left" ? "left-0" : "right-0"
         }`}
       >

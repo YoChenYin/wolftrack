@@ -28,36 +28,42 @@ interface ThemeHeatmapCell {
 
 /** 鏈位階配色：上游藍、中游紫、下游橘、支援層灰，跟熱圖本身的綠紅漲跌配色區隔開 */
 const STAGE_COLORS: Record<string, string> = {
-  upstream: "bg-blue-50 text-blue-700",
-  midstream: "bg-violet-50 text-violet-700",
-  downstream: "bg-amber-50 text-amber-700",
-  support: "bg-zinc-100 text-zinc-600",
+  upstream: "bg-blue-50 text-blue-700 dark:bg-blue-400/10 dark:text-blue-400",
+  midstream: "bg-violet-50 text-violet-700 dark:bg-violet-400/10 dark:text-violet-400",
+  downstream: "bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-400",
+  support: "bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-400",
 };
 
-/** 報酬率映到熱圖底色：台股慣例正值紅(漲)、負值綠(跌)，深淺依幅度（±5% 封頂，超過一樣是最深色） */
+/**
+ * 報酬率映到熱圖底色：台股慣例正值紅(漲)、負值綠(跌)，深淺依幅度（±5% 封頂，超過一樣是最深色）。
+ * 用CSS light-dark()而不是Tailwind的dark:字首——這裡的顏色是JS算出來的inline style，
+ * dark:字首只對className有效，inline style沒辦法用，light-dark()讓瀏覽器依prefers-color-scheme
+ * 自己選正確的一組rgba，效果等同但寫在同一個inline style裡。
+ */
 function heatColor(value: number | null): string {
   if (value === null) return "transparent";
   const clamped = Math.max(-5, Math.min(5, value));
   const intensity = Math.abs(clamped) / 5; // 0~1
+  const alpha = (0.12 + intensity * 0.55).toFixed(2);
+  const darkAlpha = (0.18 + intensity * 0.45).toFixed(2);
   if (clamped >= 0) {
-    const alpha = 0.12 + intensity * 0.55;
-    return `rgba(190, 60, 45, ${alpha.toFixed(2)})`;
+    return `light-dark(rgba(190, 60, 45, ${alpha}), rgba(239, 68, 68, ${darkAlpha}))`;
   }
-  const alpha = 0.12 + intensity * 0.55;
-  return `rgba(16, 122, 90, ${alpha.toFixed(2)})`;
+  return `light-dark(rgba(16, 122, 90, ${alpha}), rgba(52, 211, 153, ${darkAlpha}))`;
 }
 
 function textColor(value: number | null): string {
-  if (value === null) return "#a1a1aa";
-  return Math.abs(value) >= 2.5 ? "#fff" : value >= 0 ? "#8a2e20" : "#0f5c43";
+  if (value === null) return "light-dark(#a1a1aa, #71717a)";
+  if (Math.abs(value) >= 2.5) return "light-dark(#fff, #fff)";
+  return value >= 0 ? "light-dark(#8a2e20, #fecaca)" : "light-dark(#0f5c43, #a7f3d0)";
 }
 
 /** 台股慣例：買超(正)=紅、賣超(負)=綠，跟報酬率配色邏輯一致 */
 function concentrationColor(value: number | null): string {
-  if (value === null) return "text-zinc-300";
-  if (value > 0) return "text-red-600";
-  if (value < 0) return "text-emerald-600";
-  return "text-zinc-400";
+  if (value === null) return "text-zinc-300 dark:text-zinc-600";
+  if (value > 0) return "text-red-600 dark:text-red-400";
+  if (value < 0) return "text-emerald-600 dark:text-emerald-400";
+  return "text-zinc-400 dark:text-zinc-500";
 }
 
 function formatPct(value: number | null): string {
@@ -101,7 +107,7 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
     return (
       <Card>
         <SectionHeader icon={LayoutGrid} iconColor="violet" title="板塊熱圖" />
-        <p className="mt-2 text-xs text-zinc-400">載入中…</p>
+        <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">載入中…</p>
       </Card>
     );
   }
@@ -121,7 +127,9 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
               type="button"
               onClick={() => setSortBy(key)}
               className={`rounded px-2 py-1 font-medium ${
-                sortBy === key ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+                sortBy === key
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-white/10 dark:text-zinc-400 dark:hover:bg-white/15"
               }`}
             >
               依{key === "return5d" ? "5日" : key === "return10d" ? "10日" : "20日"}排序
@@ -129,7 +137,7 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
           ))}
         </div>
       </div>
-      <p className="mt-1 text-[11px] text-zinc-400">
+      <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
         族群成員平均報酬率（上）與籌碼集中度（下，籌碼領先股價，投信外資買超佔量能比例），點列可直接篩選該板塊；標籤是該板塊在產業鏈上的位置
       </p>
 
@@ -138,7 +146,9 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
           type="button"
           onClick={() => setChainFilter(null)}
           className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-            chainFilter === null ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+            chainFilter === null
+              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+              : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-white/10 dark:text-zinc-400 dark:hover:bg-white/15"
           }`}
         >
           全部產業鏈
@@ -149,7 +159,9 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
             type="button"
             onClick={() => setChainFilter(name)}
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-              chainFilter === name ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+              chainFilter === name
+                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-white/10 dark:text-zinc-400 dark:hover:bg-white/15"
             }`}
           >
             {name}
@@ -159,8 +171,8 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
 
       <div className="mt-3 max-h-80 overflow-y-auto overflow-x-auto">
         <table className="w-full min-w-[420px] text-xs">
-          <thead className="sticky top-0 bg-white">
-            <tr className="text-left text-zinc-400">
+          <thead className="sticky top-0 bg-white dark:bg-zinc-900">
+            <tr className="text-left text-zinc-400 dark:text-zinc-500">
               <th className="pb-1.5 font-normal">板塊</th>
               <th className="w-20 pb-1.5 text-right font-normal">5日</th>
               <th className="w-20 pb-1.5 text-right font-normal">10日</th>
@@ -172,15 +184,19 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
               <tr
                 key={cell.themeName}
                 onClick={() => onSelectTheme(cell.themeName)}
-                className="cursor-pointer border-t border-zinc-50 hover:bg-zinc-50"
+                className="cursor-pointer border-t border-zinc-50 hover:bg-zinc-50 dark:border-white/5 dark:hover:bg-white/5"
               >
-                <td className="py-1 pr-2 font-medium text-zinc-800">
+                <td className="py-1 pr-2 font-medium text-zinc-800 dark:text-zinc-200">
                   {cell.themeName}
-                  {cell.sampleSize > 0 && <span className="ml-1 text-[10px] font-normal text-zinc-400">({cell.sampleSize})</span>}
+                  {cell.sampleSize > 0 && (
+                    <span className="ml-1 text-[10px] font-normal text-zinc-400 dark:text-zinc-500">
+                      ({cell.sampleSize})
+                    </span>
+                  )}
                   {cell.chainStages.map((s) => (
                     <span
                       key={`${s.chainName}-${s.stageKey}`}
-                      className={`ml-1 rounded px-1 py-0.5 text-[9px] font-normal ${STAGE_COLORS[s.stageKey] ?? "bg-zinc-100 text-zinc-500"}`}
+                      className={`ml-1 rounded px-1 py-0.5 text-[9px] font-normal ${STAGE_COLORS[s.stageKey] ?? "bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-400"}`}
                     >
                       {s.chainName}·{s.label.split("：")[0]}
                     </span>

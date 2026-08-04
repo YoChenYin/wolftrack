@@ -23,7 +23,7 @@ export function ValuationSidePanel({
     return (
       <Card>
         <SectionHeader icon={Link2} iconColor="blue" title="供應鏈估值比較" />
-        <p className="mt-2 text-xs text-zinc-400">這檔股票目前沒有被歸類進任何供應鏈概念股族群。</p>
+        <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">這檔股票目前沒有被歸類進任何供應鏈概念股族群。</p>
       </Card>
     );
   }
@@ -38,8 +38,8 @@ export function ValuationSidePanel({
 
         {themesWithoutData.map((theme) => (
           <SubCard key={theme.theme_name}>
-            <p className="text-sm font-medium text-zinc-800">{theme.theme_name}</p>
-            <p className="mt-1 text-xs text-zinc-400">此族群成員清單還沒建置，暫時無法比較估值。</p>
+            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{theme.theme_name}</p>
+            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">此族群成員清單還沒建置，暫時無法比較估值。</p>
           </SubCard>
         ))}
       </div>

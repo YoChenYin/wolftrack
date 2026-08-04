@@ -25,8 +25,8 @@ function formatPct(value: number | null): string {
 
 /** 台股慣例：漲(正)=紅、跌(負)=綠 */
 function pctColor(value: number | null): string {
-  if (value === null) return "text-zinc-400";
-  return value >= 0 ? "text-red-600" : "text-emerald-600";
+  if (value === null) return "text-zinc-400 dark:text-zinc-500";
+  return value >= 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
 }
 
 /**
@@ -39,7 +39,7 @@ export function MonthlyRevenuePanel({ rows }: { rows: MonthlyRevenueRow[] }) {
     return (
       <Card>
         <SectionHeader icon={BarChart3} iconColor="emerald" title="月營收" />
-        <p className="mt-2 text-xs text-zinc-400">這檔股票目前沒有月營收資料。</p>
+        <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">這檔股票目前沒有月營收資料。</p>
       </Card>
     );
   }
@@ -59,7 +59,7 @@ export function MonthlyRevenuePanel({ rows }: { rows: MonthlyRevenueRow[] }) {
       <div className="mt-2 overflow-x-auto">
         <table className="w-full min-w-[480px] text-xs">
           <thead>
-            <tr className="text-left text-zinc-400">
+            <tr className="text-left text-zinc-400 dark:text-zinc-500">
               <th className="pr-2 font-normal">月份</th>
               <th className="pr-2 text-right font-normal">營收</th>
               <th className="pr-2 text-right font-normal">月增率</th>
@@ -69,9 +69,9 @@ export function MonthlyRevenuePanel({ rows }: { rows: MonthlyRevenueRow[] }) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.revenueMonth} className="border-t border-zinc-50">
-                <td className="py-1 pr-2 font-medium text-zinc-800">{r.revenueMonth}</td>
-                <td className="pr-2 text-right text-zinc-600">{formatRevenue(r.revenue)}</td>
+              <tr key={r.revenueMonth} className="border-t border-zinc-50 dark:border-white/5">
+                <td className="py-1 pr-2 font-medium text-zinc-800 dark:text-zinc-200">{r.revenueMonth}</td>
+                <td className="pr-2 text-right text-zinc-600 dark:text-zinc-400">{formatRevenue(r.revenue)}</td>
                 <td className={`pr-2 text-right font-medium ${pctColor(r.momGrowthPct)}`}>{formatPct(r.momGrowthPct)}</td>
                 <td className={`pr-2 text-right font-medium ${pctColor(r.yoyGrowthPct)}`}>{formatPct(r.yoyGrowthPct)}</td>
                 <td className={`text-right font-medium ${pctColor(r.cumulativeYoyGrowthPct)}`}>

@@ -7,9 +7,9 @@ import { Card } from "../ui/Card";
 import { SectionHeader } from "../ui/SectionHeader";
 
 const SENTIMENT_LABEL: Record<string, { label: string; className: string }> = {
-  bullish: { label: "看多", className: "text-emerald-700" },
-  bearish: { label: "看空", className: "text-red-700" },
-  neutral: { label: "中性", className: "text-zinc-500" },
+  bullish: { label: "看多", className: "text-emerald-700 dark:text-emerald-400" },
+  bearish: { label: "看空", className: "text-red-700 dark:text-red-400" },
+  neutral: { label: "中性", className: "text-zinc-500 dark:text-zinc-400" },
 };
 
 /** v1不需要client互動，server component直接render，比照這個專案其他TW-only區塊的做法 */
@@ -27,12 +27,12 @@ export function StockMentionOverviewSection({ items }: { items: StockMentionOver
         }
       />
       {items.length === 0 ? (
-        <p className="mt-2 text-xs text-zinc-400">近2週還沒有已處理完的個股提及。</p>
+        <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">近2週還沒有已處理完的個股提及。</p>
       ) : (
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[480px] text-left text-xs">
             <thead>
-              <tr className="text-zinc-400">
+              <tr className="text-zinc-400 dark:text-zinc-500">
                 <th className="pb-1.5 pr-3 font-medium">個股</th>
                 <th className="pb-1.5 pr-3 font-medium">提及頻道</th>
                 <th className="pb-1.5 pr-3 font-medium">次數</th>
@@ -44,24 +44,24 @@ export function StockMentionOverviewSection({ items }: { items: StockMentionOver
               {items.map((item) => {
                 const sentiment = SENTIMENT_LABEL[item.latestSentiment] ?? SENTIMENT_LABEL.neutral;
                 return (
-                  <tr key={item.stockId} className="border-t border-zinc-100">
-                    <td className="py-1.5 pr-3 font-medium text-zinc-800">
+                  <tr key={item.stockId} className="border-t border-zinc-100 dark:border-white/10">
+                    <td className="py-1.5 pr-3 font-medium text-zinc-800 dark:text-zinc-200">
                       {item.ticker} {stripCompanySuffix(item.companyName)}
                     </td>
-                    <td className="py-1.5 pr-3 text-zinc-500">
+                    <td className="py-1.5 pr-3 text-zinc-500 dark:text-zinc-400">
                       {item.channelIds.map((channelId) => findYoutubeChannel(channelId)?.displayName ?? channelId).join("、")}
                     </td>
-                    <td className="py-1.5 pr-3 text-zinc-500">{item.mentionCount}</td>
+                    <td className="py-1.5 pr-3 text-zinc-500 dark:text-zinc-400">{item.mentionCount}</td>
                     <td className={`py-1.5 pr-3 font-medium ${sentiment.className}`}>
                       {sentiment.label}
                       {item.latestAgreement === "aheadOfSystem" && (
-                        <span className="ml-1 inline-flex items-center gap-0.5 font-medium text-amber-600">
+                        <span className="ml-1 inline-flex items-center gap-0.5 font-medium text-amber-600 dark:text-amber-400">
                           <Flame className="h-3 w-3" strokeWidth={2.25} />
                           領先系統
                         </span>
                       )}
                     </td>
-                    <td className="py-1.5 text-zinc-400">{item.latestPublishedAt.slice(0, 10)}</td>
+                    <td className="py-1.5 text-zinc-400 dark:text-zinc-500">{item.latestPublishedAt.slice(0, 10)}</td>
                   </tr>
                 );
               })}

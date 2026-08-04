@@ -20,7 +20,7 @@ export function VideoMentionsSection({ videos }: { videos: VideoMentionSummary[]
         }
       />
       {videos.length === 0 ? (
-        <p className="mt-2 text-xs text-zinc-400">目前還沒有已處理完的影片。</p>
+        <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">目前還沒有已處理完的影片。</p>
       ) : (
         <div className="mt-3 flex flex-col gap-3">
           {videos.map((video) => (

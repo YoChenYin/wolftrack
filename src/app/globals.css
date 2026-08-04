@@ -1,12 +1,21 @@
 @import "tailwindcss";
 
 :root {
+  /* light-dark()要靠這個才知道目前是哪個scheme（ThemeHeatmap.tsx的熱圖底色是JS算出來的
+     inline style，沒辦法用Tailwind的dark:字首，改用CSS原生light-dark()） */
+  color-scheme: light dark;
   --background: #ffffff;
   --foreground: #171717;
   /* 2026-07-26：/tw 首頁的品牌色——琥珀銅，呼應「狼蹤」夜間追蹤的意象，只在/tw這個
      route subtree當accent用，紅漲綠跌這種資料語意色不受影響 */
   --tw-accent: #b45309;
   --tw-accent-foreground: #fffbeb;
+  /* 2026-07-30：/tw首頁跟個股詳情頁共用的畫布背景+標題漸層，用CSS變數包起來是因為這兩處
+     是inline style（radial-gradient/linear-gradient組合，沒辦法單靠Tailwind的dark:字首處理），
+     深色模式在這裡透過@media覆寫，其餘語意色（紅漲綠跌）不受影響 */
+  --tw-canvas: radial-gradient(1200px 480px at 15% -10%, rgba(180, 83, 9, 0.08), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(180, 83, 9, 0.05), transparent 55%), #fafaf9;
+  --tw-heading-gradient: linear-gradient(100deg, #78350f, #b45309 55%, #78350f);
 }
 
 @theme inline {
@@ -20,6 +29,9 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --tw-canvas: radial-gradient(1200px 480px at 15% -10%, rgba(180, 83, 9, 0.12), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(180, 83, 9, 0.07), transparent 55%), #09090b;
+    --tw-heading-gradient: linear-gradient(100deg, #fbbf24, #f59e0b 55%, #fbbf24);
   }
 }
 
