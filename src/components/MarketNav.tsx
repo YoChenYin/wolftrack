@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Construction } from "lucide-react";
+import { Construction, LineChart } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const TABS = [
+const TABS: { href: string; flag?: string; icon?: LucideIcon; label: string; underConstruction: boolean }[] = [
   { href: "/", flag: "🇺🇸", label: "WolfTrack 狼蹤", underConstruction: true },
   { href: "/tw", flag: "🇹🇼", label: "WolfTrack TW", underConstruction: false },
-] as const;
+  { href: "/macro", icon: LineChart, label: "總經", underConstruction: false },
+];
 
 export function MarketNav() {
   const pathname = usePathname();
@@ -17,6 +19,7 @@ export function MarketNav() {
       <div className="mx-auto flex w-full max-w-6xl gap-1 px-6">
         {TABS.map((tab) => {
           const active = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
+          const Icon = tab.icon;
           return (
             <Link
               key={tab.href}
@@ -27,7 +30,7 @@ export function MarketNav() {
                   : "border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-500 dark:hover:text-zinc-300"
               }`}
             >
-              <span>{tab.flag}</span>
+              {tab.flag ? <span>{tab.flag}</span> : Icon && <Icon className="h-4 w-4" strokeWidth={2.25} />}
               {tab.label}
               {tab.underConstruction && (
                 <span title="施工中">

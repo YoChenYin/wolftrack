@@ -516,6 +516,9 @@ const STOCKS = [
 
   // 大盤指數（合成股票紀錄，重用 tw_daily_price 存 TAIEX 歷史，當相對強度因子的 benchmark，isActive=false 不會出現在戰術面板）
   { ticker: "TAIEX", companyName: "台灣加權股價指數", sectorCode: "INDEX", industry: "大盤指數", isActive: false },
+  // 櫃買指數（合成股票紀錄，上櫃市場大盤，總經頁季節性分析用來對照 TAIEX 上市大盤），TWSE 官方 API
+  // 沒有這個指數的歷史資料，backfill-otc-index-history.ts 改用 FinMind（data_id="TPEx"）回填
+  { ticker: "TPEX", companyName: "台灣證券櫃檯買賣中心加權股價指數", sectorCode: "INDEX", industry: "大盤指數", isActive: false },
 ] as const;
 
 /**
