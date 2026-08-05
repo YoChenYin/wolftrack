@@ -492,3 +492,97 @@ model EarningsCallAnalysis {
   @@index([stockId])
   @@map("earnings_call_analyses")
 }
+
+/// 台指期 Decision OS 最終立場（見 docs/taifex-decision-os-prd.html 第6節）
+enum FinalStance {
+  bull
+  bear
+  neutral
+}
+
+/// 台指期 Decision OS 建議策略
+enum TradeStrategy {
+  swingLong
+  swingShort
+  rangeBound
+  flat
+}
+
+/// 台指期 Decision OS 風險等級
+enum RiskLevel {
+  low
+  medium
+  high
+}
+
+/// 台指期 Decision OS 每日決策快照：八層分數 + 最終建議，一天一筆，/decision-os 頁面直接讀這張表。
+/// MVP階段只有 L3/L4/L6 有實際分數（資料源已驗證可用），L1/L2/L5 欄位保留供第二階段接上後使用，
+/// 目前先是 null（見 docs/taifex-decision-os-prd.html 第15節「資料源現況總表」的缺口說明）。
+model DecisionSnapshot {
+  id        BigInt   @id @default(autoincrement())
+  tradeDate DateTime @unique @map("trade_date") @db.Date
+
+  l1GlobalScore    Decimal? @map("l1_global_score") @db.Decimal(4, 2)
+  l3TwMarketScore  Decimal? @map("l3_tw_market_score") @db.Decimal(4, 2)
+  l4FlowScore      Decimal? @map("l4_flow_score") @db.Decimal(4, 2)
+  l5SentimentScore Decimal? @map("l5_sentiment_score") @db.Decimal(4, 2)
+  l6TechnicalScore Decimal? @map("l6_technical_score") @db.Decimal(4, 2)
+  totalScore       Decimal  @map("total_score") @db.Decimal(5, 2)
+
+  finalStance       FinalStance   @map("final_stance")
+  finalConfidence   Int           @map("final_confidence")
+  strategy          TradeStrategy
+  riskLevel         RiskLevel     @map("risk_level")
+  suggestedSizePct  Int           @map("suggested_size_pct")
+  entryCondition    String        @map("entry_condition") @db.Text
+  stopLossPrice     Decimal?      @map("stop_loss_price") @db.Decimal(10, 2)
+  takeProfitPrice   Decimal?      @map("take_profit_price") @db.Decimal(10, 2)
+  supportingReasons Json          @map("supporting_reasons")
+  opposingReasons   Json          @map("opposing_reasons")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("decision_snapshots")
+}
+
+/// Gate 引擎每日觸發紀錄，一天可能多筆（每個觸發的Gate一筆），供Dashboard警示條與歷史稽核用
+model GateTrigger {
+  id         BigInt   @id @default(autoincrement())
+  tradeDate  DateTime @map("trade_date") @db.Date
+  gateNumber Int      @map("gate_number")
+  gateName   String   @map("gate_name")
+  action     String
+  detail     String?  @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([tradeDate])
+  @@map("gate_triggers")
+}
+
+/// 使用者風控設定：MVP先做單一全域設定（不分帳號），Onboarding流程與多使用者留給之後
+model UserRiskProfile {
+  id                  Int      @id @default(autoincrement())
+  accountEquity       Decimal  @map("account_equity") @db.Decimal(14, 0)
+  riskPerTradePct     Decimal  @default(1.0) @map("risk_per_trade_pct") @db.Decimal(4, 2)
+  dailyMaxLossPct     Decimal  @default(3.0) @map("daily_max_loss_pct") @db.Decimal(4, 2)
+  monthlyMaxLossPct   Decimal  @default(10.0) @map("monthly_max_loss_pct") @db.Decimal(4, 2)
+  maxExposurePct      Decimal  @default(50.0) @map("max_exposure_pct") @db.Decimal(4, 2)
+  atrStopMultiplier   Decimal  @default(1.5) @map("atr_stop_multiplier") @db.Decimal(3, 2)
+  consecutiveLossHalt Int      @default(3) @map("consecutive_loss_halt")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("user_risk_profile")
+}
+
+/// 總體風險事件行事曆（L2 資料源），MVP階段人工維護，見 docs/taifex-decision-os-prd.html 第15節
+model MacroEvent {
+  id         Int      @id @default(autoincrement())
+  eventDate  DateTime @map("event_date") @db.Date
+  eventType  String   @map("event_type")
+  label      String
+  gateAction String   @map("gate_action")
+
+  @@index([eventDate])
+  @@map("macro_events")
+}

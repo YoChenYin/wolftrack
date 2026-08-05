@@ -241,6 +241,156 @@ export interface IndicatorSeries {
   roc60: (number | null)[];
 }
 
+export interface AdxWithDI {
+  adx: (number | null)[];
+  plusDI: (number | null)[];
+  minusDI: (number | null)[];
+}
+
+/**
+ * 跟 adx() 算法完全相同，差別只是額外把 +DI/-DI 序列一起回傳（新增函式，不動既有 adx()
+ * 的回傳型別，避免影響美股/台股既有的 classify.ts / calculateTwDailySignal.ts 呼叫端）。
+ * 台指期 Decision OS 的 L6 技術面需要 +DI vs -DI 判斷趨勢方向，光有 ADX 值不夠。
+ */
+export function adxWithDI(bars: OhlcvBar[], period = 14): AdxWithDI {
+  const n = bars.length;
+  const adxOut: (number | null)[] = new Array(n).fill(null);
+  const plusDIOut: (number | null)[] = new Array(n).fill(null);
+  const minusDIOut: (number | null)[] = new Array(n).fill(null);
+  if (n <= period * 2) return { adx: adxOut, plusDI: plusDIOut, minusDI: minusDIOut };
+
+  const tr: number[] = new Array(n).fill(0);
+  const plusDM: number[] = new Array(n).fill(0);
+  const minusDM: number[] = new Array(n).fill(0);
+
+  for (let i = 1; i < n; i++) {
+    const { high, low } = bars[i];
+    const prevHigh = bars[i - 1].high;
+    const prevLow = bars[i - 1].low;
+    const prevClose = bars[i - 1].close;
+
+    tr[i] = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+
+    const upMove = high - prevHigh;
+    const downMove = prevLow - low;
+    plusDM[i] = upMove > downMove && upMove > 0 ? upMove : 0;
+    minusDM[i] = downMove > upMove && downMove > 0 ? downMove : 0;
+  }
+
+  let smoothTr = 0;
+  let smoothPlusDM = 0;
+  let smoothMinusDM = 0;
+  for (let i = 1; i <= period; i++) {
+    smoothTr += tr[i];
+    smoothPlusDM += plusDM[i];
+    smoothMinusDM += minusDM[i];
+  }
+
+  const dx: (number | null)[] = new Array(n).fill(null);
+  plusDIOut[period] = smoothTr === 0 ? 0 : (100 * smoothPlusDM) / smoothTr;
+  minusDIOut[period] = smoothTr === 0 ? 0 : (100 * smoothMinusDM) / smoothTr;
+  dx[period] =
+    (plusDIOut[period] as number) + (minusDIOut[period] as number) === 0
+      ? 0
+      : (100 * Math.abs((plusDIOut[period] as number) - (minusDIOut[period] as number))) /
+        ((plusDIOut[period] as number) + (minusDIOut[period] as number));
+
+  for (let i = period + 1; i < n; i++) {
+    smoothTr = smoothTr - smoothTr / period + tr[i];
+    smoothPlusDM = smoothPlusDM - smoothPlusDM / period + plusDM[i];
+    smoothMinusDM = smoothMinusDM - smoothMinusDM / period + minusDM[i];
+
+    plusDIOut[i] = smoothTr === 0 ? 0 : (100 * smoothPlusDM) / smoothTr;
+    minusDIOut[i] = smoothTr === 0 ? 0 : (100 * smoothMinusDM) / smoothTr;
+    const diSum = (plusDIOut[i] as number) + (minusDIOut[i] as number);
+    dx[i] = diSum === 0 ? 0 : (100 * Math.abs((plusDIOut[i] as number) - (minusDIOut[i] as number))) / diSum;
+  }
+
+  let adxSum = 0;
+  let count = 0;
+  let firstAdxIndex = -1;
+  for (let i = period; i < n; i++) {
+    if (dx[i] === null) continue;
+    adxSum += dx[i] as number;
+    count++;
+    if (count === period) {
+      firstAdxIndex = i;
+      adxOut[i] = adxSum / period;
+      break;
+    }
+  }
+  if (firstAdxIndex === -1) return { adx: adxOut, plusDI: plusDIOut, minusDI: minusDIOut };
+
+  let prevAdx = adxOut[firstAdxIndex] as number;
+  for (let i = firstAdxIndex + 1; i < n; i++) {
+    const d = dx[i];
+    if (d === null) continue;
+    prevAdx = (prevAdx * (period - 1) + d) / period;
+    adxOut[i] = prevAdx;
+  }
+  return { adx: adxOut, plusDI: plusDIOut, minusDI: minusDIOut };
+}
+
+/** Wilder's ATR（真實區間平均），台指期 Decision OS 用來算停損距離與波動度分級 */
+export function atr(bars: OhlcvBar[], period = 14): (number | null)[] {
+  const n = bars.length;
+  const out: (number | null)[] = new Array(n).fill(null);
+  if (n <= period) return out;
+
+  const tr: number[] = new Array(n).fill(0);
+  for (let i = 1; i < n; i++) {
+    const { high, low } = bars[i];
+    const prevClose = bars[i - 1].close;
+    tr[i] = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+  }
+
+  let sum = 0;
+  for (let i = 1; i <= period; i++) sum += tr[i];
+  let prev = sum / period;
+  out[period] = prev;
+
+  for (let i = period + 1; i < n; i++) {
+    prev = (prev * (period - 1) + tr[i]) / period;
+    out[i] = prev;
+  }
+  return out;
+}
+
+export interface BollingerBands {
+  upper: (number | null)[];
+  middle: (number | null)[];
+  lower: (number | null)[];
+  /** %b：價格在通道中的相對位置，0=貼下軌、0.5=貼中軌、1=貼上軌 */
+  percentB: (number | null)[];
+  /** 帶寬 = (上軌-下軌)/中軌，判斷盤整(窄)或噴出(寬)用 */
+  bandwidth: (number | null)[];
+}
+
+/** 布林通道：中軌=SMA(period)，上下軌=中軌 ± stdDevMultiplier 個標準差 */
+export function bollingerBands(closes: number[], period = 20, stdDevMultiplier = 2): BollingerBands {
+  const middle = sma(closes, period);
+  const upper: (number | null)[] = new Array(closes.length).fill(null);
+  const lower: (number | null)[] = new Array(closes.length).fill(null);
+  const percentB: (number | null)[] = new Array(closes.length).fill(null);
+  const bandwidth: (number | null)[] = new Array(closes.length).fill(null);
+
+  for (let i = period - 1; i < closes.length; i++) {
+    const mid = middle[i];
+    if (mid === null) continue;
+    let variance = 0;
+    for (let j = i - period + 1; j <= i; j++) variance += (closes[j] - mid) ** 2;
+    const stdDev = Math.sqrt(variance / period);
+    const up = mid + stdDevMultiplier * stdDev;
+    const low = mid - stdDevMultiplier * stdDev;
+    upper[i] = up;
+    lower[i] = low;
+    percentB[i] = up === low ? 0.5 : (closes[i] - low) / (up - low);
+    bandwidth[i] = mid === 0 ? null : (up - low) / mid;
+  }
+
+  return { upper, middle, lower, percentB, bandwidth };
+}
+
 export function computeIndicatorSeries(bars: OhlcvBar[]): IndicatorSeries {
   const closes = bars.map((b) => b.close);
   const volumes = bars.map((b) => b.volume);

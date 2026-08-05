@@ -1,0 +1,1346 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>台指期波段交易 Decision OS — PRD</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --ink: #11151a;
+    --ink-raised: #171d24;
+    --ink-raised-2: #1d242c;
+    --paper: #f6f3ec;
+    --paper-raised: #ffffff;
+    --paper-raised-2: #eeeae0;
+
+    --text: #e7e3d8;
+    --text-dim: #9aa1a8;
+    --text-faint: #6b727a;
+
+    --accent: #c79a54;
+    --accent-strong: #e0b876;
+
+    --bull: #c0392b;
+    --bull-bg: rgba(192, 57, 43, 0.12);
+    --bear: #2f8f6f;
+    --bear-bg: rgba(47, 143, 111, 0.12);
+    --neutral: #8a8f96;
+    --neutral-bg: rgba(138, 143, 150, 0.1);
+
+    --rule: rgba(231, 227, 216, 0.11);
+    --rule-strong: rgba(231, 227, 216, 0.2);
+
+    --bg: var(--ink);
+    --bg-raised: var(--ink-raised);
+    --bg-raised-2: var(--ink-raised-2);
+    --fg: var(--text);
+    --fg-dim: var(--text-dim);
+    --fg-faint: var(--text-faint);
+    --border: var(--rule);
+    --border-strong: var(--rule-strong);
+
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Hoefler Text", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "SF Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  :root[data-theme="light"] {
+    --bg: var(--paper);
+    --bg-raised: var(--paper-raised);
+    --bg-raised-2: var(--paper-raised-2);
+    --fg: #211d15;
+    --fg-dim: #5b564a;
+    --fg-faint: #8b8578;
+    --border: rgba(33, 29, 21, 0.1);
+    --border-strong: rgba(33, 29, 21, 0.18);
+    --accent: #96652b;
+    --accent-strong: #7a4f1f;
+    --bull-bg: rgba(192, 57, 43, 0.08);
+    --bear-bg: rgba(31, 107, 82, 0.08);
+    --bear: #1f6b52;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: var(--paper);
+      --bg-raised: var(--paper-raised);
+      --bg-raised-2: var(--paper-raised-2);
+      --fg: #211d15;
+      --fg-dim: #5b564a;
+      --fg-faint: #8b8578;
+      --border: rgba(33, 29, 21, 0.1);
+      --border-strong: rgba(33, 29, 21, 0.18);
+      --accent: #96652b;
+      --accent-strong: #7a4f1f;
+      --bull-bg: rgba(192, 57, 43, 0.08);
+      --bear-bg: rgba(31, 107, 82, 0.08);
+      --bear: #1f6b52;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: var(--accent); color: var(--ink); }
+
+  .shell {
+    display: grid;
+    grid-template-columns: 268px minmax(0, 1fr);
+    min-height: 100vh;
+  }
+
+  /* ---------- sidebar ---------- */
+  .rail {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 28px 20px 40px;
+    border-right: 1px solid var(--border);
+    background: var(--bg-raised);
+  }
+  .rail-brand {
+    font-family: var(--serif);
+    font-size: 17px;
+    letter-spacing: 0.01em;
+    color: var(--fg);
+    margin: 0 0 2px;
+  }
+  .rail-sub {
+    font-size: 11px;
+    color: var(--fg-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 24px;
+  }
+  .rail nav { display: flex; flex-direction: column; gap: 1px; }
+  .rail-group { margin-top: 16px; }
+  .rail-group-label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--fg-faint);
+    padding: 0 10px;
+    margin-bottom: 6px;
+  }
+  .rail a {
+    display: block;
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: var(--fg-dim);
+    text-decoration: none;
+    font-size: 13px;
+    line-height: 1.4;
+    transition: background 0.12s, color 0.12s;
+  }
+  .rail a:hover { background: var(--bg-raised-2); color: var(--fg); }
+  .rail a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* ---------- main ---------- */
+  main { min-width: 0; padding: 56px 48px 120px; }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  .wrap.wide { max-width: 980px; }
+
+  .masthead { margin-bottom: 56px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 14px;
+  }
+  h1.title {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 40px;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  .thesis {
+    font-size: 17px;
+    color: var(--fg-dim);
+    max-width: 640px;
+    margin: 0 0 28px;
+    text-wrap: balance;
+  }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+  .chip {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    padding: 5px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border-strong);
+    color: var(--fg-dim);
+  }
+  .hr { height: 1px; background: linear-gradient(90deg, var(--accent), transparent 55%); opacity: 0.55; }
+
+  section { margin: 72px 0; scroll-margin-top: 24px; }
+  section:first-of-type { margin-top: 0; }
+
+  .sec-num {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 27px;
+    margin: 4px 0 6px;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 20px;
+    margin: 36px 0 10px;
+    text-wrap: balance;
+  }
+  h4 {
+    font-family: var(--sans);
+    font-weight: 650;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--fg-dim);
+    margin: 22px 0 10px;
+  }
+  .lede { color: var(--fg-dim); font-size: 15px; max-width: 660px; margin: 0 0 20px; }
+  p { margin: 0 0 14px; max-width: 66ch; }
+  p.full { max-width: none; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 5px; }
+  strong { color: var(--fg); font-weight: 650; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    background: var(--bg-raised-2);
+    padding: 1.5px 5px;
+    border-radius: 4px;
+    color: var(--accent-strong);
+  }
+
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; margin: 4px 0 20px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 560px; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--fg-faint);
+    font-weight: 600;
+    background: var(--bg-raised);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--bg-raised); }
+  td.num, th.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11.5px; font-family: var(--mono); white-space: nowrap; }
+  .pill.bull { background: var(--bull-bg); color: var(--bull); }
+  .pill.bear { background: var(--bear-bg); color: var(--bear); }
+  .pill.neutral { background: var(--neutral-bg); color: var(--neutral); }
+  .pill.gate { background: rgba(199, 154, 84, 0.14); color: var(--accent-strong); }
+
+  .stars { font-family: var(--mono); letter-spacing: 1px; white-space: nowrap; }
+  .stars.s5 { color: var(--bull); }
+  .stars.s4 { color: var(--bull); opacity: 0.75; }
+  .stars.s3 { color: var(--neutral); }
+  .stars.s2 { color: var(--bear); opacity: 0.75; }
+  .stars.s1 { color: var(--bear); }
+
+  pre {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    margin: 4px 0 20px;
+  }
+  pre code { background: none; padding: 0; color: var(--fg); }
+  .cm { color: var(--fg-faint); }
+  .kw { color: var(--accent-strong); }
+  .ty { color: #7fa3c9; }
+
+  .layer-card {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 26px 28px;
+    margin: 28px 0;
+    background: var(--bg-raised);
+  }
+  .layer-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
+  .layer-index {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    padding: 2px 7px;
+  }
+  .layer-title { font-family: var(--serif); font-size: 21px; margin: 0; }
+  .layer-en { color: var(--fg-faint); font-size: 12.5px; font-family: var(--mono); }
+
+  dl.spec { display: grid; grid-template-columns: 132px 1fr; gap: 10px 18px; margin: 18px 0 4px; }
+  dl.spec dt { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-faint); padding-top: 2px; }
+  dl.spec dd { margin: 0; font-size: 14px; color: var(--fg); }
+
+  .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+  .cond-box { border-radius: 10px; padding: 14px 16px; border: 1px solid var(--border); }
+  .cond-box.bull { border-color: rgba(192,57,43,0.35); background: var(--bull-bg); }
+  .cond-box.bear { border-color: rgba(47,143,111,0.35); background: var(--bear-bg); }
+  .cond-box.neutral { border-color: var(--border-strong); background: var(--neutral-bg); }
+  .cond-label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .cond-box.bull .cond-label { color: var(--bull); }
+  .cond-box.bear .cond-label { color: var(--bear); }
+  .cond-box.neutral .cond-label { color: var(--neutral); }
+  .cond-box p { font-size: 13px; margin: 0; max-width: none; }
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    padding: 4px 18px;
+    margin: 18px 0;
+    background: var(--bg-raised);
+    border-radius: 0 8px 8px 0;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout.warn { border-left-color: var(--bull); }
+
+  .status-verified { color: var(--bear); font-family: var(--mono); font-size: 12.5px; }
+  .status-partial { color: var(--accent-strong); font-family: var(--mono); font-size: 12.5px; }
+  .status-missing { color: var(--bull); font-family: var(--mono); font-size: 12.5px; }
+
+  .agent-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 20px 0; }
+  .agent-card { border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; background: var(--bg-raised); }
+  .agent-card h4 { margin-top: 0; color: var(--accent-strong); }
+
+  footer { max-width: 860px; margin: 90px auto 0; padding-top: 24px; border-top: 1px solid var(--border); color: var(--fg-faint); font-size: 12.5px; }
+
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; }
+    .rail { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 36px 20px 80px; }
+    .three-col, .agent-grid { grid-template-columns: 1fr; }
+    dl.spec { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <p class="rail-brand">台指期 Decision OS</p>
+    <p class="rail-sub">Product &amp; Engineering Spec</p>
+    <nav>
+      <a href="#philosophy">00 — 設計哲學</a>
+      <a href="#user">01 — 使用者輪廓</a>
+      <a href="#architecture">02 — 系統架構</a>
+      <div class="rail-group">
+        <p class="rail-group-label">八層分析框架</p>
+        <a href="#layer-1">L1 全球市場</a>
+        <a href="#layer-2">L2 總體風險</a>
+        <a href="#layer-3">L3 台股環境</a>
+        <a href="#layer-4">L4 法人籌碼</a>
+        <a href="#layer-5">L5 市場情緒</a>
+        <a href="#layer-6">L6 技術分析</a>
+        <a href="#layer-7">L7 交易計畫</a>
+        <a href="#layer-8">L8 風險管理</a>
+      </div>
+      <div class="rail-group">
+        <p class="rail-group-label">決策引擎</p>
+        <a href="#scoring-engine">評分引擎 Scoring</a>
+        <a href="#decision-engine">決策引擎 Decision</a>
+        <a href="#agent-engine">辯論引擎 Agent Debate</a>
+        <a href="#gate-engine">關卡引擎 Gate（35關）</a>
+        <a href="#risk-engine">風控引擎 Risk</a>
+      </div>
+      <div class="rail-group">
+        <p class="rail-group-label">產出與介面</p>
+        <a href="#output-format">每日輸出格式</a>
+        <a href="#ui-spec">UI / UX 規格</a>
+      </div>
+      <div class="rail-group">
+        <p class="rail-group-label">工程規格</p>
+        <a href="#db-schema">Database Schema</a>
+        <a href="#api-design">API Design</a>
+        <a href="#frontend">Frontend Components</a>
+        <a href="#backend">Backend Services</a>
+        <a href="#data-sources">資料源現況總表</a>
+        <a href="#roadmap">開發路線圖</a>
+      </div>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="wrap">
+      <header class="masthead">
+        <p class="eyebrow">Product Requirements Document · v0.1</p>
+        <h1 class="title">台指期波段交易<br />Decision OS</h1>
+        <p class="thesis">不是報明牌網站，是一套讓新手每天用20分鐘，走完基金經理人的分析流程，得到一句誠實結論——包括「今天空手」——的決策系統。</p>
+        <div class="meta-row">
+          <span class="chip">商品｜微型台指期(MTX)</span>
+          <span class="chip">頻率｜波段 2–15 天</span>
+          <span class="chip">不做當沖</span>
+          <span class="chip">使用者｜25–40歲上班族</span>
+          <span class="chip">每日投入｜20–30分鐘</span>
+        </div>
+        <div class="hr"></div>
+      </header>
+
+      <section id="philosophy">
+        <p class="sec-num">00</p>
+        <h2>設計哲學</h2>
+        <p>這套系統的 KPI 不是「每天都有訊號」，而是<strong>減少使用者做出的錯誤交易次數</strong>。一個新手交易者最大的敵人不是看錯方向，而是在沒有優勢（edge）的日子裡，因為「不甘心今天沒交易」而硬凑一筆單。</p>
+        <p>因此整個系統只有一個不能妥協的原則：<strong>當市場沒有給出足夠清晰的優勢時，系統要有勇氣說「今天空手」</strong>，而且要把這句話說得和「建議做多」一樣有自信、一樣有理由支撐——不是含糊的「資料不足」，而是「我看過八層分析，結論是今天不值得冒險，理由如下」。</p>
+        <p>其次，系統要<strong>像基金經理人一樣思考，不能像明牌网站一样喊單</strong>。基金經理人不會直接說「買」，他會先看國際盤、再看總體風險、再看資金流向、最後才談技術面與進場價位——如果任何一關卡关過不了，後面都不用看了。這套 OS 的八層架構、以及每一層都能「否決」下一層的設計，就是在把這個思考順序系統化。</p>
+      </section>
+
+      <section id="user">
+        <p class="sec-num">01</p>
+        <h2>使用者輪廓與產品原則</h2>
+        <dl class="spec">
+          <dt>主要使用者</dt>
+          <dd>25–40 歲、有正職工作的上班族／小資族，希望建立長期穩定的交易系統，而非追求刺激或高頻交易。</dd>
+          <dt>每日時間預算</dt>
+          <dd>20–30 分鐘，通常在通勤、午休、下班後的零碎時間查看——介面必須讓「今天要不要交易」在 30 秒內有答案，細節分析可展開但不強迫閱讀。</dd>
+          <dt>交易商品</dt>
+          <dd>微型台指期貨（MTX），波段操作，持有 2–15 天，<strong>明確排除當沖</strong>——所有指標與 Gate 的時間顆粒度都以「日」為單位，不處理盤中逐筆訊號。</dd>
+          <dt>產品不是</dt>
+          <dd>不是報明牌網站、不是訊號推播機器人、不是自動下單系統（v1 沒有下單 API 整合，只做決策輔助）。</dd>
+        </dl>
+        <div class="callout">
+          <p><strong>核心產品原則：</strong>永遠先展示結論與信心分數，再展示推理過程；永遠展示「反對這個結論的理由」，不只展示「支持的理由」——這是本 OS 與一般技術分析網站最大的差異，也是「Decision Agent 辯論」設計（見第 6 節）存在的原因。</p>
+        </div>
+      </section>
+
+      <section id="architecture">
+        <p class="sec-num">02</p>
+        <h2>系統架構總覽</h2>
+        <p class="lede">資料由下往上流動、決策由上往下否決。八層分析框架先各自產生分數與旗標，交給評分引擎彙總，再交給四個 Agent 進行質化辯論，關卡引擎與風控引擎全程並行檢查，任何一關不通過就直接截斷輸出。</p>
+        <pre><code><span class="cm">// 每日 Pipeline 執行順序（並非單純由上到下——Gate 可以在任何一步後直接截斷）</span>
+1. 資料蒐集層     — 八層各自的資料源，每日排程抓取／快取
+2. 評分引擎       — 18+ 項核心指標 → -2..+2 → 加權彙總成 8 層分數
+3. Gate 引擎      — 35 項關卡並行檢查（與分數無關，任何一項 fail 就降級輸出）
+4. Agent 辯論引擎 — Macro / Flow / Technical / Risk 四個 Agent 各自表態
+                    → Decision Agent 綜合仲裁，產出最終建議 + 正反理由
+5. 風控引擎       — 針對 Decision Agent 的建議計算實際部位、停損、停利、R值
+6. 輸出層         — 今日市場 Dashboard（9 項標準輸出，見第 9 節）</code></pre>
+        <p>八層分析框架與 Agent 的對應關係：<strong>Macro Agent</strong> 消化 L1（全球市場）+ L2（總體風險）；<strong>Flow Agent</strong> 消化 L4（法人籌碼）+ L5（市場情緒）；<strong>Technical Agent</strong> 消化 L3（台股環境）+ L6（技術分析）；<strong>Risk Agent</strong> 橫向消化 Gate 引擎與風控引擎的結果，並對其餘三個 Agent 的建議有否決權。L7、L8 不產生獨立訊號，是三個分析 Agent + Risk Agent 綜合後的「輸出層」。</p>
+      </section>
+
+      <!-- ===================== LAYER 1 ===================== -->
+      <section id="layer-1">
+        <p class="sec-num">03</p>
+        <h2>八層分析框架</h2>
+        <p class="lede">以下逐層說明目的、資料需求、判讀邏輯與對下一層的影響。每一層都標註「是否可單獨否決全局」——這是本 OS 與一般加權評分模型最大的不同：不是所有分數都平等，有些層級（尤其 L2）擁有否決權，不需要贏得多數票。</p>
+
+        <div class="layer-card">
+          <div class="layer-head">
+            <span class="layer-index">L1</span>
+            <h3 class="layer-title" style="margin:0;">全球市場</h3>
+            <span class="layer-en">Global Markets</span>
+          </div>
+          <dl class="spec">
+            <dt>目的</dt>
+            <dd>判斷隔夜國際市場，尤其美股科技股與半導體股，留下的方向與情緒，作為台股開盤前的定錨。</dd>
+            <dt>為什麼重要</dt>
+            <dd>台股電子權重超過六成，那斯達克與費城半導體指數（SOX）走勢與台股次日開盤跳空方向高度相關；VIX 代表全球風險偏好；美元強弱與美債殖利率牽動外資對包含台灣在內的新興市場資金去留。這一層決定「今天要不要用比較嚴格的標準看多單」。</dd>
+            <dt>需要資料</dt>
+            <dd>NASDAQ 收盤與漲跌幅、SOX 收盤與漲跌幅、VIX 指數、美元指數（DXY）、美國 10 年期公債殖利率、美國 2 年期公債殖利率（用於利差／殖利率曲線）。</dd>
+            <dt>資料來源</dt>
+            <dd>
+              VIX — FRED 序列 <code>VIXCLS</code>（免金鑰 CSV，本專案已驗證此匯出方式可行）。
+              美元指數 — FRED <code>DTWEXBGS</code>（貿易加權美元指數）。
+              10 年期殖利率 — FRED <code>DGS10</code>；2 年期 — FRED <code>DGS2</code>。
+              NASDAQ／SOX — <strong>尚待補齊</strong>：Polygon.io 免費方案實測僅開放約 2 年歷史（本專案在建置 S&amp;P 500 對照序列時已踩過這個限制），且不含 SOX 這類產業指數；需要另尋資料源或升級方案，見第 15 節資料源現況總表。
+            </dd>
+            <dt>如何判讀</dt>
+            <dd>NASDAQ／SOX 用單日漲跌幅分級；VIX 用絕對水位＋方向分級（&lt;15 平靜、15–20 正常、20–30 警戒、&gt;30 恐慌）；殖利率曲線看 10Y–2Y 利差由負轉正、或倒掛程度是否惡化。</dd>
+          </dl>
+          <div class="three-col">
+            <div class="cond-box bull">
+              <p class="cond-label">Bullish</p>
+              <p>NASDAQ／SOX 收紅且漲幅 &gt; 0.5%，VIX &lt; 18 且下降，美元指數走弱，殖利率曲線無惡化。</p>
+            </div>
+            <div class="cond-box neutral">
+              <p class="cond-label">Neutral</p>
+              <p>NASDAQ／SOX 漲跌介於 −0.3%～+0.3%，VIX 持平於 18–22 區間，美元指數變化不顯著。</p>
+            </div>
+            <div class="cond-box bear">
+              <p class="cond-label">Bearish</p>
+              <p>NASDAQ／SOX 收黑且跌幅 &gt; 1%，VIX &gt; 25 且上升，美元急升，殖利率倒掛加深或急速變陡。</p>
+            </div>
+          </div>
+          <dl class="spec">
+            <dt>是否需等待</dt>
+            <dd>若 NASDAQ／SOX 與 VIX 訊號互相矛盾（例如那指上漲但 VIX 同步跳升），視為高不確定性，建議等待台股開盤價量確認後再判斷，本層不單獨產生決策。</dd>
+            <dt>對下一層影響</dt>
+            <dd>本層是 L2 總體風險判讀的背景；若本層強空，L6 技術分析要產生「做多」訊號時，需要更高強度才能通過（等於動態提高進場門檻，實作上反映在 Agent 辯論引擎的信心分數加權）。</dd>
+          </dl>
+        </div>
+      </section>
+
+      <!-- ===================== LAYER 2 ===================== -->
+      <section id="layer-2">
+        <div class="layer-card">
+          <div class="layer-head">
+            <span class="layer-index">L2</span>
+            <h3 class="layer-title" style="margin:0;">總體風險</h3>
+            <span class="layer-en">Macro Risk Events</span>
+          </div>
+          <dl class="spec">
+            <dt>目的</dt>
+            <dd>辨識未來 1–3 個交易日內是否有高波動事件，避免波段倉位在資訊真空期後暴露於劇烈跳空風險中。</dd>
+            <dt>為什麼重要</dt>
+            <dd>FOMC 利率決議、CPI、非農就業（NFP）等總經數據公布，常造成台指期出現超過 1.5%–3% 的異常波動。波段倉位需要過夜曝險，在這類事件前開新倉，本質上是在承擔一個與「你的交易邏輯」無關的風險。</dd>
+            <dt>需要資料</dt>
+            <dd>FOMC 會議與利率決議日期、美國 CPI／PCE 公布日期、NFP 非農公布日期、台灣央行理監事會日期、台積電法說會日期、那斯達克七雄財報週期、國內外重大選舉或公投時程、台指期結算日（每月第三個週三）。</dd>
+            <dt>資料來源</dt>
+            <dd>美國經濟數據日曆——<strong>尚待補齊</strong>，FRED 本身不含未來事件日曆，需另尋外部行事曆資料源（例如財經行事曆 API），本專案尚未驗證任何一支；台積電法說會／台灣央行——可由公開新聞公告日期建立一張人工維護的「事件日曆」表，作為 v1 的務實解法；台指期結算日——可用規則計算（每月第三個週三），不需外部資料源。</dd>
+            <dt>如何判讀</dt>
+            <dd>檢查未來 48 小時內是否落在任一「高風險事件」名單內，以及事件距離現在的時數。<strong>本層不產生方向性分數</strong>，是本 OS 八層中唯一「只做旗標、不做評分」的層級——它的工作是否決，不是投票。</dd>
+          </dl>
+          <div class="callout warn">
+            <p><strong>本層無 Bull／Bear／Neutral 三態</strong>，只有「風險窗口開啟」與「風險窗口關閉」兩種狀態。詳細規則列在 Gate 引擎（第 7 節）Gate #1–#8。</p>
+          </div>
+          <dl class="spec">
+            <dt>是否需等待</dt>
+            <dd>是——只要命中任一事件窗口，直接觸發 Gate 引擎「禁止新倉」，不論其餘七層評分多高，Decision Agent 都必須將這個否決權反映在最終建議中。</dd>
+            <dt>對下一層影響</dt>
+            <dd>若本層觸發風險旗標，L7 交易計畫直接輸出「今日空手，等待事件落地」，可以跳過後續技術面細節判讀，節省使用者的 20 分鐘。</dd>
+          </dl>
+        </div>
+      </section>
+
+      <!-- ===================== LAYER 3 ===================== -->
+      <section id="layer-3">
+        <div class="layer-card">
+          <div class="layer-head">
+            <span class="layer-index">L3</span>
+            <h3 class="layer-title" style="margin:0;">台股環境</h3>
+            <span class="layer-en">TW Market Environment</span>
+          </div>
+          <dl class="spec">
+            <dt>目的</dt>
+            <dd>確認台股大盤本身（不含期貨）目前的價、量、廣度是否支持趨勢延續，把 L1 的國際線索收斂到台灣市場的實際反應。</dd>
+            <dt>為什麼重要</dt>
+            <dd>國際盤方向不會百分之百傳導——台股有自己的資金結構與族群輪動。如果國際盤偏多但台股當天上漲家數反而少（廣度不佳），代表這波多頭「不健康」，波段的持續性存疑。</dd>
+            <dt>需要資料</dt>
+            <dd>加權指數（TAIEX）日 K 線、漲跌家數比、成交金額、新台幣兌美元匯率、電子權值股（台積電等）對大盤的貢獻度。</dd>
+            <dt>資料來源</dt>
+            <dd>TAIEX 日線——TWSE 官方 API，<span class="status-verified">已驗證可用</span>，本專案已回填 20 年歷史；漲跌家數比——TWSE 每日市場成交資訊，<span class="status-partial">待整合</span>；新台幣匯率——央行或 FRED 皆有對應序列，<span class="status-partial">待整合</span>。</dd>
+            <dt>如何判讀</dt>
+            <dd>TAIEX 相對 20 日均線的位置與斜率；漲跌家數比是否與指數漲跌方向一致（背離＝廣度警訊）；台幣單日貶值超過 0.5% 視為外資流出的間接訊號。</dd>
+          </dl>
+          <div class="three-col">
+            <div class="cond-box bull">
+              <p class="cond-label">Bullish</p>
+              <p>TAIEX 站上 20MA 且上揚，漲家數 &gt; 跌家數 1.5 倍以上，台幣持平或升值。</p>
+            </div>
+            <div class="cond-box neutral">
+              <p class="cond-label">Neutral</p>
+              <p>指數在 20MA 附近糾結，漲跌家數接近，台幣波動 &lt; 0.3%。</p>
+            </div>
+            <div class="cond-box bear">
+              <p class="cond-label">Bearish</p>
+              <p>TAIEX 跌破 20MA 且下彎，跌家數明顯多於漲家數（廣度轉弱），台幣單日貶值 &gt; 0.5%。</p>
+            </div>
+          </div>
+          <dl class="spec">
+            <dt>是否需等待</dt>
+            <dd>若指數上漲但廣度背離（漲家數反而減少），標記為「假突破疑慮」，建議等待隔日確認，不視為足夠的做多證據。</dd>
+            <dt>對下一層影響</dt>
+            <dd>本層結果是 L6 技術分析（個股層級的均線／動能指標）的大盤背景校正——同樣的均線多頭排列，在廣度健康 vs. 廣度背離的情境下，Technical Agent 給的信心分數會不同。</dd>
+          </dl>
+        </div>
+      </section>
+
+      <!-- ===================== LAYER 4 ===================== -->
+      <section id="layer-4">
+        <div class="layer-card">
+          <div class="layer-head">
+            <span class="layer-index">L4</span>
+            <h3 class="layer-title" style="margin:0;">法人籌碼</h3>
+            <span class="layer-en">Institutional Flow</span>
+          </div>
+          <dl class="spec">
+            <dt>目的</dt>
+            <dd>追蹤外資、投信、自營商在台指期與現貨的部位變化，判斷「聰明錢」目前的傾向——這是台灣期貨市場散戶最重視、也最容易被誤讀的一層。</dd>
+            <dt>為什麼重要</dt>
+            <dd>外資台指期未平倉淨部位長期被視為台股期貨市場最重要的籌碼指標之一；融資餘額變化反映散戶追高殺低的情緒，是重要的反指標；選擇權未平倉量比（Put/Call Ratio）反映整體市場的避險需求強弱。</dd>
+            <dt>需要資料</dt>
+            <dd>三大法人台指期未平倉淨口數（外資／投信／自營）、融資餘額與使用率變化、台指選擇權 Put/Call 未平倉量比、外資現貨買賣超金額。</dd>
+            <dt>資料來源</dt>
+            <dd>
+              選擇權 Put/Call 比——TAIFEX open API <code>PutCallRatio</code>，<span class="status-verified">已驗證可用且已上線</span>（本專案已建置 <code>tw_options_put_call_ratio</code> 資料表，每日排程累積）。
+              三大法人期貨未平倉——TAIFEX open API <code>MarketDataOfMajorInstitutionalTradersDetailsOfFuturesContractsBytheDate</code>，<span class="status-partial">已驗證可用，但只回傳當日快照、無歷史範圍參數</span>，需要每日排程逐日累積，尚未接進本 OS（第 15 節有完整落差說明）。
+              融資餘額——TWSE 官方每日信用交易統計，<span class="status-partial">待整合，資料源需再確認</span>。
+              外資現貨買賣超——本專案既有 <code>tw_institutional_trading</code> 資料表已涵蓋個股層級，大盤層級的加總邏輯待建置。
+            </dd>
+            <dt>如何判讀</dt>
+            <dd>外資台指期淨部位由空翻多、或淨多顯著擴大＝偏多訊號；融資餘額連續增加且股價滯漲＝過熱警訊（反指標）；Put/Call 未平倉量比 &gt; 120% 或 &lt; 70% 視為情緒極端，此層的判讀邏輯詳見第 4 節評分引擎的個別指標定義，尤其 PCR 是<strong>反指標用法</strong>，需要特別留意方向不要判讀反了。</dd>
+          </dl>
+          <div class="three-col">
+            <div class="cond-box bull">
+              <p class="cond-label">Bullish</p>
+              <p>外資期貨淨多顯著增加，融資餘額緩降（籌碼安定），PCR 落在中性偏樂觀但未達過熱。</p>
+            </div>
+            <div class="cond-box neutral">
+              <p class="cond-label">Neutral</p>
+              <p>外資期貨淨部位持平，融資餘額變化平緩，PCR 貼近 100%。</p>
+            </div>
+            <div class="cond-box bear">
+              <p class="cond-label">Bearish</p>
+              <p>外資期貨淨空顯著擴大，融資餘額爆量增加但股價滯漲（散戶追高），PCR 過度樂觀（&lt; 70%，反指標偏空）。</p>
+            </div>
+          </div>
+          <dl class="spec">
+            <dt>是否需等待</dt>
+            <dd>若外資期貨與外資現貨方向矛盾（例如現貨買超但期貨空單增加），這通常代表法人在做避險而非方向性表態，建議標記「訊號不純」，不單獨作為進場依據。</dd>
+            <dt>對下一層影響</dt>
+            <dd>本層是 Flow Agent 的主要輸入；當本層與 L6 技術面方向一致時，Decision Agent 對最終建議的信心分數會顯著提升——這是本 OS 判斷「今天是不是好日子」最重要的交叉驗證之一。</dd>
+          </dl>
+        </div>
+      </section>
+
+      <!-- ===================== LAYER 5 ===================== -->
+      <section id="layer-5">
+        <div class="layer-card">
+          <div class="layer-head">
+            <span class="layer-index">L5</span>
+            <h3 class="layer-title" style="margin:0;">市場情緒</h3>
+            <span class="layer-en">Market Sentiment</span>
+          </div>
+          <dl class="spec">
+            <dt>目的</dt>
+            <dd>量化目前市場參與者的集體心理狀態是否處於極端（過度樂觀或過度悲觀），因為極端情緒往往是短期反轉的領先指標，而不是趨勢延續的理由。</dd>
+            <dt>為什麼重要</dt>
+            <dd>波段交易最怕在情緒高點追多、情緒低點殺低。這一層存在的目的就是防止 Technical Agent 單純看「趨勢很強」就無腦做多，忽略了「強到過熱」的風險。</dd>
+            <dt>需要資料</dt>
+            <dd>選擇權 Put/Call 量比與未平倉比（與 L4 共用資料源，但這裡用「情緒極端」的角度判讀，不是「籌碼方向」的角度）、大額交易人未沖銷部位集中度、新聞與社群情緒指數（可選）。</dd>
+            <dt>資料來源</dt>
+            <dd>
+              大額交易人未沖銷部位——TAIFEX open API <code>OpenInterestOfLargeTradersFutures</code>，<span class="status-partial">端點已找到，尚未實測回傳內容</span>。
+              新聞／社群情緒——<span class="status-missing">未有資料源</span>，屬於 v2 以後的加分項，不建議列入 v1 MVP。
+            </dd>
+            <dt>如何判讀</dt>
+            <dd>PCR 未平倉量比在本層視為「情緒溫度計」：&gt; 120% 代表市場過度悲觀（避險需求極高），&lt; 70% 代表市場過度樂觀（避險需求極低）——兩個極端都要提高警覺，而不是像 L4 那樣單純判讀方向。</dd>
+          </dl>
+          <div class="three-col">
+            <div class="cond-box bull">
+              <p class="cond-label">Bullish</p>
+              <p>情緒指標從極度悲觀區間回升（PCR 從 &gt; 120% 回落），代表恐慌可能已經釋放完畢，這是本層唯一產生「偏多」訊號的情境，本質是反指標邏輯。</p>
+            </div>
+            <div class="cond-box neutral">
+              <p class="cond-label">Neutral</p>
+              <p>PCR 落在 90%–110% 之間，情緒無極端，市場處於正常討論區間。</p>
+            </div>
+            <div class="cond-box bear">
+              <p class="cond-label">Bearish</p>
+              <p>PCR 快速由高檔滑落至 &lt; 70%（過度樂觀），或大額交易人部位異常集中單一方向——兩者都視為「情緒過熱、拉回風險上升」。</p>
+            </div>
+          </div>
+          <dl class="spec">
+            <dt>是否需等待</dt>
+            <dd>是——本層的訊號本質上是「不要在情緒極端時追價」，如果情緒已達極端但尚未出現反轉跡象（例如 PCR 剛突破 120% 還在上升中），建議等待情緒指標本身出現拐點再行動，不要預判反轉時機。</dd>
+            <dt>對下一層影響</dt>
+            <dd>本層與 L6 技術分析共同輸入 Technical／Flow Agent；當技術面顯示強勢但情緒面已達極端時，這是本 OS 最典型會產生「今天空手，等回檔」結論的情境。</dd>
+          </dl>
+        </div>
+      </section>
+
+      <!-- ===================== LAYER 6 ===================== -->
+      <section id="layer-6">
+        <div class="layer-card">
+          <div class="layer-head">
+            <span class="layer-index">L6</span>
+            <h3 class="layer-title" style="margin:0;">技術分析</h3>
+            <span class="layer-en">Technical Analysis</span>
+          </div>
+          <dl class="spec">
+            <dt>目的</dt>
+            <dd>在前五層都完成「這個環境值不值得交易」的過濾後，本層負責回答最後一個問題：如果要交易，現在的價格結構是否給出足夠清楚的進場時機與停損位置。</dd>
+            <dt>為什麼重要</dt>
+            <dd>前五層決定「要不要交易」，本層決定「怎麼交易」——趨勢方向、進場時機、停損距離，全部來自本層的量價與技術指標讀數。</dd>
+            <dt>需要資料</dt>
+            <dd>台指期日 K 線（OHLCV）、成交量、20／60／200 日均線、VWAP、MACD、RSI(14)、ADX(14) 與 ±DI、ATR(14)、布林通道。</dd>
+            <dt>資料來源</dt>
+            <dd>台指期日線——本專案 <code>tw_futures_daily</code> 已建置，但目前每日只能累積「今天」一筆，<span class="status-partial">需要至少 60–90 天歷史才能穩定計算 60MA／200MA／ADX，屬於時間累積問題，非技術問題</span>；短期可用 TAIEX 現貨日線（已有 20 年歷史）先行計算技術指標，待期貨自身歷史夠長後再切換或並陳。</dd>
+            <dt>如何判讀</dt>
+            <dd>詳細的逐指標判讀門檻列在第 4 節評分引擎；本層的特殊之處是 <strong>ATR 與布林通道帶寬不直接產生方向分數</strong>，而是用來判斷「現在適不適合用趨勢策略」——ADX &lt; 20 或布林帶寬過窄，代表盤整格局，此時技術面的方向性訊號應該被降權，改用區間思維。</dd>
+          </dl>
+          <div class="three-col">
+            <div class="cond-box bull">
+              <p class="cond-label">Bullish</p>
+              <p>價格站上 20／60／200MA 呈多頭排列，MACD 金叉且柱狀擴大，ADX &gt; 25 且 +DI &gt; −DI，量能溫和放大。</p>
+            </div>
+            <div class="cond-box neutral">
+              <p class="cond-label">Neutral</p>
+              <p>均線糾結、ADX &lt; 20（無明顯趨勢）、RSI 落在 40–60、布林帶寬收窄——盤整格局，不適合趨勢策略。</p>
+            </div>
+            <div class="cond-box bear">
+              <p class="cond-label">Bearish</p>
+              <p>價格跌破 20／60／200MA 呈空頭排列，MACD 死叉且柱狀擴大，ADX &gt; 25 且 −DI &gt; +DI，下跌伴隨量增。</p>
+            </div>
+          </div>
+          <dl class="spec">
+            <dt>是否需等待</dt>
+            <dd>ADX &lt; 20 時，無論均線或 MACD 顯示什麼方向，都建議標記「趨勢強度不足」，等待 ADX 回升穿越 20–25 再視為有效趨勢訊號——這是新手最常忽略、卻是最重要的一條規則。</dd>
+            <dt>對下一層影響</dt>
+            <dd>本層產生 L7 交易計畫的進場價位、方向與停損基準（以 ATR 為單位）；本層與 L3／L4／L5 的交叉一致性，直接決定 Decision Agent 最終信心分數的高低。</dd>
+          </dl>
+        </div>
+      </section>
+
+      <!-- ===================== LAYER 7 ===================== -->
+      <section id="layer-7">
+        <div class="layer-card">
+          <div class="layer-head">
+            <span class="layer-index">L7</span>
+            <h3 class="layer-title" style="margin:0;">交易計畫</h3>
+            <span class="layer-en">Trade Plan</span>
+          </div>
+          <dl class="spec">
+            <dt>目的</dt>
+            <dd>把前六層的分析結果轉換成一句「今天該做什麼」的具體行動——方向、進場條件、部位大小的初步建議。</dd>
+            <dt>為什麼重要</dt>
+            <dd>分析做得再完整，如果最後不能收斂成一個明確、可執行的計畫，使用者還是會陷入猶豫不決，這正是本 OS 想解決的核心問題。</dd>
+            <dt>需要資料</dt>
+            <dd>本層不直接抓取外部資料，而是消化 L1–L6 的分數與 Agent 辯論結果，加上 L8 風控引擎回傳的部位與停損停利建議。</dd>
+            <dt>資料來源</dt>
+            <dd>內部運算層，資料源即前六層的輸出（見 <code>decision_snapshots</code> 資料表，第 11 節）。</dd>
+            <dt>如何判讀</dt>
+            <dd>本層直接採用 Decision Agent 的最終判斷，不重新評分；主要工作是把「多／空／中立 ＋ 信心分數」轉換成使用者看得懂的「策略類型」（波段做多／波段放空／區間操作／空手）。</dd>
+          </dl>
+          <div class="three-col">
+            <div class="cond-box bull">
+              <p class="cond-label">Bullish → 波段做多</p>
+              <p>Decision Agent 判定多方且信心分數 ≥ 65，且所有 Gate 通過。</p>
+            </div>
+            <div class="cond-box neutral">
+              <p class="cond-label">Neutral → 觀望／區間</p>
+              <p>信心分數落在 35–65 之間，或多空 Agent 意見分歧顯著（見第 6 節辯論引擎的分歧度計算）。</p>
+            </div>
+            <div class="cond-box bear">
+              <p class="cond-label">Bearish → 波段放空</p>
+              <p>Decision Agent 判定空方且信心分數 ≥ 65，且所有 Gate 通過。</p>
+            </div>
+          </div>
+          <dl class="spec">
+            <dt>是否需等待</dt>
+            <dd>任何 Gate 未通過，本層一律輸出「空手」，不論信心分數多高——這是 Gate 引擎否決權在最終輸出層的具體體現。</dd>
+            <dt>對下一層影響</dt>
+            <dd>本層的方向與信心分數是 L8 風控引擎計算實際部位大小（0–100%）與停損停利價位的直接輸入。</dd>
+          </dl>
+        </div>
+      </section>
+
+      <!-- ===================== LAYER 8 ===================== -->
+      <section id="layer-8">
+        <div class="layer-card">
+          <div class="layer-head">
+            <span class="layer-index">L8</span>
+            <h3 class="layer-title" style="margin:0;">風險管理</h3>
+            <span class="layer-en">Risk Management</span>
+          </div>
+          <dl class="spec">
+            <dt>目的</dt>
+            <dd>不論前七層的結論多麼樂觀，本層都要用獨立、機械化的規則再檢查一次「這筆交易的風險是否可控」，並且擁有對其餘所有層級的最終否決權。</dd>
+            <dt>為什麼重要</dt>
+            <dd>波段交易者最終會虧損出局，通常不是因為判斷方向錯誤，而是因為部位太大、停損太寬、或沒有停損紀律。本層存在的意義就是把紀律變成系統的一部分，而不是依賴使用者的意志力。</dd>
+            <dt>需要資料</dt>
+            <dd>帳戶總資金、當日已實現／未實現損益、連續虧損次數、目前總曝險部位、ATR(14)（用於停損距離計算）。</dd>
+            <dt>資料來源</dt>
+            <dd>帳戶相關資料由使用者於 Onboarding 時輸入並持續維護於本地資料庫（<code>user_risk_profile</code>），不依賴外部 API；ATR 沿用 L6 技術分析的計算結果。</dd>
+            <dt>如何判讀</dt>
+            <dd>本層的判讀邏輯全部是機械化規則（見第 8 節風控引擎與第 7 節 Gate #26–#35），不是「多空判斷」，而是「這筆交易能不能做」的二元檢查。</dd>
+          </dl>
+          <div class="three-col">
+            <div class="cond-box bull">
+              <p class="cond-label">通過</p>
+              <p>停損距離 ≤ 2 倍 ATR，風報比 ≥ 1.5，未達每日／每月最大虧損限制，總曝險未超過上限。</p>
+            </div>
+            <div class="cond-box neutral">
+              <p class="cond-label">降級</p>
+              <p>部分條件邊緣（例如風報比落在 1.2–1.5），建議降低建議倉位而非直接否決。</p>
+            </div>
+            <div class="cond-box bear">
+              <p class="cond-label">否決</p>
+              <p>停損超過 2 倍 ATR、風報比 &lt; 1.2、已達當日或當月最大虧損限制、連續 3 筆虧損尚未休息滿一天——任一項成立即否決本次交易，不論方向判斷多正確。</p>
+            </div>
+          </div>
+          <dl class="spec">
+            <dt>是否需等待</dt>
+            <dd>本層否決時一律建議等待，且會明確告知使用者「否決原因」與「需要滿足什麼條件才能解除」（例如「已達當日虧損上限，明日開盤前自動解除」）。</dd>
+            <dt>對下一層影響</dt>
+            <dd>本層是整套系統的最後一道防線，其結論會覆寫（override）L7 交易計畫的輸出——即使 Decision Agent 信心分數是 95，只要本層否決，最終輸出依然是「空手」。</dd>
+          </dl>
+        </div>
+      </section>
+
+      <!-- ===================== SCORING ENGINE ===================== -->
+      <section id="scoring-engine">
+        <p class="sec-num">04</p>
+        <h2>評分引擎 Scoring Engine</h2>
+        <p class="lede">每個核心指標讀值後，先分級成 5 個星等，對應 -2 到 +2 的分數；同一層所有指標分數平均後得到「層分數」（-2 至 +2）；層分數再乘以層權重加總，得到總分（設計上滿足使用者提供的 ±20 錨點）。</p>
+
+        <h3>星等 ↔ 分數對照</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>星等</th><th>分數</th><th>意義</th></tr></thead>
+            <tbody>
+              <tr><td class="stars s5">★★★★★</td><td class="num">+2</td><td>強烈偏多訊號</td></tr>
+              <tr><td class="stars s4">★★★★☆</td><td class="num">+1</td><td>溫和偏多訊號</td></tr>
+              <tr><td class="stars s3">★★★☆☆</td><td class="num">0</td><td>中性／訊號不明確</td></tr>
+              <tr><td class="stars s2">★★☆☆☆</td><td class="num">−1</td><td>溫和偏空訊號</td></tr>
+              <tr><td class="stars s1">★☆☆☆☆</td><td class="num">−2</td><td>強烈偏空訊號</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>核心指標評分表（18 項，依使用者原始需求清單）</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>層級</th><th>指標</th><th class="num">+2 條件</th><th class="num">+1</th><th class="num">0</th><th class="num">−1</th><th class="num">−2 條件</th></tr></thead>
+            <tbody>
+              <tr><td>L1</td><td>NASDAQ 日漲跌%</td><td class="num">≥+1.5%</td><td class="num">+0.3~1.5%</td><td class="num">±0.3%</td><td class="num">−1.5~−0.3%</td><td class="num">≤−1.5%</td></tr>
+              <tr><td>L1</td><td>SOX 日漲跌%</td><td class="num">≥+2.5%</td><td class="num">+0.5~2.5%</td><td class="num">±0.5%</td><td class="num">−2.5~−0.5%</td><td class="num">≤−2.5%</td></tr>
+              <tr><td>L1</td><td>VIX（水位＋方向）</td><td class="num">&lt;15 且降</td><td class="num">15–20</td><td class="num">20–25</td><td class="num">25–30 升</td><td class="num">&gt;30</td></tr>
+              <tr><td>L1</td><td>美元指數 DXY 日變化</td><td class="num">≤−0.3%</td><td class="num">−0.3~−0.1%</td><td class="num">±0.1%</td><td class="num">+0.1~0.3%</td><td class="num">≥+0.3%</td></tr>
+              <tr><td>L1</td><td>美債 10Y−2Y 利差</td><td class="num">轉正走陡</td><td class="num">正值收斂</td><td class="num">接近 0</td><td class="num">轉負</td><td class="num">深度倒掛惡化</td></tr>
+              <tr><td>L4</td><td>外資台指期淨未平倉</td><td class="num">翻多／淨多顯著增</td><td class="num">淨多小增</td><td class="num">持平</td><td class="num">淨空小增</td><td class="num">淨空顯著擴大</td></tr>
+              <tr><td>L4</td><td>融資餘額變化</td><td class="num">大減（去化健康）</td><td class="num">緩降</td><td class="num">持平</td><td class="num">增加（浮額堆積）</td><td class="num">爆量增加＋股價滯漲</td></tr>
+              <tr><td>L4／L5</td><td>選擇權 PCR 未平倉比</td><td class="num">100–120%（見說明）</td><td class="num">90–100%</td><td class="num">貼近 100%</td><td class="num">70–90%</td><td class="num">&lt;70% 或急速轉折</td></tr>
+              <tr><td>L6</td><td>成交量／20日均量</td><td class="num">&gt;130% 且價漲</td><td class="num">110–130%</td><td class="num">90–110%</td><td class="num">70–90%</td><td class="num">&lt;70%</td></tr>
+              <tr><td>L6</td><td>20MA</td><td class="num">站上且上揚</td><td class="num">站上走平</td><td class="num">貼近</td><td class="num">跌破走平</td><td class="num">跌破且下彎</td></tr>
+              <tr><td>L6</td><td>60MA</td><td class="num">站上且上揚</td><td class="num">站上走平</td><td class="num">貼近</td><td class="num">跌破走平</td><td class="num">跌破且下彎</td></tr>
+              <tr><td>L6</td><td>200MA</td><td class="num">站上且上揚</td><td class="num">站上走平</td><td class="num">貼近</td><td class="num">跌破走平</td><td class="num">跌破且下彎</td></tr>
+              <tr><td>L6</td><td>VWAP（日內偏移）</td><td class="num">站上且量增</td><td class="num">站上量平</td><td class="num">貼近</td><td class="num">跌破量平</td><td class="num">跌破且量增</td></tr>
+              <tr><td>L6</td><td>MACD</td><td class="num">金叉柱狀擴大</td><td class="num">金叉收斂</td><td class="num">糾結</td><td class="num">死叉收斂</td><td class="num">死叉柱狀擴大</td></tr>
+              <tr><td>L6</td><td>RSI(14)</td><td class="num">60–70 且趨勢強</td><td class="num">50–60</td><td class="num">40–60 盤整</td><td class="num">30–40</td><td class="num">&lt;30 或 &gt;70 且趨勢弱</td></tr>
+              <tr><td>L6</td><td>ADX(14) ＋ ±DI</td><td class="num">&gt;25 且 +DI&gt;−DI</td><td class="num">20–25 偏多</td><td class="num">&lt;20 無趨勢</td><td class="num">20–25 偏空</td><td class="num">&gt;25 且 −DI&gt;+DI</td></tr>
+              <tr><td>L6</td><td>ATR(14)／20日均值</td><td colspan="5">不評方向分——用於停損計算與「是否適合趨勢策略」判斷：80–120% 正常、&gt;150% 降倉位、&lt;60% 恐為盤整</td></tr>
+              <tr><td>L6</td><td>布林通道 %b／帶寬</td><td class="num">貼上軌＋帶寬擴張</td><td class="num">上軌～中軌</td><td class="num">貼中軌</td><td class="num">中軌～下軌</td><td class="num">貼下軌＋帶寬擴張</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          <p><strong>PCR 是反指標：</strong>Put/Call 比偏高代表市場避險需求高、悲觀情緒濃厚，但當這個悲觀來到極端（&gt;120%）反而常是短線落底訊號，因此 L4（籌碼）與 L5（情緒）對同一個 PCR 數字會給出不同方向的解讀——L4 看「現在的傾向」，L5 看「是否已到極端」。實作上這是<strong>兩個獨立的評分函式</strong>，不是同一個分數複用兩次。</p>
+        </div>
+
+        <h3>層權重與總分公式</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>層級</th><th class="num">權重</th><th>備註</th></tr></thead>
+            <tbody>
+              <tr><td>L1 全球市場</td><td class="num">1.5</td><td>背景訊號，非直接否決層</td></tr>
+              <tr><td>L2 總體風險</td><td class="num">— (Gate only)</td><td>不計分，只做否決</td></tr>
+              <tr><td>L3 台股環境</td><td class="num">1.5</td><td>大盤背景校正</td></tr>
+              <tr><td>L4 法人籌碼</td><td class="num">2.5</td><td>台股期貨市場最受重視的邊際訊號</td></tr>
+              <tr><td>L5 市場情緒</td><td class="num">1.5</td><td>反指標／極端值校正</td></tr>
+              <tr><td>L6 技術分析</td><td class="num">3.0</td><td>波段技術系統的主力權重</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <pre><code><span class="cm">總分 = Σ(層分數_i × 層權重_i)，層分數 ∈ [-2, +2]，權重總和 = 10.0
+理論最大值 = 2 × 10.0 = ±20，與 Decision Engine 的錨點表完全對齊</span></pre>
+        <div class="callout warn">
+          <p>⚠️ 上述層權重是<strong>初始假設值</strong>，需要用歷史資料回測校準（沿用本專案既有慣例：所有未經回測驗證的參數一律標註 ⚠️，不假裝是已驗證的最終答案）。</p>
+        </div>
+      </section>
+
+      <!-- ===================== DECISION ENGINE ===================== -->
+      <section id="decision-engine">
+        <p class="sec-num">05</p>
+        <h2>決策引擎 Decision Engine（基準版）</h2>
+        <p class="lede">這是<strong>確定性（deterministic）備援機制</strong>：當 Agent 辯論引擎不可用、或用於歷史回測時，系統退回這套純數字公式。生產環境的實際建議以第 6 節 Agent 辯論引擎為準——評分引擎產生的總分是 Agent 們辯論時引用的「客觀證據」，不是自動輸出結論的唯一依據。</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th class="num">總分區間</th><th>星等</th><th>結論</th></tr></thead>
+            <tbody>
+              <tr><td class="num">≥ +15</td><td class="stars s5">★★★★★</td><td>非常適合做多</td></tr>
+              <tr><td class="num">+8 ~ +14</td><td class="stars s4">★★★★☆</td><td>偏多</td></tr>
+              <tr><td class="num">+3 ~ +7</td><td class="stars s3">★★★☆☆</td><td>保守偏多</td></tr>
+              <tr><td class="num">−2 ~ +2</td><td class="stars s3">★★☆☆☆</td><td>等待</td></tr>
+              <tr><td class="num">−7 ~ −3</td><td class="stars s2">★★☆☆☆</td><td>偏空</td></tr>
+              <tr><td class="num">−14 ~ −8</td><td class="stars s2">★☆☆☆☆</td><td>做空</td></tr>
+              <tr><td class="num">≤ −15</td><td class="stars s1">★☆☆☆☆</td><td>空方趨勢</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===================== AGENT DEBATE ENGINE ===================== -->
+      <section id="agent-engine">
+        <p class="sec-num">06</p>
+        <h2>Agent 辯論引擎</h2>
+        <p class="lede">生產環境不用固定權重公式直接輸出結論——四個角色分明的 Agent 各自消化自己負責的層級，獨立給出立場、信心分數與理由，再由 Decision Agent 綜合仲裁。這個設計的目的是讓最終建議<strong>附帶反方意見</strong>，而不是一個看起來客觀、實際上把複雜情境壓成單一數字的黑盒分數。</p>
+
+        <div class="agent-grid">
+          <div class="agent-card">
+            <h4>Macro Agent · 總體經濟</h4>
+            <p>輸入：L1 全球市場 ＋ L2 總體風險。分析美元、利率、VIX、美股、經濟事件對台股期貨的傳導效果。傾向於在國際盤矛盾或事件風險升高時，主動降低自己的信心分數並在理由中明確說明「為什麼不確定」。</p>
+          </div>
+          <div class="agent-card">
+            <h4>Flow Agent · 資金流</h4>
+            <p>輸入：L4 法人籌碼 ＋ L5 市場情緒。分析外資期貨、三大法人、融資融券、選擇權未平倉量比。是四個 Agent 中最常與 Technical Agent 唱反調的一個——技術面轉強但籌碼未跟上時，會明確標記「量價與籌碼背離」。</p>
+          </div>
+          <div class="agent-card">
+            <h4>Technical Agent · 技術面</h4>
+            <p>輸入：L3 台股環境 ＋ L6 技術分析。分析趨勢、均線、量價、ATR、ADX、支撐壓力。負責提出具體的進場價位與停損參考，是唯一會輸出「價位」而非只有「方向」的 Agent。</p>
+          </div>
+          <div class="agent-card">
+            <h4>Risk Agent · 風控</h4>
+            <p>輸入：Gate 引擎全部 35 項 ＋ L8 風控引擎。檢查是否有重大事件、是否符合風險報酬比、是否超過風險限制。<strong>對其餘三個 Agent 擁有否決權</strong>——只要 Risk Agent 判定「不可交易」，Decision Agent 的最終輸出必須是空手，不能被其他三個 Agent 的樂觀意見覆蓋。</p>
+          </div>
+        </div>
+
+        <h3>Agent 輸出格式（統一介面）</h3>
+        <pre><code><span class="kw">interface</span> <span class="ty">AgentVerdict</span> {
+  agent: <span class="ty">"macro"</span> | <span class="ty">"flow"</span> | <span class="ty">"technical"</span> | <span class="ty">"risk"</span>
+  stance: <span class="ty">"bull"</span> | <span class="ty">"bear"</span> | <span class="ty">"neutral"</span>
+  confidence: <span class="ty">number</span>          <span class="cm">// 0–100</span>
+  keyDrivers: <span class="ty">string</span>[]         <span class="cm">// 支撐這個立場的前 2–3 個關鍵證據</span>
+  counterpoints: <span class="ty">string</span>[]       <span class="cm">// Agent 自己承認的、對立場不利的證據（強制要求，不能空）</span>
+  reasoning: <span class="ty">string</span>            <span class="cm">// 一段基金經理人語氣的完整推理</span>
+  vetoes: <span class="ty">boolean</span>              <span class="cm">// 僅 Risk Agent 使用，true 時 Decision Agent 必須輸出空手</span>
+}</code></pre>
+
+        <h3>Decision Agent 仲裁邏輯</h3>
+        <ol>
+          <li>先檢查是否有任一 Agent（實務上只會是 Risk Agent）設定 <code>vetoes: true</code>——若有，直接輸出「建議空手」，並把否決理由放在最顯眼位置，不需要再看其他三個 Agent 的意見。</li>
+          <li>若無否決，計算四個 Agent 的<strong>立場分歧度</strong>：若 4 個 Agent 中有 ≥2 個立場相反（一個 bull 一個 bear），視為高分歧，最終建議自動降級（例如把「建議做多」降為「建議偏多、輕倉」），並在輸出中列出分歧的雙方理由讓使用者自行判斷。</li>
+          <li>若無高分歧，用信心分數加權多數決：<code>Macro×1.0 + Flow×1.5 + Technical×1.5 + Risk×1.0</code>（Risk 通常是二元的通過／否決，這裡的權重只在「未否決但信心偏低」時產生緩衝作用）。</li>
+          <li>輸出最終建議：方向、信心分數、<strong>支持理由列表</strong>（彙整各 Agent 的 keyDrivers）、<strong>反對理由列表</strong>（彙整各 Agent 的 counterpoints，即使最終結論是做多，也必須顯示做空方的論點）。</li>
+        </ol>
+        <div class="callout">
+          <p>這一步的 UI 呈現方式建議做成「辯論紀錄」：像看一場投資會議的四人會議紀錄，而不是一個只給結論的黑盒子。使用者展開任一層都能看到「哪個 Agent 說了什麼」，這是本 OS 建立使用者信任感最重要的介面設計決策。</p>
+        </div>
+      </section>
+
+      <!-- ===================== GATE ENGINE ===================== -->
+      <section id="gate-engine">
+        <p class="sec-num">07</p>
+        <h2>關卡引擎 Gate Engine</h2>
+        <p class="lede">35 項機械化檢查，任一項觸發即依其「動作」限制交易——完全不參考 Agent 的意見，這是刻意設計成「規則優先於判斷」的一層，模擬真正基金經理人交易前的合規檢查（compliance check）。</p>
+
+        <h4>A. 事件與行事曆（8 項）</h4>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th class="num">#</th><th>條件</th><th>動作</th></tr></thead>
+            <tbody>
+              <tr><td class="num">1</td><td>今晚為 FOMC 利率決議</td><td><span class="pill gate">禁止新倉</span></td></tr>
+              <tr><td class="num">2</td><td>今晚為美國 CPI 公布</td><td><span class="pill gate">禁止新倉</span></td></tr>
+              <tr><td class="num">3</td><td>今晚為美國 NFP 非農公布</td><td><span class="pill gate">禁止新倉</span></td></tr>
+              <tr><td class="num">4</td><td>今日為台積電法說會</td><td><span class="pill gate">禁止新倉</span></td></tr>
+              <tr><td class="num">5</td><td>今日為台灣央行理監事會</td><td><span class="pill gate">禁止新倉</span></td></tr>
+              <tr><td class="num">6</td><td>距台指期結算日（每月第三個週三）&lt;1 個交易日</td><td><span class="pill gate">禁止新倉／建議提前減碼</span></td></tr>
+              <tr><td class="num">7</td><td>本週為那斯達克七雄財報密集週</td><td><span class="pill gate">建議倉位上限降 50%</span></td></tr>
+              <tr><td class="num">8</td><td>今日為國內外重大選舉或公投日</td><td><span class="pill gate">禁止新倉</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>B. 波動度（6 項）</h4>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th class="num">#</th><th>條件</th><th>動作</th></tr></thead>
+            <tbody>
+              <tr><td class="num">9</td><td>VIX &gt; 30</td><td><span class="pill gate">禁止抄底／新做多倉</span></td></tr>
+              <tr><td class="num">10</td><td>VIX 單日跳升 &gt; 20%</td><td><span class="pill gate">強制觀望一日</span></td></tr>
+              <tr><td class="num">11</td><td>VIX &lt; 12（過度平靜）</td><td><span class="pill gate">降低做多信心分數</span></td></tr>
+              <tr><td class="num">12</td><td>台指期 ATR &gt; 1.5 倍 20 日均值</td><td><span class="pill gate">建議倉位減半</span></td></tr>
+              <tr><td class="num">13</td><td>開盤跳空 &gt; 1.5%</td><td><span class="pill gate">禁止追價，等回測</span></td></tr>
+              <tr><td class="num">14</td><td>隔夜美股單日跌幅 &gt; 3%</td><td><span class="pill gate">禁止開多倉</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>C. 流動性（5 項）</h4>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th class="num">#</th><th>條件</th><th>動作</th></tr></thead>
+            <tbody>
+              <tr><td class="num">15</td><td>台指期成交量 &lt; 20 日均量 70%</td><td><span class="pill gate">禁止追價</span></td></tr>
+              <tr><td class="num">16</td><td>現貨成交金額急縮（&lt; 1500 億）</td><td><span class="pill gate">降低整體信心分數</span></td></tr>
+              <tr><td class="num">17</td><td>委買委賣價差異常擴大</td><td><span class="pill gate">禁止市價單，僅限限價</span></td></tr>
+              <tr><td class="num">18</td><td>開盤前 15 分鐘量能明顯不足</td><td><span class="pill gate">延後進場判斷至少 30 分鐘</span></td></tr>
+              <tr><td class="num">19</td><td>選擇權未平倉集中單一履約價（近結算）</td><td><span class="pill gate">提高警覺標記，不禁止</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>D. 價格結構（6 項）</h4>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th class="num">#</th><th>條件</th><th>動作</th></tr></thead>
+            <tbody>
+              <tr><td class="num">20</td><td>距離前高 &lt; 1%</td><td><span class="pill gate">禁止追多</span></td></tr>
+              <tr><td class="num">21</td><td>距離前低 &lt; 1%</td><td><span class="pill gate">禁止追空</span></td></tr>
+              <tr><td class="num">22</td><td>已連續上漲 ≥ 5 日</td><td><span class="pill gate">禁止追多，需等拉回</span></td></tr>
+              <tr><td class="num">23</td><td>已連續下跌 ≥ 5 日</td><td><span class="pill gate">禁止追空，需等反彈</span></td></tr>
+              <tr><td class="num">24</td><td>價格處於重大整數關卡 ±0.3%</td><td><span class="pill gate">等突破確認，暫緩進場</span></td></tr>
+              <tr><td class="num">25</td><td>布林帶寬 &lt; 20 日均值 50%（盤整）</td><td><span class="pill gate">禁止趨勢單，只能區間策略</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>E. 風險管理（7 項）</h4>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th class="num">#</th><th>條件</th><th>動作</th></tr></thead>
+            <tbody>
+              <tr><td class="num">26</td><td>停損距離 &gt; 2 倍 ATR</td><td><span class="pill gate">不交易</span></td></tr>
+              <tr><td class="num">27</td><td>風報比（Reward/Risk）&lt; 1.5</td><td><span class="pill gate">不交易</span></td></tr>
+              <tr><td class="num">28</td><td>當日已達最大虧損限制</td><td><span class="pill gate">禁止再開倉，鎖到隔日</span></td></tr>
+              <tr><td class="num">29</td><td>連續 3 筆虧損</td><td><span class="pill gate">強制休息 1 個交易日</span></td></tr>
+              <tr><td class="num">30</td><td>總曝險部位已達上限（如總資金 50%）</td><td><span class="pill gate">禁止加碼</span></td></tr>
+              <tr><td class="num">31</td><td>當月虧損達 10%</td><td><span class="pill gate">降級為觀察模式，僅記錄不交易</span></td></tr>
+              <tr><td class="num">32</td><td>距結算日 &lt; 2 天且持有較大 OTM 選擇權相關部位</td><td><span class="pill gate">強制檢視提醒</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>F. 跨市場一致性（3 項）</h4>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th class="num">#</th><th>條件</th><th>動作</th></tr></thead>
+            <tbody>
+              <tr><td class="num">33</td><td>美台股相關性異常斷裂（該漲不漲／該跌不跌超過 2 個標準差）</td><td><span class="pill gate">提高警覺，可能有特殊籌碼操作</span></td></tr>
+              <tr><td class="num">34</td><td>新台幣單日貶值 &gt; 1%</td><td><span class="pill gate">降低做多信心分數</span></td></tr>
+              <tr><td class="num">35</td><td>美元指數單日急升 &gt; 1% 且新興市場全面下跌</td><td><span class="pill gate">禁止做多</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===================== RISK ENGINE ===================== -->
+      <section id="risk-engine">
+        <p class="sec-num">08</p>
+        <h2>風控引擎 Risk Engine</h2>
+        <p class="lede">Gate 引擎回答「能不能交易」，風控引擎回答「交易多大、停在哪裡」——兩者都獨立於 Agent 辯論引擎之外運作，屬於機械化計算層。</p>
+
+        <h3>核心公式</h3>
+        <pre><code><span class="cm">// 單筆最大風險：每一筆交易願意承擔的最大虧損金額</span>
+maxRiskPerTrade = accountEquity × riskPerTradePct   <span class="cm">// 預設 ⚠️1%，需回測校準</span>
+
+<span class="cm">// ATR 停損：以市場波動度而非主觀價位決定停損距離</span>
+stopDistance = atr14 × atrMultiplier                <span class="cm">// 預設 ⚠️1.5倍</span>
+stopPrice    = entryPrice − stopDistance             <span class="cm">// 做多；做空則相反</span>
+
+<span class="cm">// 部位大小：用最大風險金額反推口數</span>
+positionSize = floor(maxRiskPerTrade / (stopDistance × pointValue))
+
+<span class="cm">// 風報比：停利距離必須是停損距離的 X 倍以上才允許交易（見 Gate #27）</span>
+rewardRiskRatio = (takeProfitPrice − entryPrice) / (entryPrice − stopPrice)
+
+<span class="cm">// R 值：每筆交易的損益用「風險單位」而非台幣衡量，方便橫向比較策略優劣</span>
+rMultiple = actualPnL / (stopDistance × pointValue)
+
+<span class="cm">// 期望值：長期是否值得執行這套策略的核心指標</span>
+expectedValue = (winRate × avgWinR) − ((1 − winRate) × avgLossR)
+
+<span class="cm">// Kelly 建議倉位（僅供參考，實際建議用 1/4 Kelly 避免波動過大）</span>
+kellyFraction = winRate − ((1 − winRate) / (avgWinR / avgLossR))
+suggestedFraction = max(0, kellyFraction × 0.25)     <span class="cm">// ⚠️ Fractional Kelly，保守係數需回測</span></code></pre>
+
+        <h3>風控引擎管理項目</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>項目</th><th>說明</th><th class="num">預設值 ⚠️</th></tr></thead>
+            <tbody>
+              <tr><td>單筆最大風險</td><td>單一部位允許的最大虧損佔總資金比例</td><td class="num">1%</td></tr>
+              <tr><td>每日最大虧損</td><td>觸發後鎖倉至隔日（Gate #28）</td><td class="num">3%</td></tr>
+              <tr><td>最大持倉</td><td>同時間允許的最大總曝險（Gate #30）</td><td class="num">50%</td></tr>
+              <tr><td>連續虧損斷路器</td><td>觸發後強制休息（Gate #29）</td><td class="num">3 筆</td></tr>
+              <tr><td>ATR 停損倍數</td><td>停損距離＝ATR × 倍數</td><td class="num">1.5x</td></tr>
+              <tr><td>Break Even 觸發</td><td>獲利達 1R 後將停損移至進場價，鎖定不虧損</td><td class="num">+1R</td></tr>
+              <tr><td>Trailing Stop</td><td>獲利超過 2R 後改用移動停損，用 ATR 倍數追蹤</td><td class="num">2x ATR</td></tr>
+              <tr><td>最低風報比</td><td>低於此比例直接不交易（Gate #27）</td><td class="num">1.5</td></tr>
+              <tr><td>Kelly 保守係數</td><td>實際建議倉位＝Kelly 值 × 此係數</td><td class="num">0.25</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===================== OUTPUT FORMAT ===================== -->
+      <section id="output-format">
+        <p class="sec-num">09</p>
+        <h2>每日輸出格式</h2>
+        <p class="lede">首頁 Dashboard 只呈現這 9 項，全部用基金經理人的分析語氣撰寫，展開任一項可看到對應層級與 Agent 的完整推理。</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th class="num">#</th><th>項目</th><th>格式</th></tr></thead>
+            <tbody>
+              <tr><td class="num">1</td><td>今日市場評分</td><td>★☆☆☆☆ ~ ★★★★★，對應第 5 節七級距</td></tr>
+              <tr><td class="num">2</td><td>市場結論</td><td>偏多 ／ 偏空 ／ 震盪</td></tr>
+              <tr><td class="num">3</td><td>建議策略</td><td>波段做多 ／ 波段放空 ／ 區間操作 ／ 空手</td></tr>
+              <tr><td class="num">4</td><td>風險等級</td><td>低 ／ 中 ／ 高（依當前 ATR 相對水位與 Gate 觸發數量計算）</td></tr>
+              <tr><td class="num">5</td><td>建議倉位</td><td>0% ／ 25% ／ 50% ／ 75% ／ 100%（風控引擎輸出，四捨五入至最近檔位）</td></tr>
+              <tr><td class="num">6</td><td>進場條件</td><td>具體價位或觸發條件（例如「站上 43,500 且量能確認」）</td></tr>
+              <tr><td class="num">7</td><td>停損</td><td>絕對價位 ＋ ATR 倍數說明</td></tr>
+              <tr><td class="num">8</td><td>停利</td><td>絕對價位 ＋ 風報比說明</td></tr>
+              <tr><td class="num">9</td><td>理由</td><td>Decision Agent 的支持理由與反對理由並列</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===================== UI SPEC ===================== -->
+      <section id="ui-spec">
+        <p class="sec-num">10</p>
+        <h2>UI / UX 規格</h2>
+        <p class="lede">視覺語言取三個產品的優點：Apple 的留白與層次、Bloomberg Terminal 的資料密度與數字對齊、TradingView 的圖表可信度；介面不是交易軟體，是每天早上讀的一份簡報。</p>
+        <h4>首頁：今日市場 Dashboard</h4>
+        <ul>
+          <li>只呈現第 9 節的 9 項標準輸出，使用 Card UI，30 秒內讀完。</li>
+          <li>最上方是「今日市場評分」星等 ＋ 建議策略，用最大字級呈現，其餘 7 項次之。</li>
+          <li>任何一個 Gate 被觸發時，Dashboard 頂部顯示明顯的警示條（非跳出視窗），列出觸發的 Gate 名稱。</li>
+        </ul>
+        <h4>八層卡片（可展開）</h4>
+        <ul>
+          <li>每張卡片預設收合，顯示：層級名稱、目前狀態（Bull／Neutral／Bear pill）、分數、一句話結論。</li>
+          <li>展開後顯示：完整說明、指標評分表、負責的 Agent 推理段落。</li>
+          <li>L2（總體風險）與 L8（風控）用不同的視覺樣式（無星等，改用「通過／否決」二元徽章），因為它們的性質是否決而非投票。</li>
+        </ul>
+        <h4>Agent 辯論紀錄</h4>
+        <ul>
+          <li>獨立分頁或可展開區塊，以「會議紀錄」形式呈現四個 Agent 的發言，每個 Agent 一張卡片，含立場 pill、信心分數條、關鍵理由、反方論點。</li>
+          <li>Decision Agent 的仲裁摘要固定置頂，並附上分歧度視覺化（例如四個 Agent 立場的簡單分佈條）。</li>
+        </ul>
+      </section>
+
+      <!-- ===================== DB SCHEMA ===================== -->
+      <section id="db-schema">
+        <p class="sec-num">11</p>
+        <h2>Database Schema</h2>
+        <p class="lede">沿用本專案既有 Prisma 慣例（<code>snake_case</code> 資料表、camelCase 欄位、Decimal 用於價格）。<code>tw_futures_daily</code> 與 <code>tw_options_put_call_ratio</code> 已在既有系統上線，其餘為本 PRD 新增。</p>
+        <pre><code><span class="cm">/// 每日決策快照——八層分數＋四個Agent結果＋最終建議，一天一筆，Dashboard直接讀這張表</span>
+<span class="kw">model</span> <span class="ty">DecisionSnapshot</span> {
+  id              BigInt   @id @default(autoincrement())
+  tradeDate       DateTime @unique @map(<span class="ty">"trade_date"</span>) @db.Date
+
+  <span class="cm">// 八層分數（L2/L8 無分數，只有旗標，故 nullable）</span>
+  l1GlobalScore     Decimal? @db.Decimal(4, 2)
+  l3TwMarketScore   Decimal? @db.Decimal(4, 2)
+  l4FlowScore       Decimal? @db.Decimal(4, 2)
+  l5SentimentScore  Decimal? @db.Decimal(4, 2)
+  l6TechnicalScore  Decimal? @db.Decimal(4, 2)
+  totalScore        Decimal? @db.Decimal(5, 2)   <span class="cm">// 加權總分，Decision Engine 基準版用</span>
+
+  <span class="cm">// Agent 辯論結果（JSON，見 AgentVerdict 介面）</span>
+  macroVerdict      Json
+  flowVerdict       Json
+  technicalVerdict  Json
+  riskVerdict       Json
+  finalStance       <span class="ty">FinalStance</span>
+  finalConfidence   Int      <span class="cm">// 0-100</span>
+
+  <span class="cm">// 最終輸出（對應第9節9項）</span>
+  strategy          <span class="ty">TradeStrategy</span>
+  riskLevel         <span class="ty">RiskLevel</span>
+  suggestedSizePct  Int
+  entryCondition    String
+  stopLossPrice     Decimal? @db.Decimal(10, 2)
+  takeProfitPrice   Decimal? @db.Decimal(10, 2)
+  supportingReasons Json     <span class="cm">// string[]</span>
+  opposingReasons   Json     <span class="cm">// string[]</span>
+
+  createdAt DateTime @default(now()) @map(<span class="ty">"created_at"</span>)
+
+  @@map(<span class="ty">"decision_snapshots"</span>)
+}
+
+<span class="kw">enum</span> <span class="ty">FinalStance</span> { bull bear neutral }
+<span class="kw">enum</span> <span class="ty">TradeStrategy</span> { swingLong swingShort rangeBound flat }
+<span class="kw">enum</span> <span class="ty">RiskLevel</span> { low medium high }
+
+<span class="cm">/// Gate 引擎每日檢查結果，一天可能多筆（每個觸發的Gate一筆），供Dashboard警示條與歷史稽核用</span>
+<span class="kw">model</span> <span class="ty">GateTrigger</span> {
+  id         BigInt   @id @default(autoincrement())
+  tradeDate  DateTime @map(<span class="ty">"trade_date"</span>) @db.Date
+  gateNumber Int      @map(<span class="ty">"gate_number"</span>)   <span class="cm">// 對應第7節 #1-#35</span>
+  gateName   String   @map(<span class="ty">"gate_name"</span>)
+  action     String                                <span class="cm">// 例如 "禁止新倉"</span>
+  detail     String?                                <span class="cm">// 觸發當下的具體數值</span>
+  createdAt  DateTime @default(now()) @map(<span class="ty">"created_at"</span>)
+
+  @@index([tradeDate])
+  @@map(<span class="ty">"gate_triggers"</span>)
+}
+
+<span class="cm">/// 使用者風控設定，Onboarding時建立，L8風控引擎讀取</span>
+<span class="kw">model</span> <span class="ty">UserRiskProfile</span> {
+  id                  Int      @id @default(autoincrement())
+  accountEquity       Decimal  @map(<span class="ty">"account_equity"</span>) @db.Decimal(14, 0)
+  riskPerTradePct     Decimal  @default(1.0) @map(<span class="ty">"risk_per_trade_pct"</span>) @db.Decimal(4, 2)
+  dailyMaxLossPct     Decimal  @default(3.0) @map(<span class="ty">"daily_max_loss_pct"</span>) @db.Decimal(4, 2)
+  monthlyMaxLossPct   Decimal  @default(10.0) @map(<span class="ty">"monthly_max_loss_pct"</span>) @db.Decimal(4, 2)
+  maxExposurePct      Decimal  @default(50.0) @map(<span class="ty">"max_exposure_pct"</span>) @db.Decimal(4, 2)
+  atrStopMultiplier   Decimal  @default(1.5) @map(<span class="ty">"atr_stop_multiplier"</span>) @db.Decimal(3, 2)
+  consecutiveLossHalt Int      @default(3) @map(<span class="ty">"consecutive_loss_halt"</span>)
+  updatedAt           DateTime @updatedAt @map(<span class="ty">"updated_at"</span>)
+
+  @@map(<span class="ty">"user_risk_profile"</span>)
+}
+
+<span class="cm">/// 事件行事曆（L2 資料源，v1先用人工維護）</span>
+<span class="kw">model</span> <span class="ty">MacroEvent</span> {
+  id         Int      @id @default(autoincrement())
+  eventDate  DateTime @map(<span class="ty">"event_date"</span>) @db.Date
+  eventType  String   @map(<span class="ty">"event_type"</span>)  <span class="cm">// "FOMC" | "CPI" | "NFP" | "TSMC_CALL" | ...</span>
+  label      String
+  gateAction String   @map(<span class="ty">"gate_action"</span>)
+
+  @@index([eventDate])
+  @@map(<span class="ty">"macro_events"</span>)
+}
+
+<span class="cm">/// 已存在於本專案（本PRD重新列出以便工程師對照）</span>
+<span class="kw">model</span> <span class="ty">TwFuturesDaily</span> { <span class="cm">/* 見 prisma/schema.prisma，已上線 */</span> }
+<span class="kw">model</span> <span class="ty">TwOptionsPutCallRatio</span> { <span class="cm">/* 見 prisma/schema.prisma，已上線 */</span> }</code></pre>
+      </section>
+
+      <!-- ===================== API DESIGN ===================== -->
+      <section id="api-design">
+        <p class="sec-num">12</p>
+        <h2>API Design</h2>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>方法</th><th>路徑</th><th>說明</th></tr></thead>
+            <tbody>
+              <tr><td class="num">GET</td><td><code>/api/decision-os/today</code></td><td>回傳今日 <code>DecisionSnapshot</code>（Dashboard 主要資料源）</td></tr>
+              <tr><td class="num">GET</td><td><code>/api/decision-os/layers/:layerId</code></td><td>單一層級的完整指標與判讀細節（展開卡片用）</td></tr>
+              <tr><td class="num">GET</td><td><code>/api/decision-os/agents</code></td><td>四個 Agent 的完整辯論紀錄＋ Decision Agent 仲裁</td></tr>
+              <tr><td class="num">GET</td><td><code>/api/decision-os/gates</code></td><td>今日觸發的 Gate 清單</td></tr>
+              <tr><td class="num">GET</td><td><code>/api/decision-os/history</code></td><td>歷史決策快照（回測與績效檢視用）</td></tr>
+              <tr><td class="num">POST</td><td><code>/api/cron/decision-os-daily</code></td><td>排程觸發：跑完整 Pipeline，寫入當日 <code>DecisionSnapshot</code>，沿用既有 Cron Secret 驗證機制</td></tr>
+              <tr><td class="num">GET／PUT</td><td><code>/api/decision-os/risk-profile</code></td><td>讀取／更新 <code>UserRiskProfile</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===================== FRONTEND ===================== -->
+      <section id="frontend">
+        <p class="sec-num">13</p>
+        <h2>Frontend Component Tree</h2>
+        <pre><code>/decision-os
+├─ page.tsx                     <span class="cm">// 首頁 Dashboard，只渲染 DashboardSummary</span>
+├─ layers/page.tsx               <span class="cm">// 八層卡片列表頁</span>
+├─ agents/page.tsx               <span class="cm">// Agent 辯論紀錄頁</span>
+└─ history/page.tsx              <span class="cm">// 歷史決策回顧</span>
+
+components/decision-os/
+├─ DashboardSummary.tsx          <span class="cm">// 第9節9項標準輸出，首頁核心</span>
+├─ GateAlertBanner.tsx           <span class="cm">// 觸發Gate時的頂部警示條</span>
+├─ LayerCard.tsx                 <span class="cm">// 單一層級卡片（收合/展開），L2、L8用 variant="gate"</span>
+├─ IndicatorScoreTable.tsx       <span class="cm">// 展開後的指標評分明細表</span>
+├─ AgentVerdictCard.tsx          <span class="cm">// 單一Agent的立場/信心/理由卡片</span>
+├─ DecisionArbitrationPanel.tsx  <span class="cm">// Decision Agent仲裁摘要＋分歧度視覺化</span>
+├─ RiskPositionPanel.tsx         <span class="cm">// 建議倉位/停損/停利/R值</span>
+└─ ScoreStars.tsx                <span class="cm">// 共用星等元件，沿用 -2..+2 → ★☆☆☆☆..★★★★★</span></code></pre>
+      </section>
+
+      <!-- ===================== BACKEND ===================== -->
+      <section id="backend">
+        <p class="sec-num">14</p>
+        <h2>Backend Service 分層</h2>
+        <pre><code>src/lib/decision-os/
+├─ ingest/                       <span class="cm">// 八層各自的資料抓取（沿用既有 marketData/ client 慣例）</span>
+│  ├─ fetchGlobalMarkets.ts      <span class="cm">// L1：VIX/DXY/DGS10 走 FRED，NASDAQ/SOX 待補資料源</span>
+│  ├─ fetchMacroEvents.ts        <span class="cm">// L2：讀 macro_events 表</span>
+│  ├─ fetchTwMarket.ts           <span class="cm">// L3：TAIEX + 漲跌家數</span>
+│  ├─ fetchInstitutionalFlow.ts  <span class="cm">// L4：沿用/擴充既有 taifexClient.ts</span>
+│  ├─ fetchSentiment.ts          <span class="cm">// L5：PCR 反指標邏輯 + 大額交易人</span>
+│  └─ fetchTechnical.ts          <span class="cm">// L6：均線/MACD/RSI/ADX/ATR/布林，沿用tw_futures_daily</span>
+├─ scoring/
+│  ├─ scoreIndicator.ts          <span class="cm">// 單一指標 → -2..+2（第4節門檻表的程式化實作）</span>
+│  └─ aggregateLayerScore.ts     <span class="cm">// 指標分數 → 層分數 → 加權總分</span>
+├─ gates/
+│  └─ evaluateGates.ts           <span class="cm">// 35項Gate並行檢查，回傳觸發清單</span>
+├─ agents/
+│  ├─ macroAgent.ts
+│  ├─ flowAgent.ts
+│  ├─ technicalAgent.ts
+│  ├─ riskAgent.ts
+│  └─ decisionAgent.ts           <span class="cm">// 仲裁邏輯（第6節步驟1-4）</span>
+├─ risk/
+│  └─ computePositionSizing.ts   <span class="cm">// 第8節公式實作：ATR停損/部位/R值/EV/Kelly</span>
+└─ runDecisionOsDaily.ts         <span class="cm">// 排程進入點：ingest → scoring → gates → agents → risk → 寫入 DecisionSnapshot</span></code></pre>
+      </section>
+
+      <!-- ===================== DATA SOURCES ===================== -->
+      <section id="data-sources">
+        <p class="sec-num">15</p>
+        <h2>資料源現況總表</h2>
+        <p class="lede">誠實列出本專案目前已經驗證可用、部分可用、與完全缺口的資料源，讓工程師知道哪些層級可以立刻動工、哪些需要先做資料源調研。</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>指標／資料</th><th>對應層級</th><th>狀態</th><th>說明</th></tr></thead>
+            <tbody>
+              <tr><td>TAIEX 現貨日線</td><td>L3 / L6</td><td><span class="status-verified">已驗證上線</span></td><td>TWSE 官方 API，20 年歷史已回填</td></tr>
+              <tr><td>台指期(TX)日線</td><td>L6</td><td><span class="status-partial">已上線，歷史累積中</span></td><td>TAIFEX API 只給當日快照，需每日累積</td></tr>
+              <tr><td>選擇權 Put/Call 比</td><td>L4 / L5</td><td><span class="status-verified">已驗證上線</span></td><td>TAIFEX API，約1個月滾動窗口，已排程累積</td></tr>
+              <tr><td>三大法人台指期未平倉</td><td>L4</td><td><span class="status-partial">端點已確認，未接入</span></td><td>只回傳當日快照，需新排程每日累積，無回填路徑</td></tr>
+              <tr><td>大額交易人未沖銷部位</td><td>L5</td><td><span class="status-partial">端點已找到，未實測</span></td><td><code>OpenInterestOfLargeTradersFutures</code></td></tr>
+              <tr><td>VIX</td><td>L1</td><td><span class="status-verified">已驗證可用</span></td><td>FRED <code>VIXCLS</code>，免金鑰</td></tr>
+              <tr><td>美元指數 DXY</td><td>L1</td><td><span class="status-verified">已驗證可用</span></td><td>FRED <code>DTWEXBGS</code></td></tr>
+              <tr><td>美債 10Y／2Y 殖利率</td><td>L1</td><td><span class="status-verified">已驗證可用</span></td><td>FRED <code>DGS10</code> / <code>DGS2</code></td></tr>
+              <tr><td>S&amp;P 500</td><td>L1（對照組）</td><td><span class="status-verified">已驗證上線</span></td><td>FRED <code>SP500</code>，本專案已用於總經頁季節性分析</td></tr>
+              <tr><td>NASDAQ／SOX 指數</td><td>L1</td><td><span class="status-missing">缺口</span></td><td>Polygon 免費層僅約2年歷史，且不含SOX，需另尋來源或升級方案</td></tr>
+              <tr><td>融資融券餘額</td><td>L4</td><td><span class="status-missing">缺口</span></td><td>TWSE 應有對應公開資料，尚待調研確認端點</td></tr>
+              <tr><td>美國經濟數據行事曆（未來事件）</td><td>L2</td><td><span class="status-missing">缺口</span></td><td>FRED 不含未來事件，需另尋財經行事曆資料源；v1 可先用人工維護表頂替</td></tr>
+              <tr><td>新聞／社群情緒</td><td>L5</td><td><span class="status-missing">缺口，非 MVP 必要</span></td><td>建議列入 v2 以後</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===================== ROADMAP ===================== -->
+      <section id="roadmap">
+        <p class="sec-num">16</p>
+        <h2>開發路線圖</h2>
+        <h3>MVP（第一階段）</h3>
+        <ul>
+          <li>L3（台股環境）、L4（法人籌碼，先用已上線的 PCR）、L6（技術分析，先用 TAIEX 現貨計算指標）三層先上線——這三層資料源已驗證可用，可立刻動工。</li>
+          <li>Gate 引擎先實作 B/C/D/E 四類（波動度、流動性、價格結構、風險管理），共 24 項，不依賴外部行事曆資料源。</li>
+          <li>Decision Engine 先用第 5 節的確定性公式版本上線，Agent 辯論引擎作為第二階段。</li>
+          <li>風控引擎與 <code>UserRiskProfile</code> 從第一天就必須存在——這是本 OS 的核心承諾，不能延後。</li>
+        </ul>
+        <h3>第二階段</h3>
+        <ul>
+          <li>接入三大法人台指期未平倉每日排程（L4 完整化）。</li>
+          <li>調研並接入 NASDAQ／SOX 資料源、融資融券資料源、事件行事曆資料源（L1／L2 完整化）。</li>
+          <li>上線 Agent 辯論引擎，取代 Decision Engine 基準版成為生產環境預設。</li>
+        </ul>
+        <h3>第三階段</h3>
+        <ul>
+          <li>用累積的 <code>DecisionSnapshot</code> 歷史資料回測，校準所有標註 ⚠️ 的權重與門檻參數。</li>
+          <li>新聞／社群情緒資料源、大額交易人集中度視覺化。</li>
+        </ul>
+      </section>
+
+      <footer>
+        <p>台指期波段交易 Decision OS — Product &amp; Engineering Spec v0.1。所有標註 ⚠️ 的數值為初始假設，需以歷史資料回測校準後才能視為生產環境的最終參數。</p>
+      </footer>
+    </div>
+  </main>
+</div>
+</body>
+</html>
