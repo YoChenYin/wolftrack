@@ -156,7 +156,7 @@ export function ChainSignalLights() {
         }
       />
 
-      <div className="mt-3 flex flex-col gap-4">
+      <div className="mt-4 flex flex-col gap-5">
         {chains.map((chain) => {
           const sortedStages = [...chain.stages].sort(
             (a, b) => STAGE_ORDER.indexOf(a.stageKey) - STAGE_ORDER.indexOf(b.stageKey)
@@ -168,74 +168,88 @@ export function ChainSignalLights() {
 
           return (
             <SubCard key={chain.chainName}>
-              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{chain.chainNameFull}</p>
-              <div className="mt-2 flex flex-col sm:flex-row sm:flex-wrap sm:items-stretch gap-2">
+              <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">{chain.chainNameFull}</p>
+              <div className="mt-2.5 flex flex-col sm:flex-row sm:flex-wrap sm:items-stretch gap-2">
                 {sortedStages.map((stage, i) => {
                   const key = `${chain.chainName}::${stage.stageKey}`;
                   const isOpen = key === expandedKey;
+                  const hasData = stage.memberCount > 0;
+                  const LightIcon = LIGHT_STYLE[stage.light].icon;
+
+                  if (!hasData) {
+                    return (
+                      <div
+                        key={stage.stageKey}
+                        className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-zinc-400 ring-1 ring-zinc-100 dark:text-zinc-600 dark:ring-white/[0.04]"
+                      >
+                        <Circle className="h-3 w-3 shrink-0" strokeWidth={2.25} />
+                        {stage.label.split("：")[0]} · 無資料
+                      </div>
+                    );
+                  }
+
                   return (
                     <div key={stage.stageKey} className="flex flex-col sm:flex-row sm:items-center gap-2">
                       <button
                         type="button"
                         onClick={() => setExpandedKey(isOpen ? null : key)}
-                        disabled={stage.memberCount === 0}
-                        className={`w-full rounded-md px-2.5 py-1.5 text-left text-xs ring-1 transition-shadow disabled:cursor-default sm:w-auto ${
+                        className={`w-full min-w-[168px] rounded-lg px-3 py-2 text-left text-xs ring-1 transition-shadow sm:w-auto ${
                           LIGHT_STYLE[stage.light].ring
                         } ${isOpen ? "ring-2 ring-zinc-400 dark:ring-zinc-500" : "hover:ring-zinc-300 dark:hover:ring-white/20"}`}
                       >
-                        <div className="flex items-center gap-1 font-medium text-zinc-700 dark:text-zinc-300">
-                          {(() => {
-                            const LightIcon = LIGHT_STYLE[stage.light].icon;
-                            return (
-                              <LightIcon
-                                className={`h-3.5 w-3.5 ${LIGHT_STYLE[stage.light].iconClassName}`}
-                                strokeWidth={2.25}
-                              />
-                            );
-                          })()}
-                          {stage.label.split("：")[0]}
-                          {stage.memberCount > 0 && (
-                            <span className="text-zinc-400 dark:text-zinc-500">{isOpen ? "▲" : "▼"}</span>
-                          )}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">
+                            <LightIcon className={`h-4 w-4 shrink-0 ${LIGHT_STYLE[stage.light].iconClassName}`} strokeWidth={2.25} />
+                            {stage.label.split("：")[0]}
+                          </span>
+                          <ChevronDown
+                            className={`h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform dark:text-zinc-500 ${isOpen ? "rotate-180" : ""}`}
+                            strokeWidth={2.25}
+                          />
                         </div>
-                        {stage.memberCount > 0 ? (
-                          <>
-                            <div className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
-                              {stage.risingCount}漲{stage.fallingCount}跌 · 5日
-                              <span className={`font-medium ${returnColor(stage.avgReturn5d)}`}>
-                                {formatPct(stage.avgReturn5d)}
+
+                        <div className="mt-1.5 flex items-center gap-2.5 text-[11px]">
+                          <span className="flex items-center gap-2 tabular-nums">
+                            <span className="flex items-center gap-0.5 text-red-600 dark:text-red-400">
+                              <TrendingUp className="h-3 w-3" strokeWidth={2.5} />
+                              {stage.risingCount}
+                            </span>
+                            <span className="flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
+                              <TrendingDown className="h-3 w-3" strokeWidth={2.5} />
+                              {stage.fallingCount}
+                            </span>
+                          </span>
+                          <span className="text-zinc-300 dark:text-zinc-600">·</span>
+                          <span className="text-zinc-500 dark:text-zinc-400">
+                            5日 <span className={`font-semibold ${returnColor(stage.avgReturn5d)}`}>{formatPct(stage.avgReturn5d)}</span>
+                          </span>
+                        </div>
+
+                        {Object.keys(stage.statusBreakdown).length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {Object.entries(stage.statusBreakdown).map(([status, count]) => (
+                              <span
+                                key={status}
+                                className="rounded bg-white/70 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 ring-1 ring-zinc-900/[0.03] dark:bg-black/20 dark:text-zinc-400 dark:ring-white/[0.05]"
+                              >
+                                {STATUS_LABELS[status] ?? status}×{count}
                               </span>
-                              {Object.keys(stage.statusBreakdown).length > 0 && (
-                                <>
-                                  {" · "}
-                                  {Object.entries(stage.statusBreakdown)
-                                    .map(([status, count]) => `${STATUS_LABELS[status] ?? status}${count}`)
-                                    .join(" ")}
-                                </>
-                              )}
-                            </div>
-                            {stage.phase !== "mixed" && (
-                              <div className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-zinc-600 dark:text-zinc-400">
-                                {(() => {
-                                  const PhaseIcon = PHASE_LABELS[stage.phase].icon;
-                                  return (
-                                    <PhaseIcon
-                                      className={`h-3 w-3 ${PHASE_LABELS[stage.phase].iconClassName}`}
-                                      strokeWidth={2.25}
-                                    />
-                                  );
-                                })()}
+                            ))}
+                          </div>
+                        )}
+
+                        {stage.phase !== "mixed" &&
+                          (() => {
+                            const PhaseIcon = PHASE_LABELS[stage.phase].icon;
+                            return (
+                              <div
+                                className={`mt-1.5 flex w-fit items-center gap-1 rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] font-medium dark:bg-black/20 ${PHASE_LABELS[stage.phase].iconClassName}`}
+                              >
+                                <PhaseIcon className="h-3 w-3 shrink-0" strokeWidth={2.25} />
                                 {PHASE_LABELS[stage.phase].label}
                               </div>
-                            )}
-                            <div className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-500">
-                              龍頭({stage.leaders.count}檔) {formatPct(stage.leaders.avgReturn5d)} · 二軍(
-                              {stage.followers.count}檔) {formatPct(stage.followers.avgReturn5d)}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-500">無成員資料</div>
-                        )}
+                            );
+                          })()}
                       </button>
                       {i < sortedStages.length - 1 && (
                         <>
@@ -255,10 +269,21 @@ export function ChainSignalLights() {
               </div>
 
               {activeStage && (
-                <div className="mt-2 rounded-lg bg-white p-2 ring-1 ring-zinc-900/[0.04] dark:bg-white/[0.03] dark:ring-white/[0.06]">
-                  <p className="mb-1.5 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
-                    {activeStage.label.split("：")[0]} 成員股票（依近5日報酬排序）
-                  </p>
+                <div className="mt-2.5 rounded-lg bg-white p-2.5 ring-1 ring-zinc-900/[0.04] dark:bg-white/[0.03] dark:ring-white/[0.06]">
+                  <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                      {activeStage.label.split("：")[0]} 成員股票（依近5日報酬排序）
+                    </p>
+                    <p className="flex items-center gap-2 text-[10px] text-zinc-400 dark:text-zinc-500">
+                      <span className="flex items-center gap-1">
+                        <Crown className="h-3 w-3 text-amber-500" />
+                        龍頭({activeStage.leaders.count}) {formatPct(activeStage.leaders.avgReturn5d)}
+                      </span>
+                      <span>
+                        二軍({activeStage.followers.count}) {formatPct(activeStage.followers.avgReturn5d)}
+                      </span>
+                    </p>
+                  </div>
                   <div className="flex flex-wrap gap-1.5">
                     {activeStage.members.map((member) => (
                       <Link
