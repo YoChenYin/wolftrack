@@ -296,6 +296,49 @@ model TwBrokerBranchFlow {
   @@map("tw_broker_branch_flow")
 }
 
+/// 台指期(TX)每日近月合約行情，市場層級資料（不對應到某一檔stock），用來算「期貨-現貨基差」——
+/// 現貨端直接查 tw_daily_price 的 TAIEX 合成股票即可，這裡只存近月一般盤的期貨行情。
+/// 資料源 openapi.taifex.com.tw/v1/DailyMarketReportFut，這支API只回傳「今天」的快照，
+/// 沒有歷史範圍可查，只能每天排程累積（見 runTaifexDailyUpdate.ts），沒有回填捷徑。
+model TwFuturesDaily {
+  id            BigInt   @id @default(autoincrement())
+  tradeDate     DateTime @map("trade_date") @db.Date
+  contract      String   @default("TX")
+  contractMonth String   @map("contract_month")
+
+  open            Decimal  @db.Decimal(10, 2)
+  high            Decimal  @db.Decimal(10, 2)
+  low             Decimal  @db.Decimal(10, 2)
+  close           Decimal  @db.Decimal(10, 2)
+  settlementPrice Decimal? @map("settlement_price") @db.Decimal(10, 2)
+  volume          Int
+  openInterest    Int      @map("open_interest")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([contract, tradeDate])
+  @@map("tw_futures_daily")
+}
+
+/// 台指選擇權 Put/Call 比（買權/賣權成交量與未平倉量比值），市場層級資料。資料源
+/// openapi.taifex.com.tw/v1/PutCallRatio 這支本身就回傳約一個月的歷史範圍，每天呼叫時
+/// 用upsert疊加，自然累積出比 tw_futures_daily 更長的歷史。
+model TwOptionsPutCallRatio {
+  id        BigInt   @id @default(autoincrement())
+  tradeDate DateTime @unique @map("trade_date") @db.Date
+
+  putVolume             BigInt  @map("put_volume")
+  callVolume            BigInt  @map("call_volume")
+  putCallVolumeRatioPct Decimal @map("put_call_volume_ratio_pct") @db.Decimal(6, 2)
+  putOpenInterest       BigInt  @map("put_open_interest")
+  callOpenInterest      BigInt  @map("call_open_interest")
+  putCallOiRatioPct     Decimal @map("put_call_oi_ratio_pct") @db.Decimal(6, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("tw_options_put_call_ratio")
+}
+
 /// 逐字稿來源：caption=官方/自動字幕（游庭皓頻道有）、whisper=語音轉文字（EBC/Gooaye沒有字幕，走這條）
 enum TranscriptSource {
   caption

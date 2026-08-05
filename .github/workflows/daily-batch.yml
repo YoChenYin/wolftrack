@@ -41,6 +41,15 @@ jobs:
           curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/tw-daily" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
 
+  taifex-daily:
+    if: github.event.schedule == '0 9 * * 1-5' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger TAIFEX daily update (台指期基差 + Put/Call比)
+        run: |
+          curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/taifex-daily" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
   tw-revenue:
     if: github.event.schedule == '0 9 10-12 * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
