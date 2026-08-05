@@ -37,6 +37,9 @@ function median(values: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
+/** 四條參考序列回填深度不一（TAIEX/TPEX/2330 都比 SPX 的10年長），統一裁成近10年樣本，跨序列比較才公平 */
+const LOOKBACK_YEARS = 10;
+
 /**
  * 歷年月份表現：給定一檔（合成或真實）股票，算每個月的報酬率 = 月底收盤 vs 上個月月底收盤，
  * 依日曆月分組後看每個月份（1-12月）橫跨多年的平均/中位數/勝率/累加週期，抓「歷史上哪個月份比較容易漲/跌」
@@ -49,8 +52,15 @@ export async function computeMonthlySeasonality(ticker: string, label: string, m
   });
   if (!stock) return emptyResult(ticker, label);
 
+  // 樣本視窗起點（近10年），多抓一個月當緩衝，讓視窗第一個月也能算出對上個月底的報酬
+  const windowStart = new Date();
+  windowStart.setFullYear(windowStart.getFullYear() - LOOKBACK_YEARS);
+  const windowStartKey = windowStart.toISOString().slice(0, 7);
+  const fetchCutoff = new Date(windowStart);
+  fetchCutoff.setMonth(fetchCutoff.getMonth() - 1);
+
   const bars = await prisma.twDailyPrice.findMany({
-    where: { stockId: stock.id },
+    where: { stockId: stock.id, tradeDate: { gte: fetchCutoff } },
     orderBy: { tradeDate: "asc" },
     select: { tradeDate: true, close: true },
   });
@@ -70,6 +80,7 @@ export async function computeMonthlySeasonality(ticker: string, label: string, m
   for (let i = 1; i < sortedKeys.length; i++) {
     const prevKey = sortedKeys[i - 1];
     const key = sortedKeys[i];
+    if (key < windowStartKey) continue; // 緩衝月只借來算報酬用，本身不計入近10年樣本
     const [prevYear, prevMonth] = prevKey.split("-").map(Number);
     const [year, month] = key.split("-").map(Number);
 
@@ -111,6 +122,15 @@ export async function computeMonthlySeasonality(ticker: string, label: string, m
   });
 
   const years = [...new Set(cells.map((c) => c.year))].sort((a, b) => a - b);
+  const windowedKeys = sortedKeys.filter((k) => k >= windowStartKey);
 
-  return { ticker, label, cells, summary, years, dataFrom: sortedKeys[0] ?? null, dataTo: sortedKeys[sortedKeys.length - 1] ?? null };
+  return {
+    ticker,
+    label,
+    cells,
+    summary,
+    years,
+    dataFrom: windowedKeys[0] ?? null,
+    dataTo: windowedKeys[windowedKeys.length - 1] ?? null,
+  };
 }
