@@ -166,6 +166,11 @@ model DailyTrendSignal {
   reversalPointDate DateTime? @map("reversal_point_date") @db.Date
   priceAtSignal     Decimal?  @map("price_at_signal") @db.Decimal(12, 4)
 
+  /// 2026-08-07新增：台股entry/exit/buyDip今天為什麼被分類進這個狀態，用當下實際數值描述
+  /// （非規則本身），見 classifyChipFlow.ts 的 describeEntryReason/describeExitReasons/
+  /// describeBuyDipReason。美股版跟台股 limitMove/none 狀態永遠是 null。
+  triggerReason String? @map("trigger_reason") @db.Text
+
   createdAt DateTime @default(now()) @map("created_at")
 
   stock Stock @relation(fields: [stockId], references: [id])
@@ -585,4 +590,71 @@ model MacroEvent {
 
   @@index([eventDate])
   @@map("macro_events")
+}
+
+/// Decision Lab（總經頁最上方，見 docs/decision-lab-prd.html）Regime分類，第7節定義
+enum MarketRegime {
+  strongBull
+  weakBull
+  range
+  weakBear
+  strongBear
+  volatile
+  distribution
+  accumulation
+  capitulation
+}
+
+/// Decision Lab 每日快照：M1全球市場 + M7 Regime + M8 Trading Score，一天一筆。
+/// Phase 1 只有 globalMarketData/volatilityData(VIX)/liquidityData(沿用既有PCR) 有實際內容，
+/// macroEvents/breadthData/sentimentData 留到資料源補齊後再填，目前是null——不假裝有資料，
+/// scoreBreakdown 會誠實記錄哪些因子因為沒資料而貢獻0分，見 docs/decision-lab-prd.html 第14節。
+model MacroDailySnapshot {
+  id           BigInt   @id @default(autoincrement())
+  snapshotDate DateTime @unique @map("snapshot_date") @db.Date
+
+  globalMarketData Json  @map("global_market_data")
+  macroEvents      Json? @map("macro_events_snapshot")
+  volatilityData   Json? @map("volatility_data")
+  liquidityData    Json? @map("liquidity_data")
+  breadthData      Json? @map("breadth_data")
+  sentimentData    Json? @map("sentiment_data")
+
+  regime           MarketRegime
+  tradingScore     Int          @map("trading_score")
+  maxPossibleScore Int          @map("max_possible_score")
+  scoreBreakdown   Json         @map("score_breakdown")
+
+  tradingPlanStrategy String @map("trading_plan_strategy")
+  tradingPlanReason   String @map("trading_plan_reason") @db.Text
+  suggestedSizePct    Int    @map("suggested_size_pct")
+
+  fundManagerNote String? @map("fund_manager_note") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("macro_daily_snapshots")
+}
+
+enum ScenarioOutcome {
+  correct
+  incorrect
+  notTriggered
+}
+
+/// Decision Lab M9 情境生成器：每天三個劇本，收盤後（Phase 2 Decision Replay）回填 actualOutcome
+model ScenarioForecast {
+  id           BigInt   @id @default(autoincrement())
+  snapshotDate DateTime @map("snapshot_date") @db.Date
+  label        String
+  description  String   @db.Text
+  probability  Int
+  condition    String   @db.Text
+  risk         String   @db.Text
+  strategy     String   @db.Text
+
+  actualOutcome ScenarioOutcome? @map("actual_outcome")
+
+  @@unique([snapshotDate, label])
+  @@map("scenario_forecasts")
 }

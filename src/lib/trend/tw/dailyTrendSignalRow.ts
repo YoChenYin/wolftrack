@@ -28,5 +28,6 @@ export function buildTwDailyTrendSignalRow(signal: TwDailySignal) {
     status: signal.status as "entry" | "exit" | "buyDip" | "limitMove",
     reversalPointDate: signal.reversalPointDate ? new Date(signal.reversalPointDate) : null,
     priceAtSignal: signal.priceAtSignal,
+    triggerReason: signal.triggerReason,
   };
 }

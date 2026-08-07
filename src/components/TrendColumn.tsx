@@ -222,6 +222,11 @@ export function TrendColumn({
                     `${meta.signalLabel} N/A`
                   )}
                 </p>
+                {item.triggerReason && (
+                  <p className="mt-0.5 text-[11px] leading-snug text-zinc-400 dark:text-zinc-500" title="今天為什麼被分類進這一欄">
+                    {item.triggerReason}
+                  </p>
+                )}
                 {item.themes.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1">
                     {item.themes.map((theme) => (

@@ -115,6 +115,7 @@ export function calculateTwTrendSignalAtIndex(
     status,
     reversalPointDate: classification.signalPointDate,
     priceAtSignal: classification.priceAtSignal,
+    triggerReason: classification.triggerReason,
     isLimitMove,
     chipConcentration5: concentration5,
     chipConcentration10: concentration10,

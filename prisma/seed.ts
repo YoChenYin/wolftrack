@@ -165,6 +165,17 @@ const STOCKS = [
   // 資料來源是 FRED 的 SP500 官方序列（見 backfill-sp500-history.ts），不是任何一檔可交易的股票/ETF，
   // isActive=false 不會出現在美股版的戰術面板/選股清單
   { ticker: "SPX", companyName: "S&P 500 Index", sectorCode: "INDEX", industry: "Index", isActive: false },
+
+  // Decision Lab（總經頁，見 docs/decision-lab-prd.html Module 1/3）全球市場+波動度參考序列，
+  // 全部是 FRED 免金鑰序列（見 globalMacroSeries.ts），同樣是合成紀錄，isActive=false
+  { ticker: "IXIC", companyName: "NASDAQ Composite Index", sectorCode: "INDEX", industry: "Index", isActive: false },
+  { ticker: "DJI", companyName: "Dow Jones Industrial Average", sectorCode: "INDEX", industry: "Index", isActive: false },
+  { ticker: "BTC", companyName: "Bitcoin (Coinbase)", sectorCode: "INDEX", industry: "Index", isActive: false },
+  { ticker: "WTI", companyName: "WTI Crude Oil", sectorCode: "INDEX", industry: "Index", isActive: false },
+  { ticker: "DXY", companyName: "Trade Weighted U.S. Dollar Index", sectorCode: "INDEX", industry: "Index", isActive: false },
+  { ticker: "US10Y", companyName: "US 10-Year Treasury Yield", sectorCode: "INDEX", industry: "Index", isActive: false },
+  { ticker: "US2Y", companyName: "US 2-Year Treasury Yield", sectorCode: "INDEX", industry: "Index", isActive: false },
+  { ticker: "VIX", companyName: "CBOE Volatility Index", sectorCode: "INDEX", industry: "Index", isActive: false },
 ] as const;
 
 // 跨板塊題材標籤（一檔股票可以有多個）

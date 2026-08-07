@@ -21,6 +21,8 @@ export interface TwDailySignal {
   status: TrendStatus;
   reversalPointDate: string | null;
   priceAtSignal: number | null;
+  /** 為什麼今天還被分類進這個狀態，用當下實際數值描述（非規則本身），見 classifyChipFlow.ts。只有台股entry/exit/buyDip有值 */
+  triggerReason: string | null;
   isLimitMove: boolean;
   chipConcentration5: number;
   chipConcentration10: number;

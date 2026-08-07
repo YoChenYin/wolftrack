@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>Decision Lab — PRD</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --ink: #0d1013;
+    --ink-raised: #12161a;
+    --ink-raised-2: #171c21;
+    --paper: #f5f3ec;
+    --paper-raised: #ffffff;
+    --paper-raised-2: #edeae1;
+
+    --text: #e6e4dc;
+    --text-dim: #979d9f;
+    --text-faint: #676d70;
+
+    --accent: #5fb4a2;
+    --accent-strong: #7ecdba;
+
+    --bull: #c0392b;
+    --bull-bg: rgba(192, 57, 43, 0.12);
+    --bear: #2f8f6f;
+    --bear-bg: rgba(47, 143, 111, 0.12);
+    --neutral: #8a8f96;
+    --neutral-bg: rgba(138, 143, 150, 0.1);
+
+    --rule: rgba(230, 228, 220, 0.11);
+    --rule-strong: rgba(230, 228, 220, 0.2);
+
+    --bg: var(--ink);
+    --bg-raised: var(--ink-raised);
+    --bg-raised-2: var(--ink-raised-2);
+    --fg: var(--text);
+    --fg-dim: var(--text-dim);
+    --fg-faint: var(--text-faint);
+    --border: var(--rule);
+    --border-strong: var(--rule-strong);
+
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Hoefler Text", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "SF Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  :root[data-theme="light"] {
+    --bg: var(--paper);
+    --bg-raised: var(--paper-raised);
+    --bg-raised-2: var(--paper-raised-2);
+    --fg: #1d1f1a;
+    --fg-dim: #565b52;
+    --fg-faint: #8a8f80;
+    --border: rgba(29, 31, 26, 0.1);
+    --border-strong: rgba(29, 31, 26, 0.18);
+    --accent: #2f8f6f;
+    --accent-strong: #1f6b52;
+    --bull-bg: rgba(192, 57, 43, 0.08);
+    --bear-bg: rgba(31, 107, 82, 0.08);
+    --bear: #1f6b52;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: var(--paper);
+      --bg-raised: var(--paper-raised);
+      --bg-raised-2: var(--paper-raised-2);
+      --fg: #1d1f1a;
+      --fg-dim: #565b52;
+      --fg-faint: #8a8f80;
+      --border: rgba(29, 31, 26, 0.1);
+      --border-strong: rgba(29, 31, 26, 0.18);
+      --accent: #2f8f6f;
+      --accent-strong: #1f6b52;
+      --bull-bg: rgba(192, 57, 43, 0.08);
+      --bear-bg: rgba(31, 107, 82, 0.08);
+      --bear: #1f6b52;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--accent); color: var(--ink); }
+
+  .shell { display: grid; grid-template-columns: 268px minmax(0, 1fr); min-height: 100vh; }
+  .rail { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 28px 20px 40px; border-right: 1px solid var(--border); background: var(--bg-raised); }
+  .rail-brand { font-family: var(--serif); font-size: 17px; margin: 0 0 2px; }
+  .rail-sub { font-size: 11px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 24px; }
+  .rail nav { display: flex; flex-direction: column; gap: 1px; }
+  .rail-group { margin-top: 16px; }
+  .rail-group-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--fg-faint); padding: 0 10px; margin-bottom: 6px; }
+  .rail a { display: block; padding: 5px 10px; border-radius: 6px; color: var(--fg-dim); text-decoration: none; font-size: 12.5px; line-height: 1.4; transition: background 0.12s, color 0.12s; }
+  .rail a:hover { background: var(--bg-raised-2); color: var(--fg); }
+
+  main { min-width: 0; padding: 56px 48px 120px; }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  .masthead { margin-bottom: 56px; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0 0 14px; }
+  h1.title { font-family: var(--serif); font-weight: 500; font-size: 40px; line-height: 1.15; letter-spacing: -0.01em; margin: 0 0 14px; text-wrap: balance; }
+  .thesis { font-size: 17px; color: var(--fg-dim); max-width: 660px; margin: 0 0 28px; text-wrap: balance; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+  .chip { font-family: var(--mono); font-size: 11.5px; padding: 5px 10px; border-radius: 20px; border: 1px solid var(--border-strong); color: var(--fg-dim); }
+  .hr { height: 1px; background: linear-gradient(90deg, var(--accent), transparent 55%); opacity: 0.55; }
+
+  section { margin: 72px 0; scroll-margin-top: 24px; }
+  section:first-of-type { margin-top: 0; }
+  .sec-num { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: 0.04em; }
+  h2 { font-family: var(--serif); font-weight: 500; font-size: 27px; margin: 4px 0 6px; text-wrap: balance; }
+  h3 { font-family: var(--serif); font-weight: 500; font-size: 20px; margin: 36px 0 10px; text-wrap: balance; }
+  h4 { font-family: var(--sans); font-weight: 650; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-dim); margin: 22px 0 10px; }
+  .lede { color: var(--fg-dim); font-size: 15px; max-width: 660px; margin: 0 0 20px; }
+  p { margin: 0 0 14px; max-width: 66ch; }
+  p.full { max-width: none; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 5px; }
+  strong { color: var(--fg); font-weight: 650; }
+  code { font-family: var(--mono); font-size: 0.87em; background: var(--bg-raised-2); padding: 1.5px 5px; border-radius: 4px; color: var(--accent-strong); }
+
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; margin: 4px 0 20px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg-faint); font-weight: 600; background: var(--bg-raised); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--bg-raised); }
+  td.num, th.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-family: var(--mono); white-space: nowrap; }
+  .status-verified { color: var(--bear); font-family: var(--mono); font-size: 12px; }
+  .status-partial { color: var(--accent-strong); font-family: var(--mono); font-size: 12px; }
+  .status-missing { color: var(--bull); font-family: var(--mono); font-size: 12px; }
+
+  pre { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; overflow-x: auto; font-family: var(--mono); font-size: 12px; line-height: 1.6; margin: 4px 0 20px; }
+  pre code { background: none; padding: 0; color: var(--fg); }
+  .cm { color: var(--fg-faint); }
+  .kw { color: var(--accent-strong); }
+  .ty { color: #7fa3c9; }
+
+  .mod-card { border: 1px solid var(--border); border-radius: 14px; padding: 22px 24px; margin: 18px 0; background: var(--bg-raised); }
+  .mod-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .mod-index { font-family: var(--mono); font-size: 11px; color: var(--accent); border: 1px solid var(--border-strong); border-radius: 6px; padding: 2px 7px; }
+  .mod-title { font-family: var(--serif); font-size: 18px; margin: 0; }
+  .mod-en { color: var(--fg-faint); font-size: 12px; font-family: var(--mono); }
+  .feasibility { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; }
+
+  .callout { border-left: 3px solid var(--accent); padding: 4px 18px; margin: 18px 0; background: var(--bg-raised); border-radius: 0 8px 8px 0; }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout.warn { border-left-color: var(--bull); }
+
+  footer { max-width: 880px; margin: 90px auto 0; padding-top: 24px; border-top: 1px solid var(--border); color: var(--fg-faint); font-size: 12.5px; }
+
+  /* ---------- high-fidelity mockup (self-contained dark terminal treatment) ---------- */
+  .mockup {
+    background: #08090b;
+    border: 1px solid #1e2227;
+    border-radius: 16px;
+    padding: 22px;
+    color: #d8dadb;
+    font-family: var(--sans);
+    box-shadow: 0 24px 60px -30px rgba(0,0,0,0.7);
+  }
+  .mockup * { box-sizing: border-box; }
+  .mockup-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .mockup-brand { font-family: var(--serif); font-size: 15px; color: #eef0ee; display: flex; align-items: center; gap: 8px; }
+  .mockup-brand .dot { width: 7px; height: 7px; border-radius: 50%; background: #5fb4a2; box-shadow: 0 0 8px #5fb4a2; }
+  .mockup-tabs { display: flex; gap: 4px; font-family: var(--mono); font-size: 10.5px; color: #767b7d; }
+  .mockup-tabs span { padding: 4px 10px; border-radius: 6px; }
+  .mockup-tabs span.active { background: #181c20; color: #eef0ee; }
+  .mockup-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; }
+  .mockup-panel { background: #101317; border: 1px solid #1e2227; border-radius: 12px; padding: 16px; }
+  .mockup-label { font-family: var(--mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.08em; color: #676d70; margin-bottom: 10px; }
+  .mockup-score-row { display: flex; align-items: baseline; gap: 14px; }
+  .mockup-score { font-family: var(--serif); font-size: 46px; color: #eef0ee; line-height: 1; }
+  .mockup-score-sub { font-size: 12px; color: #a7abac; }
+  .mockup-badge { display: inline-block; margin-top: 10px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-family: var(--mono); background: rgba(95,180,162,0.14); color: #7ecdba; }
+  .mockup-heatmap { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 10px; }
+  .mockup-tile { border-radius: 6px; padding: 8px 6px; font-family: var(--mono); font-size: 10px; text-align: center; }
+  .mockup-tile .t { display: block; color: #c9cbc8; font-size: 9.5px; margin-bottom: 4px; }
+  .mockup-tile .v { display: block; font-weight: 600; }
+  .mockup-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 11.5px; }
+  .mockup-bar-row .lbl { width: 78px; color: #a7abac; font-size: 10.5px; flex-shrink: 0; }
+  .mockup-bar-track { flex: 1; height: 6px; border-radius: 4px; background: #1c2126; overflow: hidden; }
+  .mockup-bar-fill { height: 100%; border-radius: 4px; }
+  .mockup-bar-val { width: 30px; text-align: right; font-family: var(--mono); font-size: 10.5px; color: #d8dadb; }
+  .mockup-note { font-size: 12px; line-height: 1.6; color: #c3c6c4; font-style: italic; border-top: 1px solid #1e2227; margin-top: 12px; padding-top: 12px; }
+  .mockup-scenario { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #181c20; font-size: 12px; }
+  .mockup-scenario:last-child { border-bottom: none; }
+  .mockup-scenario .prob { font-family: var(--mono); color: #7ecdba; font-weight: 600; }
+  .mockup-checklist { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+  .mockup-checklist .item { display: flex; align-items: center; gap: 8px; }
+  .mockup-checklist .box { width: 13px; height: 13px; border-radius: 3px; border: 1.5px solid #3a4046; flex-shrink: 0; }
+  .mockup-checklist .box.done { background: #5fb4a2; border-color: #5fb4a2; }
+  @media (max-width: 760px) { .mockup-grid { grid-template-columns: 1fr; } }
+
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; }
+    .rail { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 36px 20px 80px; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <p class="rail-brand">Decision Lab</p>
+    <p class="rail-sub">Product &amp; Engineering Spec</p>
+    <nav>
+      <a href="#summary">00 — 摘要與定位</a>
+      <a href="#principles">01 — 產品原則</a>
+      <a href="#userflow">02 — User Flow</a>
+      <a href="#ia">03 — Information Architecture</a>
+      <div class="rail-group">
+        <p class="rail-group-label">十六個模組</p>
+        <a href="#m1">M1 Global Market</a>
+        <a href="#m2">M2 Macro</a>
+        <a href="#m3">M3 Volatility</a>
+        <a href="#m4">M4 Liquidity</a>
+        <a href="#m5">M5 Market Breadth</a>
+        <a href="#m6">M6 Sentiment</a>
+        <a href="#m7">M7 Regime Engine</a>
+        <a href="#m8">M8 Trading Score</a>
+        <a href="#m9">M9 Scenario Generator</a>
+        <a href="#m10">M10 Trading Plan</a>
+        <a href="#m11">M11 Risk Management</a>
+        <a href="#m12">M12 Execution Checklist</a>
+        <a href="#copilot">AI Copilot</a>
+        <a href="#m13">M13 Decision Replay</a>
+        <a href="#m14">M14 Portfolio Manager Mode</a>
+        <a href="#m15">M15 Personal Growth</a>
+        <a href="#m16">M16 Decision Journal</a>
+      </div>
+      <div class="rail-group">
+        <p class="rail-group-label">設計與工程</p>
+        <a href="#design-system">Design System</a>
+        <a href="#wireframe">Wireframe</a>
+        <a href="#mockup">High-Fidelity Mockup</a>
+        <a href="#db-schema">Database Schema</a>
+        <a href="#api-design">API Design</a>
+        <a href="#components">Component Architecture</a>
+        <a href="#data-feasibility">資料源可行性總表</a>
+        <a href="#roadmap">開發 Roadmap</a>
+      </div>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="wrap">
+      <header class="masthead">
+        <p class="eyebrow">Product Requirements Document · v0.1</p>
+        <h1 class="title">Decision Lab<br />Professional Market Decision System</h1>
+        <p class="thesis">不預測市場，訓練決策。放在總經頁最上方——使用者用10分鐘走完一次基金經理人的盤前流程，得到一份誠實的 Today's Trading Report，自己做決定。</p>
+        <div class="meta-row">
+          <span class="chip">放置位置｜總經頁最上方</span>
+          <span class="chip">使用者｜24–45歲，有交易經驗</span>
+          <span class="chip">每日投入｜10分鐘</span>
+          <span class="chip">不喊單、不預測</span>
+        </div>
+        <div class="hr"></div>
+      </header>
+
+      <section id="summary">
+        <p class="sec-num">00</p>
+        <h2>摘要與定位</h2>
+        <p>Decision Lab 是總經頁的新首屏——在既有「台股歷年月份表現」季節性面板<strong>之上</strong>，新增一層「今天」視角的全球市場決策儀表板。兩者互補：季節性面板回答「歷史上這個月通常如何」，Decision Lab 回答「今天這個當下，值不值得交易」。</p>
+        <p>這也跟本專案已經上線的<strong>台指期 Decision OS</strong>（<code>/futures</code> 頁，見 <code>docs/taifex-decision-os-prd.html</code>）形成分工：台指期 Decision OS 是「台股期貨執行層」，八層框架裡的 L1(全球市場)／L2(總體風險) 兩層當時因為資料源缺口沒有分數；<strong>Decision Lab 的 Module 1(Global Market) 與 Module 2(Macro) 一旦上線，就是那兩層缺的資料源</strong>——這不是兩個獨立產品，是同一套決策骨幹的兩個層級，工程上應該讓台指期 Decision OS 未來直接讀 Decision Lab 的每日快照當輸入，而不是重算一次。</p>
+        <div class="callout warn">
+          <p><strong>誠實的規模提醒：</strong>使用者提供的規格涵蓋 16 個模組，其中 Module 13–16（Decision Replay／Portfolio Manager／Personal Growth／Decision Journal）需要「使用者真實下的單」這個資料——目前系統完全沒有交易紀錄輸入機制。這四個模組看起來是「進階功能」，實際上<strong>需要先建一個全新的基礎功能：交易日誌輸入（Trade Log）</strong>，否則 Decision Quality Score／Trading Maturity Score 都無米可炊。這點在第16節開發 Roadmap 會排進正確的順序，不會假裝這是「之後才加的小功能」。</p>
+        </div>
+      </section>
+
+      <section id="principles">
+        <p class="sec-num">01</p>
+        <h2>產品原則</h2>
+        <ol>
+          <li><strong>建立流程，而非預測市場。</strong>每一個模組輸出的是「證據」，不是「訊號」——最終畫面永遠是給使用者資訊去自己判斷，不是一個「買/賣」按鈕。</li>
+          <li><strong>提升決策品質，而非追求短期績效。</strong>Decision Replay（M13）刻意不評估「今天賺不賠」，評估「今天的流程有沒有做對」——賠錢但流程正確，分數仍然高。</li>
+          <li><strong>像基金經理人一樣思考。</strong>Fund Manager Notes（M14）、AI Coach（M13）都刻意用機構投資人語氣，不是散戶社群語氣。</li>
+          <li><strong>把每天的分析變成可累積的知識資產。</strong>M16 Decision Journal 讓每天的 Decision Lab 快照都變成未來可搜尋、可回顧的紀錄，而不是看完就消失的即時資訊。</li>
+        </ol>
+      </section>
+
+      <section id="userflow">
+        <p class="sec-num">02</p>
+        <h2>User Flow</h2>
+        <pre><code>盤前（開盤前，使用者的10分鐘）
+  總經頁 → Decision Lab 區塊置頂
+    → 看 Trading Score + Market Regime（30秒懂今天狀態）
+    → 依序掃過 M1–M6（Global→Macro→Volatility→Liquidity→Breadth→Sentiment）
+    → 看 M9 Scenario Generator（今天三種劇本）
+    → 看 M10 Trading Plan + M11 Risk Management（今天適合什麼打法、部位多大）
+    → 若真的要下單：M12 Execution Checklist 全部打勾才顯示 Ready To Trade
+    → （可選）問 AI Copilot 任何一個模組的細節
+
+盤中
+    → （v1不做）即時更新非必要，維持「盤前一次性完成分析」的定位
+
+盤後（收盤後，automated）
+    → M13 Decision Replay 自動產生：Actual Market Story + Scenario Accuracy
+    → 若使用者有登記今天的交易（Trade Log）→ 額外算 Decision Quality Score
+    → M16 Decision Journal 自動寫一篇日誌，使用者可以事後補充/搜尋
+
+週期性
+    → 每週一自動產生 Weekly Report（M13）
+    → 每月自動產生 Monthly Report（M13）
+    → M15 Trading Maturity Score 隨 Trade Log 累積量增加而逐漸有意義</code></pre>
+      </section>
+
+      <section id="ia">
+        <p class="sec-num">03</p>
+        <h2>Information Architecture</h2>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>路徑</th><th>內容</th></tr></thead>
+            <tbody>
+              <tr><td><code>/macro</code></td><td><strong>Decision Lab Dashboard 置頂</strong>（M1–M12摘要卡＋Trading Score），下方接原有「台股歷年月份表現」季節性面板</td></tr>
+              <tr><td><code>/macro/global</code></td><td>M1 Global Market 完整 Heatmap＋各指數細節</td></tr>
+              <tr><td><code>/macro/regime</code></td><td>M7 Regime Engine 歷史與判斷依據</td></tr>
+              <tr><td><code>/macro/scenarios</code></td><td>M9 Scenario Generator 今日與歷史命中率</td></tr>
+              <tr><td><code>/macro/replay</code></td><td>M13 Decision Replay（今日/週報/月報）</td></tr>
+              <tr><td><code>/macro/portfolio</code></td><td>M14 Portfolio Manager Mode</td></tr>
+              <tr><td><code>/macro/journal</code></td><td>M16 Decision Journal（可搜尋歷史紀錄）＋M15 Trading Maturity Score</td></tr>
+              <tr><td><code>/macro/trades</code></td><td><strong>新功能</strong>：Trade Log 輸入介面，M13/M15 的資料前提</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>右側 <strong>Decision Copilot</strong> 是跨頁面的固定側欄（非獨立路徑），任何一頁都能開啟提問。</p>
+      </section>
+
+      <!-- MODULES -->
+      <h2 style="margin-top:80px;">十六個模組</h2>
+      <p class="lede">每個模組標示可行性：<span class="status-verified">已驗證</span>＝本專案已有可用資料源／已上線；<span class="status-partial">推測可行</span>＝已知同類資料源存在但本session未實測；<span class="status-missing">缺口</span>＝需要新資料源調研或付費方案，甚至是全新子系統（如 Trade Log）。</p>
+
+      <div class="mod-card" id="m1">
+        <div class="mod-head">
+          <span class="mod-index">M1</span><h3 class="mod-title" style="margin:0;">Global Market</h3><span class="mod-en">全球市場</span>
+          <span class="feasibility status-partial">◐ 部分可行</span>
+        </div>
+        <p>顯示 SPX / NASDAQ / SOX / Dow / Russell 2000 / DAX / Nikkei / Hang Seng / Bitcoin / Gold / Oil / DXY / US10Y / US2Y，紅綠配色、日漲跌、開盤跳空(Gap)、趨勢箭頭，用 Heatmap 排列。</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>指標</th><th>資料源</th><th>狀態</th></tr></thead>
+            <tbody>
+              <tr><td>SPX (S&amp;P 500)</td><td>FRED <code>SP500</code></td><td><span class="status-verified">已驗證，本專案已上線（總經頁既有季節性面板同一個序列）</span></td></tr>
+              <tr><td>DXY</td><td>FRED <code>DTWEXBGS</code></td><td><span class="status-verified">已驗證（台指期Decision OS已用）</span></td></tr>
+              <tr><td>US10Y／US2Y</td><td>FRED <code>DGS10</code>／<code>DGS2</code></td><td><span class="status-verified">已驗證</span></td></tr>
+              <tr><td>NASDAQ、Dow</td><td>FRED <code>NASDAQCOM</code>／<code>DJIA</code>（同類已知FRED序列）</td><td><span class="status-partial">推測可行，未實測</span></td></tr>
+              <tr><td>Bitcoin</td><td>FRED <code>CBBTCUSD</code></td><td><span class="status-partial">推測可行，未實測</span></td></tr>
+              <tr><td>Oil (WTI)</td><td>FRED <code>DCOILWTICO</code></td><td><span class="status-partial">推測可行，未實測</span></td></tr>
+              <tr><td>Gold</td><td>FRED 系列（需確認確切代碼）</td><td><span class="status-partial">推測可行，未實測</span></td></tr>
+              <tr><td>SOX、Russell 2000、DAX、Nikkei、Hang Seng</td><td>FRED 通常不含這些，Stooq本session實測有bot防護擋掉</td><td><span class="status-missing">缺口，需另尋資料源或付費方案</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="mod-card" id="m2">
+        <div class="mod-head">
+          <span class="mod-index">M2</span><h3 class="mod-title" style="margin:0;">Macro</h3><span class="mod-en">總體事件</span>
+          <span class="feasibility status-missing">✕ 缺口</span>
+        </div>
+        <p>今日／未來重大事件：CPI、PPI、FOMC、Fed Speech、GDP、PMI、NFP，含重要程度、倒數時間、影響程度。命中時系統提醒「Avoid aggressive trading」——這一項邏輯已經在台指期 Decision OS 的 Gate #1–#8 設計過，可以直接共用同一張事件行事曆表（<code>MacroEvent</code>，見台指期PRD第11節），不用重新設計，只是那張表目前也是空的，需要資料維護流程或找到可靠的財經行事曆 API。</p>
+      </div>
+
+      <div class="mod-card" id="m3">
+        <div class="mod-head">
+          <span class="mod-index">M3</span><h3 class="mod-title" style="margin:0;">Volatility</h3><span class="mod-en">波動度</span>
+          <span class="feasibility status-partial">◐ 部分可行</span>
+        </div>
+        <p>VIX、VVIX、MOVE、Skew、Put/Call Ratio，並附白話解讀（例如「VIX↑ 但 SPX↑ = 高波動多頭市場」）。</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>指標</th><th>資料源</th><th>狀態</th></tr></thead>
+            <tbody>
+              <tr><td>VIX</td><td>FRED <code>VIXCLS</code></td><td><span class="status-verified">已驗證（台指期Decision OS PRD已列為L1輸入）</span></td></tr>
+              <tr><td>美股整體 Put/Call Ratio</td><td>CBOE總量Put/Call，非本專案已有的TAIFEX PCR（那是台指選擇權專用）</td><td><span class="status-missing">缺口，需另找CBOE資料源</span></td></tr>
+              <tr><td>VVIX、MOVE、Skew</td><td>CBOE系列指數，通常需付費或另尋免費鏡射源</td><td><span class="status-missing">缺口</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="mod-card" id="m4">
+        <div class="mod-head">
+          <span class="mod-index">M4</span><h3 class="mod-title" style="margin:0;">Liquidity</h3><span class="mod-en">流動性</span>
+          <span class="feasibility status-partial">◐ 部分可行</span>
+        </div>
+        <p>ETF Flow、外資期貨部位、未平倉量(OI)、融資、融資賣出、Dollar、Bond Yield，逐項給 Bullish／Neutral／Bearish 判斷。</p>
+        <p>台指期部分（外資期貨部位／OI）已經在台指期 Decision OS 有雛形（<code>tw_futures_daily</code>已上線，三大法人期貨未平倉端點已確認但未接入每日累積）；ETF Flow（美股）與台股融資融券則是<span class="status-missing">缺口</span>，需另外調研資料源。</p>
+      </div>
+
+      <div class="mod-card" id="m5">
+        <div class="mod-head">
+          <span class="mod-index">M5</span><h3 class="mod-title" style="margin:0;">Market Breadth</h3><span class="mod-en">市場廣度</span>
+          <span class="feasibility status-missing">✕ 缺口</span>
+        </div>
+        <p>Advance/Decline、New High/New Low、類股輪動、SPX等權重 vs 市值加權、大型股貢獻度——需要美股全市場逐檔資料，本專案目前的資料源（TWSE/TAIFEX/FRED/FinMind）都不涵蓋美股個股層級，這是全新的資料源需求。</p>
+      </div>
+
+      <div class="mod-card" id="m6">
+        <div class="mod-head">
+          <span class="mod-index">M6</span><h3 class="mod-title" style="margin:0;">Sentiment</h3><span class="mod-en">市場情緒</span>
+          <span class="feasibility status-missing">✕ 缺口</span>
+        </div>
+        <p>Fear &amp; Greed、AAII、Positioning、Gamma Exposure、Dealer Position，翻譯成白話（例如「市場開始過度樂觀」）。Gamma Exposure／Dealer Position 是 SqueezeMetrics／SpotGamma 這類專業付費資料商的產品，AAII 每週有公開問卷但需要另外整理，CNN Fear&amp;Greed 沒有官方開放API。全部列為缺口，v1 不建議承諾。</p>
+      </div>
+
+      <div class="mod-card" id="m7">
+        <div class="mod-head">
+          <span class="mod-index">M7</span><h3 class="mod-title" style="margin:0;">Market Regime Engine</h3><span class="mod-en">市場狀態引擎</span>
+          <span class="feasibility status-verified">● 純運算，可行</span>
+        </div>
+        <p>這是核心模組，但屬於<strong>運算邏輯設計</strong>，不依賴新資料源——用 M1(趨勢)＋M3(波動度)＋M5(廣度) 三組讀值分類，即使 M5 暫缺，先用 M1+M3+既有的台股技術面（沿用台指期Decision OS的L6技術分析）也能先跑一個簡化版。</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Regime</th><th>定義</th></tr></thead>
+            <tbody>
+              <tr><td>Strong Bull</td><td>價格站上所有均線且持續創高，ADX&gt;25，VIX偏低且穩定</td></tr>
+              <tr><td>Weak Bull</td><td>價格緩漲，均線糾結或部分翻多，ADX&lt;25</td></tr>
+              <tr><td>Range</td><td>價格在區間內反覆，布林帶寬收窄，ADX&lt;20</td></tr>
+              <tr><td>Weak Bear</td><td>價格緩跌，尚未破底加速</td></tr>
+              <tr><td>Strong Bear</td><td>價格加速破底，VIX明顯上升</td></tr>
+              <tr><td>Volatile</td><td>ATR/波動度急速擴張，方向不明</td></tr>
+              <tr><td>Distribution</td><td>價格高檔震盪但廣度轉弱（大型股撐盤、多數個股走弱）</td></tr>
+              <tr><td>Accumulation</td><td>價格低檔震盪但廣度開始改善</td></tr>
+              <tr><td>Capitulation</td><td>VIX急升＋單日跌幅劇烈＋成交量爆量，通常是短期底部特徵而非賣出訊號</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="mod-card" id="m8">
+        <div class="mod-head">
+          <span class="mod-index">M8</span><h3 class="mod-title" style="margin:0;">Trading Score</h3><span class="mod-en">交易評分</span>
+          <span class="feasibility status-verified">● 純運算，可行</span>
+        </div>
+        <p>沿用台指期 Decision OS 已經驗證過的「加權層分數」設計模式，這裡的權重依使用者需求給定：</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>因子</th><th class="num">權重</th></tr></thead>
+            <tbody>
+              <tr><td>Macro</td><td class="num">20%</td></tr>
+              <tr><td>Liquidity</td><td class="num">20%</td></tr>
+              <tr><td>Trend</td><td class="num">20%</td></tr>
+              <tr><td>Sentiment</td><td class="num">15%</td></tr>
+              <tr><td>Volatility</td><td class="num">15%</td></tr>
+              <tr><td>Breadth</td><td class="num">10%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout warn">
+          <p>⚠️ 這組權重是使用者給的初始假設，跟台指期 Decision OS 一樣需要回測校準；且 Liquidity/Sentiment/Breadth 三個因子目前資料源缺口最大（見上方M4-M6），v1上線時這三項會用「資料不足時中性化處理」（缺資料的因子貢獻分數記為0，不是假裝有資料硬湊），並在UI上誠實標示「此因子資料不足」。</p>
+        </div>
+      </div>
+
+      <div class="mod-card" id="m9">
+        <div class="mod-head">
+          <span class="mod-index">M9</span><h3 class="mod-title" style="margin:0;">Scenario Generator</h3><span class="mod-en">情境生成器</span>
+          <span class="feasibility status-verified">● 規則式可行，敘事可加LLM</span>
+        </div>
+        <p>每天產生 Scenario A/B/C（例如「開高走高續漲」65%、「橫盤」25%、「賣壓」10%），各自附條件／風險／策略。v1 用規則式機率（依 Regime＋Trading Score 分佈映射到三個劇本），敘事文字可以疊加 Claude API 生成更口語化的描述——但機率本身必須是規則算出來的，不能讓LLM自己編機率（那樣無法回測校準、也違反「不是預測市場」的產品原則）。</p>
+      </div>
+
+      <div class="mod-card" id="m10">
+        <div class="mod-head">
+          <span class="mod-index">M10</span><h3 class="mod-title" style="margin:0;">Trading Plan</h3><span class="mod-en">交易計畫</span>
+          <span class="feasibility status-verified">● 純運算，可行</span>
+        </div>
+        <p>依 Regime 判斷今天適合 Trend Following／Breakout／Mean Reversion／Scalping／No Trade，附理由。對應規則：Strong Bull/Bear→Trend Following；Range→Mean Reversion；Volatile→No Trade 或大幅降低頻率；Accumulation/Distribution→觀察為主。</p>
+      </div>
+
+      <div class="mod-card" id="m11">
+        <div class="mod-head">
+          <span class="mod-index">M11</span><h3 class="mod-title" style="margin:0;">Risk Management</h3><span class="mod-en">風險管理</span>
+          <span class="feasibility status-verified">● 已有雛形</span>
+        </div>
+        <p>今日最大建議部位（100/75/50/25%）、最大虧損限額、停損提醒、事件提醒——直接沿用並延伸台指期 Decision OS 已上線的 <code>riskEngine.ts</code>／<code>UserRiskProfile</code>，不重寫一套新的。</p>
+      </div>
+
+      <div class="mod-card" id="m12">
+        <div class="mod-head">
+          <span class="mod-index">M12</span><h3 class="mod-title" style="margin:0;">Execution Checklist</h3><span class="mod-en">執行檢查表</span>
+          <span class="feasibility status-verified">● 純UI，可行</span>
+        </div>
+        <p>Trend確認／Volume確認／VWAP／Higher Timeframe／Entry／Stop Loss／Position Size／Risk Reward 八項勾選，全部完成才顯示「Ready To Trade」。這是最簡單的模組——單純的使用者互動狀態，不需要新資料源，v1第一批就能做。</p>
+      </div>
+
+      <div class="mod-card" id="copilot">
+        <div class="mod-head">
+          <span class="mod-index">AI</span><h3 class="mod-title" style="margin:0;">Decision Copilot</h3><span class="mod-en">右側常駐助手</span>
+          <span class="feasibility status-verified">● 需要LLM整合，設計上可行</span>
+        </div>
+        <p>系統 Prompt 必須明確約束「只能教育、不能給明牌」——技術上用一個固定的 system prompt 前綴 + 把當下頁面看得到的 Decision Lab 資料（Trading Score/Regime/當前模組明細）當 context 灌進去，讓 Copilot 只針對「已經顯示在畫面上的資料」做解釋，不去外部生成新的市場預測。</p>
+      </div>
+
+      <div class="mod-card" id="m13">
+        <div class="mod-head">
+          <span class="mod-index">M13</span><h3 class="mod-title" style="margin:0;">Decision Replay</h3><span class="mod-en">決策回放</span>
+          <span class="feasibility status-partial">◐ 部分可行，Decision Quality需要Trade Log</span>
+        </div>
+        <h4>可以做（不需要使用者輸入）</h4>
+        <ul>
+          <li><strong>Morning Snapshot</strong>：回顧當天M8 Trading Score／M7 Regime／M11 Risk Level／M9三劇本的存檔——純粹讀 <code>daily_snapshots</code> 歷史列。</li>
+          <li><strong>Actual Market Story</strong>：收盤後用當日OHLC分類「開高走高／開高走低／震盪／突破／假突破／V轉／Gap Fill／Trend Day／Range Day」，規則式判斷＋LLM包裝成一段像基金經理人盤後報告的敘事。</li>
+          <li><strong>Scenario Accuracy</strong>：拿 Actual Market Story 的分類結果去對當初M9的三個劇本，判定 Correct／Incorrect／Not Triggered，並長期累積每種劇本的命中率統計。</li>
+        </ul>
+        <h4>做不到（需要先有 Trade Log）</h4>
+        <div class="callout warn">
+          <p><strong>Decision Quality Score</strong>（是否忽略重大事件／逆勢交易／違反風控／低分時仍交易／符合自己的計畫）本質上是在評估「使用者實際做了什麼」，系統目前完全沒有交易紀錄輸入。這不是「AI Coach還沒接上」的問題，是<strong>資料完全不存在</strong>的問題。M13 的 Decision Quality／AI Coach 兩塊必須排在「先做 Trade Log 輸入功能」之後，見第16節Roadmap。</p>
+        </div>
+        <p>Weekly／Monthly Report 是既有每日快照的週期性彙總，屬於純運算，v1可以只做「市場面」的週報/月報（Trading Score走勢、Regime分布、Scenario命中率），Decision Quality相關統計等Trade Log上線後再補。</p>
+      </div>
+
+      <div class="mod-card" id="m14">
+        <div class="mod-head">
+          <span class="mod-index">M14</span><h3 class="mod-title" style="margin:0;">Portfolio Manager Mode</h3><span class="mod-en">基金經理人視角</span>
+          <span class="feasibility status-verified">● 純運算＋LLM敘事，可行</span>
+        </div>
+        <p>Risk Budget／Position Size Recommendation／Exposure Recommendation／Confidence Level／Capital Allocation／Portfolio Heat 全部是 M7(Regime)＋M8(Trading Score)＋M11(Risk Engine) 的重新包裝與呈現，不需要新資料源，是<strong>視角轉換</strong>而不是新資料。Fund Manager Notes（100–200字晨間筆記）用 LLM 生成，輸入是當天M1-M11的完整快照，輸出限制字數與語氣（機構投資人晨會筆記，不是散戶社群語氣）。</p>
+      </div>
+
+      <div class="mod-card" id="m15">
+        <div class="mod-head">
+          <span class="mod-index">M15</span><h3 class="mod-title" style="margin:0;">Personal Growth Dashboard</h3><span class="mod-en">個人成長儀表板</span>
+          <span class="feasibility status-missing">✕ 需要 Trade Log</span>
+        </div>
+        <p>Decision Quality／Execution Discipline／Patience Score／FOMO Score／Rule Compliance／Risk Discipline／Scenario Accuracy／Holding Quality／Consistency 彙總成 Trading Maturity Score——全部依賴使用者的實際交易行為資料，跟M13的Decision Quality是同一個根本問題：<strong>沒有Trade Log就沒有這個模組</strong>。</p>
+      </div>
+
+      <div class="mod-card" id="m16">
+        <div class="mod-head">
+          <span class="mod-index">M16</span><h3 class="mod-title" style="margin:0;">Decision Journal</h3><span class="mod-en">決策日誌</span>
+          <span class="feasibility status-verified">◐ 市場面可行，決策面需Trade Log</span>
+        </div>
+        <p>每天自動生成日誌（市場摘要／最大風險／最大機會／AI總結）可以直接用 M13 的 Actual Market Story 產出，v1就能做且可全文搜尋；「今天最大的錯誤／今天最好的決策」這類需要對照使用者實際行為的欄位，一樣要等 Trade Log。</p>
+      </div>
+
+      <!-- DESIGN SYSTEM -->
+      <section id="design-system">
+        <p class="sec-num">04</p>
+        <h2>Design System</h2>
+        <p class="lede">融合 Bloomberg Terminal 的資料密度、TradingView 的圖表可信度、Apple 的留白節奏、Linear 的介面速度感、Notion 的資訊架構彈性。極簡、黑色系為主、專業金融感，Glassmorphism 只用在懸浮層（tooltip／Copilot側欄），不用在卡片本體（卡片維持實色背景，避免資料被模糊背景干擾閱讀，這是Bloomberg優先於玻璃感的地方）。</p>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Token</th><th>用途</th><th class="num">色值（深色）</th></tr></thead>
+            <tbody>
+              <tr><td><code>--bg</code></td><td>頁面底色</td><td class="num">#0b0d0f</td></tr>
+              <tr><td><code>--surface</code></td><td>卡片背景</td><td class="num">#12151a</td></tr>
+              <tr><td><code>--accent</code></td><td>強調色（避開WolfTrack既有的琥珀色，Decision Lab用冷色跟總經其他區塊區隔）</td><td class="num">#5fb4a2（青綠）</td></tr>
+              <tr><td><code>--bull</code></td><td>多方語意色（跟本專案其他TW頁面一致：漲=紅）</td><td class="num">#c0392b</td></tr>
+              <tr><td><code>--bear</code></td><td>空方語意色（跌=綠）</td><td class="num">#2f8f6f</td></tr>
+              <tr><td>字體－標題</td><td>Serif，同台指期Decision OS PRD的選擇，維持同一套文件識別</td><td class="num">Iowan Old Style</td></tr>
+              <tr><td>字體－數據</td><td>等寬字，tabular-nums</td><td class="num">SF Mono</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>實際產品實作時，建議<strong>重用</strong>本專案既有的 <code>Card</code>／<code>SectionHeader</code>／<code>InfoTooltip</code> 元件（<code>src/components/ui/</code>），只新增 Decision Lab 專屬的深色資料視覺化元件（Heatmap Tile、Regime Badge、Score Gauge），不要為了「風格不同」重寫整套設計系統——那會讓總經頁出現兩套不一致的卡片語言。</p>
+      </section>
+
+      <section id="wireframe">
+        <p class="sec-num">05</p>
+        <h2>Wireframe</h2>
+        <p class="lede">總經頁最上方由上到下的區塊順序，嚴格對應使用者要求的分析流程，不是隨意排列：</p>
+        <pre><code>┌─────────────────────────────────────────────┐
+│ Trading Score(大字) + Market Regime Badge     │  ← 30秒摘要，最頂層
+│ Fund Manager Note（一段話）                    │
+├─────────────────────────────────────────────┤
+│ M1 Global Market Heatmap（橫向卡片列）          │
+├─────────────────────────────────────────────┤
+│ M2 Macro Event Countdown（今日/未來事件）        │
+├─────────────────────────────────────────────┤
+│ M3 Volatility │ M4 Liquidity（左右並排）         │
+├─────────────────────────────────────────────┤
+│ M5 Breadth    │ M6 Sentiment（左右並排）         │
+├─────────────────────────────────────────────┤
+│ M7 Regime 詳解 + 歷史Regime時間軸                │
+├─────────────────────────────────────────────┤
+│ M9 Scenario A/B/C（三欄卡片）                   │
+├─────────────────────────────────────────────┤
+│ M10 Trading Plan │ M11 Risk Management         │
+├─────────────────────────────────────────────┤
+│ M12 Execution Checklist（收合，真的要下單才展開）  │
+└─────────────────────────────────────────────┘
+                                    [Decision Copilot 側欄，全程固定]
+─────────────────────────────────────────────────
+↓ 下方接續既有「台股歷年月份表現」季節性面板 ↓</code></pre>
+      </section>
+
+      <section id="mockup">
+        <p class="sec-num">06</p>
+        <h2>High-Fidelity Mockup</h2>
+        <p class="lede">下面是實際視覺呈現的高擬真預覽（非產品截圖，是這份規格書內嵌的靜態示意），示範 Trading Score、Global Heatmap、Liquidity 判斷條、Scenario 清單、Fund Manager Note、Execution Checklist 在深色終端機美學下的樣子。</p>
+
+        <div class="mockup">
+          <div class="mockup-topbar">
+            <div class="mockup-brand"><span class="dot"></span>Decision Lab</div>
+            <div class="mockup-tabs"><span class="active">Today</span><span>Regime</span><span>Scenarios</span><span>Replay</span><span>Journal</span></div>
+          </div>
+          <div class="mockup-grid">
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div class="mockup-panel">
+                <div class="mockup-label">Trading Score</div>
+                <div class="mockup-score-row">
+                  <span class="mockup-score">72</span>
+                  <span class="mockup-score-sub">/ 100</span>
+                </div>
+                <span class="mockup-badge">Weak Bull · Trend Following</span>
+                <p class="mockup-note">"市場仍處於高流動性環境，但波動率開始墊高，代表機構資金正在建立避險。今天應降低追價意願，耐心等待 Pullback。"</p>
+              </div>
+              <div class="mockup-panel">
+                <div class="mockup-label">Global Market</div>
+                <div class="mockup-heatmap">
+                  <div class="mockup-tile" style="background:rgba(192,57,43,0.22)"><span class="t">SPX</span><span class="v" style="color:#e07a6d">+0.8%</span></div>
+                  <div class="mockup-tile" style="background:rgba(192,57,43,0.3)"><span class="t">NASDAQ</span><span class="v" style="color:#e07a6d">+1.2%</span></div>
+                  <div class="mockup-tile" style="background:rgba(47,143,111,0.18)"><span class="t">SOX</span><span class="v" style="color:#6bbfa2">-0.3%</span></div>
+                  <div class="mockup-tile" style="background:rgba(138,143,150,0.14)"><span class="t">DOW</span><span class="v" style="color:#c9cbc8">+0.1%</span></div>
+                  <div class="mockup-tile" style="background:rgba(47,143,111,0.14)"><span class="t">DXY</span><span class="v" style="color:#6bbfa2">-0.2%</span></div>
+                  <div class="mockup-tile" style="background:rgba(192,57,43,0.16)"><span class="t">GOLD</span><span class="v" style="color:#e07a6d">+0.4%</span></div>
+                  <div class="mockup-tile" style="background:rgba(138,143,150,0.14)"><span class="t">US10Y</span><span class="v" style="color:#c9cbc8">4.28</span></div>
+                </div>
+              </div>
+              <div class="mockup-panel">
+                <div class="mockup-label">Scenario Generator</div>
+                <div class="mockup-scenario"><span>A · Gap Up → Pullback → Continue Rally</span><span class="prob">65%</span></div>
+                <div class="mockup-scenario"><span>B · Sideway Consolidation</span><span class="prob">25%</span></div>
+                <div class="mockup-scenario"><span>C · Selloff on Volume</span><span class="prob">10%</span></div>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div class="mockup-panel">
+                <div class="mockup-label">Liquidity</div>
+                <div class="mockup-bar-row"><span class="lbl">外資期貨</span><div class="mockup-bar-track"><div class="mockup-bar-fill" style="width:68%; background:#c0392b"></div></div><span class="mockup-bar-val">+68</span></div>
+                <div class="mockup-bar-row"><span class="lbl">融資餘額</span><div class="mockup-bar-track"><div class="mockup-bar-fill" style="width:40%; background:#8a8f96"></div></div><span class="mockup-bar-val">0</span></div>
+                <div class="mockup-bar-row"><span class="lbl">Bond Yield</span><div class="mockup-bar-track"><div class="mockup-bar-fill" style="width:30%; background:#2f8f6f"></div></div><span class="mockup-bar-val">-30</span></div>
+              </div>
+              <div class="mockup-panel">
+                <div class="mockup-label">Risk Management</div>
+                <div class="mockup-score-row"><span class="mockup-score" style="font-size:28px;">75%</span><span class="mockup-score-sub">建議部位</span></div>
+                <p class="mockup-note" style="font-style:normal; border-top:none; margin-top:8px; padding-top:0;">今日最大虧損限額 3%，本週已無事件風險。</p>
+              </div>
+              <div class="mockup-panel">
+                <div class="mockup-label">Execution Checklist</div>
+                <div class="mockup-checklist">
+                  <div class="item"><span class="box done"></span>Trend 確認</div>
+                  <div class="item"><span class="box done"></span>Volume 確認</div>
+                  <div class="item"><span class="box done"></span>VWAP</div>
+                  <div class="item"><span class="box"></span>Stop Loss 設定</div>
+                  <div class="item"><span class="box"></span>Position Size</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="db-schema">
+        <p class="sec-num">07</p>
+        <h2>Database Schema</h2>
+        <p class="lede">與台指期 Decision OS 相同慣例（<code>snake_case</code>資料表）。刻意把 M1-M12（市場面，可以現在做）跟 M13/M15 需要的 <code>TradeLog</code>（決策面，是先決條件）分開標示。</p>
+        <pre><code><span class="cm">/// M1-M6 每日快照：全球市場/總體事件/波動度/流動性/廣度/情緒，一天一筆，欄位依可行性逐步填入
+/// （資料源缺口的欄位先留null，見PRD第14節，不假裝有資料）</span>
+<span class="kw">model</span> <span class="ty">MacroDailySnapshot</span> {
+  id            BigInt   @id @default(autoincrement())
+  snapshotDate  DateTime @unique @map(<span class="ty">"snapshot_date"</span>) @db.Date
+
+  globalMarketData   Json     <span class="cm">// M1: {ticker: {close, changePct, gapPct}}[]</span>
+  macroEvents        Json?    <span class="cm">// M2: 當天/未來事件清單快照</span>
+  volatilityData     Json?    <span class="cm">// M3</span>
+  liquidityData      Json?    <span class="cm">// M4</span>
+  breadthData        Json?    <span class="cm">// M5（v1通常是null，資料源缺口）</span>
+  sentimentData      Json?    <span class="cm">// M6（v1通常是null，資料源缺口）</span>
+
+  regime             <span class="ty">MarketRegime</span>
+  tradingScore       Int      @map(<span class="ty">"trading_score"</span>)
+  scoreBreakdown     Json     @map(<span class="ty">"score_breakdown"</span>) <span class="cm">// 各因子貢獻分數，缺資料因子記0並標註</span>
+
+  fundManagerNote    String   @map(<span class="ty">"fund_manager_note"</span>) @db.Text  <span class="cm">// LLM生成，100-200字</span>
+
+  createdAt DateTime @default(now()) @map(<span class="ty">"created_at"</span>)
+  @@map(<span class="ty">"macro_daily_snapshots"</span>)
+}
+
+<span class="kw">enum</span> <span class="ty">MarketRegime</span> {
+  strongBull weakBull range weakBear strongBear
+  volatile distribution accumulation capitulation
+}
+
+<span class="cm">/// M9 情境生成器：每天三個劇本＋收盤後回填實際結果</span>
+<span class="kw">model</span> <span class="ty">ScenarioForecast</span> {
+  id            BigInt   @id @default(autoincrement())
+  snapshotDate  DateTime @map(<span class="ty">"snapshot_date"</span>) @db.Date
+  label         String   <span class="cm">// "A" | "B" | "C"</span>
+  description   String   @db.Text
+  probability   Int
+  condition     String   @db.Text
+  risk          String   @db.Text
+  strategy      String   @db.Text
+
+  actualOutcome <span class="ty">ScenarioOutcome</span>? @map(<span class="ty">"actual_outcome"</span>)  <span class="cm">// 收盤後M13填入</span>
+
+  @@unique([snapshotDate, label])
+  @@map(<span class="ty">"scenario_forecasts"</span>)
+}
+<span class="kw">enum</span> <span class="ty">ScenarioOutcome</span> { correct incorrect notTriggered }
+
+<span class="cm">/// M13 收盤後決策回放：市場面部分（不需要Trade Log）</span>
+<span class="kw">model</span> <span class="ty">DecisionReplay</span> {
+  id                 BigInt   @id @default(autoincrement())
+  tradeDate          DateTime @unique @map(<span class="ty">"trade_date"</span>) @db.Date
+  actualMarketStory  String   @map(<span class="ty">"actual_market_story"</span>) @db.Text
+  marketPattern      String   @map(<span class="ty">"market_pattern"</span>) <span class="cm">// "開高走高" | "假突破" | "TrendDay" ...</span>
+  decisionQualityScore Int?   @map(<span class="ty">"decision_quality_score"</span>) <span class="cm">// null，直到有 TradeLog 才能算</span>
+  aiCoachNote        String?  @map(<span class="ty">"ai_coach_note"</span>) @db.Text  <span class="cm">// 同樣依賴TradeLog才有意義的內容</span>
+
+  @@map(<span class="ty">"decision_replays"</span>)
+}
+
+<span class="cm">/// ⚠️新的基礎功能，M13的Decision Quality／M15整個模組的前提，不存在就無法評估「使用者做了什麼」</span>
+<span class="kw">model</span> <span class="ty">TradeLog</span> {
+  id           BigInt   @id @default(autoincrement())
+  entryDate    DateTime @map(<span class="ty">"entry_date"</span>)
+  instrument   String   <span class="cm">// "MTX" | "TX" | 個股ticker</span>
+  direction    String   <span class="cm">// "long" | "short"</span>
+  entryPrice   Decimal  @map(<span class="ty">"entry_price"</span>) @db.Decimal(12, 2)
+  exitPrice    Decimal? @map(<span class="ty">"exit_price"</span>) @db.Decimal(12, 2)
+  positionSize Int      @map(<span class="ty">"position_size"</span>)
+  stopLoss     Decimal? @map(<span class="ty">"stop_loss"</span>) @db.Decimal(12, 2)
+  takeProfit   Decimal? @map(<span class="ty">"take_profit"</span>) @db.Decimal(12, 2)
+  followedPlan Boolean? @map(<span class="ty">"followed_plan"</span>) <span class="cm">// 使用者自評是否照計畫執行</span>
+  linkedSnapshotDate DateTime? @map(<span class="ty">"linked_snapshot_date"</span>) @db.Date <span class="cm">// 關聯當天的MacroDailySnapshot</span>
+
+  createdAt DateTime @default(now()) @map(<span class="ty">"created_at"</span>)
+  @@map(<span class="ty">"trade_logs"</span>)
+}
+
+<span class="cm">/// M15 Trading Maturity Score：週期性從 TradeLog + DecisionReplay 彙總算出，不是每天算</span>
+<span class="kw">model</span> <span class="ty">TradingMaturitySnapshot</span> {
+  id              Int      @id @default(autoincrement())
+  periodStart     DateTime @map(<span class="ty">"period_start"</span>) @db.Date
+  periodEnd       DateTime @map(<span class="ty">"period_end"</span>) @db.Date
+  maturityScore   Int      @map(<span class="ty">"maturity_score"</span>)
+  subScores       Json     <span class="cm">// {disciplineScore, patienceScore, fomoScore, ruleComplianceScore, ...}</span>
+
+  @@map(<span class="ty">"trading_maturity_snapshots"</span>)
+}
+
+<span class="cm">/// M16 每日自動日誌，可全文搜尋</span>
+<span class="kw">model</span> <span class="ty">DecisionJournalEntry</span> {
+  id           BigInt   @id @default(autoincrement())
+  entryDate    DateTime @unique @map(<span class="ty">"entry_date"</span>) @db.Date
+  marketSummary String  @map(<span class="ty">"market_summary"</span>) @db.Text
+  biggestRisk   String  @map(<span class="ty">"biggest_risk"</span>) @db.Text
+  biggestOpportunity String @map(<span class="ty">"biggest_opportunity"</span>) @db.Text
+  aiSummary     String  @map(<span class="ty">"ai_summary"</span>) @db.Text
+  <span class="cm">// 下面兩個欄位需要TradeLog才會有內容，v1可為null</span>
+  biggestMistake String? @map(<span class="ty">"biggest_mistake"</span>) @db.Text
+  bestDecision   String? @map(<span class="ty">"best_decision"</span>) @db.Text
+
+  @@map(<span class="ty">"decision_journal_entries"</span>)
+}</code></pre>
+      </section>
+
+      <section id="api-design">
+        <p class="sec-num">08</p>
+        <h2>API Design</h2>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>方法</th><th>路徑</th><th>說明</th></tr></thead>
+            <tbody>
+              <tr><td class="num">GET</td><td><code>/api/decision-lab/today</code></td><td>今日 <code>MacroDailySnapshot</code> + 三個 <code>ScenarioForecast</code></td></tr>
+              <tr><td class="num">GET</td><td><code>/api/decision-lab/regime-history</code></td><td>Regime 時間軸（M7歷史視覺化用）</td></tr>
+              <tr><td class="num">GET</td><td><code>/api/decision-lab/replay/:date</code></td><td>指定日期的 <code>DecisionReplay</code></td></tr>
+              <tr><td class="num">GET</td><td><code>/api/decision-lab/journal?q=</code></td><td>Decision Journal 全文搜尋</td></tr>
+              <tr><td class="num">POST／GET</td><td><code>/api/decision-lab/trades</code></td><td>Trade Log 的 CRUD（新功能，M13/M15前提）</td></tr>
+              <tr><td class="num">POST</td><td><code>/api/decision-lab/copilot</code></td><td>Decision Copilot 問答，帶當前頁面context</td></tr>
+              <tr><td class="num">POST</td><td><code>/api/cron/decision-lab-daily</code></td><td>排程：跑M1-M12算今日快照，晚間另一支跑M13 Replay</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="components">
+        <p class="sec-num">09</p>
+        <h2>Component Architecture</h2>
+        <pre><code>/macro
+├─ page.tsx                        <span class="cm">// Decision Lab 置頂 + 既有季節性面板</span>
+├─ global/page.tsx
+├─ regime/page.tsx
+├─ scenarios/page.tsx
+├─ replay/page.tsx
+├─ portfolio/page.tsx
+├─ journal/page.tsx
+└─ trades/page.tsx                 <span class="cm">// 新：Trade Log 輸入表單</span>
+
+components/decisionLab/
+├─ TradingScoreHero.tsx            <span class="cm">// 頂部大分數 + Regime Badge + Fund Manager Note</span>
+├─ GlobalMarketHeatmap.tsx         <span class="cm">// M1</span>
+├─ MacroEventCountdown.tsx         <span class="cm">// M2</span>
+├─ VolatilityPanel.tsx             <span class="cm">// M3</span>
+├─ LiquidityPanel.tsx              <span class="cm">// M4，沿用ChainSignalLights.tsx的長條/圖示模式</span>
+├─ BreadthPanel.tsx                <span class="cm">// M5</span>
+├─ SentimentPanel.tsx              <span class="cm">// M6</span>
+├─ RegimeTimeline.tsx              <span class="cm">// M7</span>
+├─ ScenarioCards.tsx               <span class="cm">// M9</span>
+├─ TradingPlanCard.tsx             <span class="cm">// M10</span>
+├─ RiskManagementCard.tsx          <span class="cm">// M11，重用台指期Decision OS的riskEngine輸出</span>
+├─ ExecutionChecklist.tsx          <span class="cm">// M12，純client state</span>
+├─ DecisionCopilotPanel.tsx        <span class="cm">// 固定側欄</span>
+├─ DecisionReplayView.tsx          <span class="cm">// M13</span>
+├─ PortfolioManagerView.tsx        <span class="cm">// M14</span>
+├─ TradingMaturityGauge.tsx        <span class="cm">// M15</span>
+├─ DecisionJournalList.tsx         <span class="cm">// M16</span>
+└─ TradeLogForm.tsx                <span class="cm">// 新：交易紀錄輸入</span></code></pre>
+      </section>
+
+      <section id="data-feasibility">
+        <p class="sec-num">10</p>
+        <h2>資料源可行性總表</h2>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>模組</th><th>狀態</th><th>備註</th></tr></thead>
+            <tbody>
+              <tr><td>M1 Global Market</td><td><span class="status-partial">部分</span></td><td>SPX/DXY/US10Y/US2Y已驗證；NASDAQ/Dow/BTC/Oil/Gold推測可行未實測；SOX/Russell/DAX/Nikkei/HangSeng缺口</td></tr>
+              <tr><td>M2 Macro</td><td><span class="status-missing">缺口</span></td><td>沿用台指期Decision OS的MacroEvent表結構，同樣需要行事曆資料源</td></tr>
+              <tr><td>M3 Volatility</td><td><span class="status-partial">部分</span></td><td>VIX已驗證；VVIX/MOVE/Skew/CBOE-PCR缺口</td></tr>
+              <tr><td>M4 Liquidity</td><td><span class="status-partial">部分</span></td><td>台指期部分有雛形；美股ETF Flow、台股融資融券缺口</td></tr>
+              <tr><td>M5 Breadth</td><td><span class="status-missing">缺口</span></td><td>需要美股全市場逐檔資料</td></tr>
+              <tr><td>M6 Sentiment</td><td><span class="status-missing">缺口</span></td><td>Gamma Exposure/Dealer Position是專業付費資料商產品</td></tr>
+              <tr><td>M7 Regime／M8 Score／M9 Scenario／M10 Plan／M11 Risk／M12 Checklist</td><td><span class="status-verified">可行</span></td><td>純運算或已有雛形，不卡資料源</td></tr>
+              <tr><td>Copilot</td><td><span class="status-verified">可行</span></td><td>需要Claude API整合，非資料源問題</td></tr>
+              <tr><td>M13 Decision Replay（市場面）</td><td><span class="status-verified">可行</span></td><td>Morning Snapshot/Actual Market/Scenario Accuracy 都可做</td></tr>
+              <tr><td>M13（Decision Quality部分）／M15</td><td><span class="status-missing">缺口</span></td><td>需要先建 Trade Log 功能，非資料源調研問題，是全新功能</td></tr>
+              <tr><td>M14 Portfolio Manager</td><td><span class="status-verified">可行</span></td><td>M7/M8/M11的重新包裝</td></tr>
+              <tr><td>M16 Decision Journal（市場面）</td><td><span class="status-verified">可行</span></td><td>決策面（最大錯誤/最好決策）同樣需要Trade Log</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="roadmap">
+        <p class="sec-num">11</p>
+        <h2>開發 Roadmap</h2>
+        <h3>Phase 1 — 市場面 MVP（資料源已驗證/推測可行的部分）</h3>
+        <ul>
+          <li>M1（SPX/DXY/US10Y/US2Y先上，其餘逐步補）、M7 Regime Engine、M8 Trading Score（缺資料因子記0並標示）、M9 Scenario（規則式機率）、M10 Trading Plan、M11 Risk Management（重用台指期Decision OS的risk engine）、M12 Execution Checklist。</li>
+          <li>置頂於總經頁，跟既有季節性面板共存。</li>
+        </ul>
+        <h3>Phase 2 — 決策回放（市場面）與 AI 整合</h3>
+        <ul>
+          <li>M13 Decision Replay 的市場面部分（Morning Snapshot/Actual Market/Scenario Accuracy）。</li>
+          <li>Decision Copilot（Claude API整合）、M14 Fund Manager Notes（LLM敘事）。</li>
+          <li>M16 Decision Journal 市場面部分，全文搜尋。</li>
+        </ul>
+        <h3>Phase 3 — Trade Log 基礎建設</h3>
+        <ul>
+          <li><strong>這是解鎖 M13完整版/M15 的關鍵前提，必須獨立排一個階段，不能當作「順便做」。</strong></li>
+          <li>建 <code>TradeLog</code> 輸入介面（<code>/macro/trades</code>），使用者自己登記進出場、部位、是否照計畫執行。</li>
+          <li>Decision Quality Score、AI Coach、M15 Trading Maturity Score 都在這個階段之後才能真正上線，而不是流於「顯示假資料的空殼模組」。</li>
+        </ul>
+        <h3>Phase 4 — 資料源擴充</h3>
+        <ul>
+          <li>調研 SOX/Russell/DAX/Nikkei/HangSeng、CBOE Put/Call、美股Breadth、台股融資融券、事件行事曆等缺口資料源，逐步把 M2/M3/M4/M5/M6 的「資料不足」因子填滿。</li>
+          <li>回測校準 M8 Trading Score 的因子權重（目前是⚠️假設值）。</li>
+        </ul>
+      </section>
+
+      <footer>
+        <p>Decision Lab — Product &amp; Engineering Spec v0.1。與 <code>docs/taifex-decision-os-prd.html</code>（台指期 Decision OS）共用同一套決策骨幹設計原則，二者是總經層與台股期貨執行層的關係，非各自獨立的產品。所有標註 ⚠️ 的數值為初始假設，需以歷史資料回測校準。</p>
+      </footer>
+    </div>
+  </main>
+</div>
+</body>
+</html>

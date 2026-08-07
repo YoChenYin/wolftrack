@@ -40,6 +40,8 @@ export interface SectorTrendItem {
   chipBadge: "confirmed" | "divergence" | null;
   /** 反轉點：最近一次 MA20/50 交叉日期 */
   signalDate: string | null;
+  /** 為什麼今天還被分類進這個狀態，用當下實際數值描述，TW限定，見 classifyChipFlow.ts */
+  triggerReason: string | null;
   /** 反轉點距今天數（日曆天） */
   daysSinceSignal: number | null;
   priceAtSignal: number | null;
@@ -78,6 +80,7 @@ type SignalRow = {
   status: TrendStatus;
   reversalPointDate: Date | null;
   priceAtSignal: unknown;
+  triggerReason: string | null;
   closePrice: unknown;
   tradeDate: Date;
   stock: {
@@ -123,6 +126,7 @@ function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
     chipScore: row.chipScore !== null ? Number(row.chipScore) : null,
     chipBadge: row.chipBadge,
     signalDate: row.reversalPointDate ? row.reversalPointDate.toISOString().slice(0, 10) : null,
+    triggerReason: row.triggerReason,
     daysSinceSignal,
     priceAtSignal,
     priceNow,

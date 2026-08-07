@@ -123,6 +123,53 @@ function isEntry(
   return crossedUp;
 }
 
+/**
+ * 給定成功分類的一天，重新檢查各子條件，回傳「哪些具體條件成立」給UI顯示——不是複述規則本身，
+ * 是帶上這檔股票當天的實際數值。entry/buyDip 是單一AND條件（全部成立才會被分類進來），仍然
+ * 回傳每一項的當下數值方便使用者核對；exit 有4條互相獨立的OR路徑，同一天可能不只一條成立，
+ * 全部列出來才知道「這檔股票是被哪個原因踢出去的」。
+ */
+function describeEntryReason(idx: number, ind: ChipFlowIndicators, institutionalDaysUpToDate: InstitutionalDay[]): string {
+  const parts: string[] = ["MA5>MA10>MA20多頭排列", "投信外資近3個月合計買超且力道呈5日>10日>20日加速"];
+  const concentration = calculateChipConcentration(institutionalDaysUpToDate);
+  parts.push(`籌碼集中度轉強(5日${concentration.concentration5.toFixed(1)}%)`);
+  const curK = ind.k[idx];
+  if (curK !== null) parts.push(`KD黃金交叉且K持續走強(K=${curK.toFixed(0)})`);
+  return parts.join("；");
+}
+
+function describeBuyDipReason(idx: number, bars: OhlcvBar[], ind: ChipFlowIndicators, institutionalDaysUpToDate: InstitutionalDay[]): string {
+  const m60 = ind.ma60[idx];
+  const close = bars[idx].close;
+  const distPct = m60 !== null ? ((close - m60) / m60) * 100 : null;
+  const concentration5 = calculateChipConcentration(institutionalDaysUpToDate).concentration5;
+  return `股價貼近季線MA60${distPct !== null ? `（距離${distPct >= 0 ? "+" : ""}${distPct.toFixed(1)}%）` : ""}；近5日籌碼集中度${concentration5.toFixed(1)}%（門檻${BUY_DIP_CONCENTRATION_THRESHOLD}%）`;
+}
+
+function describeExitReasons(idx: number, bars: OhlcvBar[], ind: ChipFlowIndicators, institutionalDaysUpToDate: InstitutionalDay[]): string {
+  const reasons: string[] = [];
+  const close = bars[idx].close;
+  const m5 = ind.ma5[idx];
+  const m10 = ind.ma10[idx];
+
+  if (idx >= 3) {
+    const ret3d = ((close - bars[idx - 3].close) / bars[idx - 3].close) * 100;
+    if (ret3d > 15 && m5 !== null && close < m5) {
+      reasons.push(`近3日噴出+${ret3d.toFixed(1)}%後跌破MA5(${m5.toFixed(1)})，噴出停利`);
+    }
+    if (ret3d > 10 && m10 !== null && close < m10) {
+      reasons.push(`近3日噴出+${ret3d.toFixed(1)}%後跌破MA10(${m10.toFixed(1)})，噴出停利`);
+    }
+  }
+  if (m5 !== null && m10 !== null && m10 > m5) {
+    reasons.push(`MA5(${m5.toFixed(1)})跌破MA10(${m10.toFixed(1)})，短均線死叉`);
+  }
+  if (netSellAccelerating(institutionalDaysUpToDate)) {
+    reasons.push("投信/外資賣超力道加速（近2日<近5日<近10日均賣超）");
+  }
+  return reasons.length > 0 ? reasons.join("；") : "訊號條件成立";
+}
+
 function isBuyDip(idx: number, bars: OhlcvBar[], ind: ChipFlowIndicators, institutionalDaysUpToDate: InstitutionalDay[]): boolean {
   const m60 = ind.ma60[idx];
   if (m60 === null) return false;
@@ -152,6 +199,8 @@ export interface ChipFlowClassificationResult {
   /** 這個狀態連續成立的第一天（不是MA交叉錨點，是條件streak的起點），配合priceAtSignal算「訊號後漲跌幅」 */
   signalPointDate: string | null;
   priceAtSignal: number | null;
+  /** 用targetIndex(今天)當下的實際數值描述觸發原因，不是anchor day的——使用者想知道「今天為什麼還在這個分類」 */
+  triggerReason: string | null;
 }
 
 /** 往回找同一個condition連續成立的最早一天，當作「訊號從哪天開始」的錨點 */
@@ -182,7 +231,7 @@ export function classifyChipFlow(
   isLimitMove: boolean
 ): ChipFlowClassificationResult {
   if (isLimitMove) {
-    return { status: "none", signalPointDate: null, priceAtSignal: null };
+    return { status: "none", signalPointDate: null, priceAtSignal: null, triggerReason: null };
   }
 
   const institutionalDaysUpToDate = institutionalDays.filter((d) => d.date <= bars[targetIndex].date);
@@ -198,18 +247,33 @@ export function classifyChipFlow(
   // 排列，buyDip要求價格貼近季線，正常情況下不會同時成立），兩者誰先判斷影響很小。
   if (isEntry(targetIndex, indicators, institutionalDaysUpToDate)) {
     const anchorIdx = findStreakStart(targetIndex, (i) => isEntry(i, indicators, institutionalDaysUpToIndex(i)));
-    return { status: "entry", signalPointDate: bars[anchorIdx].date, priceAtSignal: bars[anchorIdx].close };
+    return {
+      status: "entry",
+      signalPointDate: bars[anchorIdx].date,
+      priceAtSignal: bars[anchorIdx].close,
+      triggerReason: describeEntryReason(targetIndex, indicators, institutionalDaysUpToDate),
+    };
   }
 
   if (isBuyDip(targetIndex, bars, indicators, institutionalDaysUpToDate)) {
     const anchorIdx = findStreakStart(targetIndex, (i) => isBuyDip(i, bars, indicators, institutionalDaysUpToIndex(i)));
-    return { status: "buyDip", signalPointDate: bars[anchorIdx].date, priceAtSignal: bars[anchorIdx].close };
+    return {
+      status: "buyDip",
+      signalPointDate: bars[anchorIdx].date,
+      priceAtSignal: bars[anchorIdx].close,
+      triggerReason: describeBuyDipReason(targetIndex, bars, indicators, institutionalDaysUpToDate),
+    };
   }
 
   if (isExit(targetIndex, bars, indicators, institutionalDaysUpToDate)) {
     const anchorIdx = findStreakStart(targetIndex, (i) => isExit(i, bars, indicators, institutionalDaysUpToIndex(i)));
-    return { status: "exit", signalPointDate: bars[anchorIdx].date, priceAtSignal: bars[anchorIdx].close };
+    return {
+      status: "exit",
+      signalPointDate: bars[anchorIdx].date,
+      priceAtSignal: bars[anchorIdx].close,
+      triggerReason: describeExitReasons(targetIndex, bars, indicators, institutionalDaysUpToDate),
+    };
   }
 
-  return { status: "none", signalPointDate: null, priceAtSignal: null };
+  return { status: "none", signalPointDate: null, priceAtSignal: null, triggerReason: null };
 }

@@ -63,6 +63,24 @@ jobs:
           curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/decision-os-daily" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
 
+  global-macro-sync:
+    if: github.event.schedule == '0 9 * * 1-5' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Decision Lab global market sync（SPX/NASDAQ/DOW/BTC/WTI/DXY/US10Y/US2Y/VIX）
+        run: |
+          curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/global-macro-sync" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+  decision-lab-daily:
+    if: github.event.schedule == '15 9 * * 1-5' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Decision Lab daily run（Regime/Trading Score/Scenario/Trading Plan）
+        run: |
+          curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/decision-lab-daily" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
   tw-revenue:
     if: github.event.schedule == '0 9 10-12 * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
