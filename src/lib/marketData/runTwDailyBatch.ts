@@ -11,6 +11,7 @@ export interface TwDailyBatchResult {
   written: number;
   skippedNone: number;
   skippedInsufficientData: number;
+  failed: { ticker: string; error: string }[];
   log: string[];
 }
 
@@ -64,46 +65,57 @@ export async function runTwDailyBatch(tickerFilter?: string[]): Promise<TwDailyB
   let written = 0;
   let skippedNone = 0;
   let skippedInsufficientData = 0;
+  const failed: { ticker: string; error: string }[] = [];
 
   for (const stock of stocks) {
-    const bars = await loadPriceBars(stock.id);
-    if (bars.length < MIN_BARS_REQUIRED) {
-      skippedInsufficientData++;
-      continue;
+    try {
+      const bars = await loadPriceBars(stock.id);
+      if (bars.length < MIN_BARS_REQUIRED) {
+        skippedInsufficientData++;
+        continue;
+      }
+
+      const institutionalDays = await loadInstitutionalDays(stock.id);
+      const targetIndex = bars.length - 1;
+      const benchmarkTargetIndex = benchmarkDateIndex.get(bars[targetIndex].date);
+
+      const signal = calculateTwTrendSignalAtIndex(
+        bars,
+        [],
+        targetIndex,
+        institutionalDays,
+        benchmarkTargetIndex !== undefined ? benchmarkSeries : undefined,
+        benchmarkTargetIndex
+      );
+
+      if (signal.status === "none") {
+        skippedNone++;
+        continue;
+      }
+
+      const row = buildTwDailyTrendSignalRow(signal);
+      await prisma.dailyTrendSignal.upsert({
+        where: { stockId_tradeDate: { stockId: stock.id, tradeDate: new Date(signal.tradeDate) } },
+        update: row,
+        create: { stockId: stock.id, tradeDate: new Date(signal.tradeDate), ...row },
+      });
+      written++;
+      log.push(
+        `${stock.ticker} ${stock.companyName}: ${signal.status} (tradeDate=${signal.tradeDate}, core=${signal.coreScore}, tech=${signal.technicalScore}, chip=${signal.chipScore})`
+      );
+    } catch (err) {
+      // 單一股票算出異常值（例如指標溢位）不該讓700+檔的整批計算全部中止，記錄下來跳過，
+      // 跟 tw-backfill.ts 對單檔失敗的處理方式一致
+      failed.push({ ticker: stock.ticker, error: (err as Error).message });
+      log.push(`${stock.ticker} ${stock.companyName}: FAILED, skipping — ${(err as Error).message}`);
     }
-
-    const institutionalDays = await loadInstitutionalDays(stock.id);
-    const targetIndex = bars.length - 1;
-    const benchmarkTargetIndex = benchmarkDateIndex.get(bars[targetIndex].date);
-
-    const signal = calculateTwTrendSignalAtIndex(
-      bars,
-      [],
-      targetIndex,
-      institutionalDays,
-      benchmarkTargetIndex !== undefined ? benchmarkSeries : undefined,
-      benchmarkTargetIndex
-    );
-
-    if (signal.status === "none") {
-      skippedNone++;
-      continue;
-    }
-
-    const row = buildTwDailyTrendSignalRow(signal);
-    await prisma.dailyTrendSignal.upsert({
-      where: { stockId_tradeDate: { stockId: stock.id, tradeDate: new Date(signal.tradeDate) } },
-      update: row,
-      create: { stockId: stock.id, tradeDate: new Date(signal.tradeDate), ...row },
-    });
-    written++;
-    log.push(
-      `${stock.ticker} ${stock.companyName}: ${signal.status} (tradeDate=${signal.tradeDate}, core=${signal.coreScore}, tech=${signal.technicalScore}, chip=${signal.chipScore})`
-    );
   }
 
   log.push(
-    `Done. wrote ${written} rows, skipped ${skippedNone} "none", skipped ${skippedInsufficientData} insufficient price history (<${MIN_BARS_REQUIRED} bars).`
+    `Done. wrote ${written} rows, skipped ${skippedNone} "none", skipped ${skippedInsufficientData} insufficient price history (<${MIN_BARS_REQUIRED} bars), failed ${failed.length}.`
   );
-  return { written, skippedNone, skippedInsufficientData, log };
+  if (failed.length > 0) {
+    log.push(`Failed tickers: ${failed.map((f) => f.ticker).join(",")}`);
+  }
+  return { written, skippedNone, skippedInsufficientData, failed, log };
 }
