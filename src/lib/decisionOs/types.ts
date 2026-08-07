@@ -30,9 +30,19 @@ export interface LayerScore {
   indicators: IndicatorScore[];
 }
 
-/** 層權重，PRD 第4節——總和 10.0，讓總分理論最大值對齊 ±20 錨點。L1/L2/L5 權重保留但 MVP 不產生分數 */
+/**
+ * 層權重，PRD 第4節——總和 10.0，讓總分理論最大值對齊 ±20 錨點。L1/L2/L5 權重保留但 MVP 不產生分數。
+ *
+ * L3/L6 已用 scripts/calibrate-decision-weights.ts 校準（TAIEX 2006-2026，4665個交易日，
+ * Information Coefficient vs 未來5/10/20日報酬，70/30 train/test split）：
+ * train-only IC本來偏向L3，但這個排名在test集（樣本外）反轉，顯示train-only不穩定；
+ * 改用全樣本IC（跟test集方向一致）在5/10/20日三個窗口都穩定顯示L6>L3
+ * （全樣本IC：5日 L3=0.021/L6=0.028，10日 L3=0.041/L6=0.046，20日 L3=0.046/L6=0.059），
+ * 因此把L3+L6的原總和(4.5)按此比例重新分配，原1.5/3.0調整為2.0/2.5。
+ * L4（選擇權PCR）資料窗口只有~1個月，暫不校準，維持PRD原值。
+ */
 export const LAYER_WEIGHTS: Record<LayerKey, number> = {
-  L3: 1.5,
+  L3: 2.0,
   L4: 2.5,
-  L6: 3.0,
+  L6: 2.5,
 };
