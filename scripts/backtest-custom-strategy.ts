@@ -365,6 +365,54 @@ function percentile(sorted: number[], p: number): number {
   return sorted[idx];
 }
 
+function mean(values: number[]): number {
+  return sum(values) / values.length;
+}
+
+function stdev(values: number[]): number {
+  const m = mean(values);
+  return Math.sqrt(sum(values.map((v) => (v - m) ** 2)) / (values.length - 1));
+}
+
+/**
+ * 2026-08-10：n=56的「主要進場」樣本單看全樣本平均值看不出這個接近0的超額報酬是真的沒有
+ * edge、還是樣本數太小純粹雜訊蓋過去了——加兩個檢查：①用進場日期切前後兩半，看接近0的
+ * 結論在兩個時期是不是穩定的（不是被單一時期的極端值撐出來的平均）②算標準誤跟t值，
+ * 讓「均超額-0.04%」有個「這個數字跟真正的0能不能分得開」的量化依據，不是憑肉眼判斷。
+ */
+function printSignificance(label: string, excessReturns: number[]) {
+  if (excessReturns.length < 2) return;
+  const m = mean(excessReturns);
+  const se = stdev(excessReturns) / Math.sqrt(excessReturns.length);
+  const t = m / se;
+  console.log(
+    `  ${label}顯著性：均值${m >= 0 ? "+" : ""}${m.toFixed(2)}% ± ${se.toFixed(2)}%（標準誤，n=${excessReturns.length}）　t≈${t.toFixed(2)}${Math.abs(t) < 2 ? "（|t|<2，跟0沒有統計上可分辨的差異——不能說有效，但也不能說一定沒用，就是樣本不夠看不出來）" : ""}`
+  );
+}
+
+/** 按進場日期切前後兩半，各自印一次超額報酬統計——確認「接近打平」是不是兩個時期都成立，
+ * 不是被某一段特別好或特別差的時期平均掉、真實情況其實忽多忽空。 */
+function printTemporalSplit(trades: Trade[]) {
+  const sorted = [...trades].sort((a, b) => a.entryDate.localeCompare(b.entryDate));
+  const mid = Math.floor(sorted.length / 2);
+  const halves: [string, Trade[]][] = [
+    ["前半段", sorted.slice(0, mid)],
+    ["後半段", sorted.slice(mid)],
+  ];
+  for (const [label, half] of halves) {
+    const withMarket = half.filter((t) => t.marketReturnPct !== null);
+    const excess = withMarket.map((t) => t.returnPct - (t.marketReturnPct as number));
+    if (excess.length === 0) {
+      console.log(`  ${label}（${half[0]?.entryDate ?? "-"}~${half[half.length - 1]?.entryDate ?? "-"}）：無樣本`);
+      continue;
+    }
+    const winRate = (excess.filter((r) => r > 0).length / excess.length) * 100;
+    console.log(
+      `  ${label}（${half[0].entryDate}~${half[half.length - 1].entryDate}，n=${excess.length}）：勝率${winRate.toFixed(0)}% 均超額${mean(excess) >= 0 ? "+" : ""}${mean(excess).toFixed(2)}% 中位超額${percentile([...excess].sort((a, b) => a - b), 0.5) >= 0 ? "+" : ""}${percentile([...excess].sort((a, b) => a - b), 0.5).toFixed(2)}%`
+    );
+  }
+}
+
 function printReport(label: string, trades: Trade[], only: ("main" | "buyDip")[] = ["main", "buyDip"]) {
   console.log("\n" + "#".repeat(100));
   console.log(`# ${label}`);
@@ -400,6 +448,10 @@ function printReport(label: string, trades: Trade[], only: ("main" | "buyDip")[]
       console.log(
         `  超額報酬：勝率${excessWinRate.toFixed(1)}% 均超額${excessAvg >= 0 ? "+" : ""}${excessAvg.toFixed(2)}% 中位超額${excessMedian >= 0 ? "+" : ""}${excessMedian.toFixed(2)}%`
       );
+      if (triggerType === "main") {
+        printSignificance("主要進場超額報酬", excessReturns);
+        printTemporalSplit(withMarket);
+      }
     }
 
     const byReason = new Map<string, number>();
