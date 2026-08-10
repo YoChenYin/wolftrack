@@ -1,13 +1,15 @@
 import { computeMonthlySeasonality } from "@/lib/macro/computeMonthlySeasonality";
 import { MonthlySeasonalityPanel } from "@/components/macro/MonthlySeasonalityPanel";
 import { DecisionLabDashboard } from "@/components/decisionLab/DecisionLabDashboard";
+import { CrossSystemCheck } from "@/components/CrossSystemCheck";
 import { queryLatestDecisionLabSnapshot } from "@/lib/decisionLab/querySnapshot";
+import { queryLatestSnapshot } from "@/lib/decisionOs/queryLatestSnapshot";
 
 // 這個頁面直接查資料庫，不能被當成靜態頁面在 build time 凍結一份快照
 export const dynamic = "force-dynamic";
 
 export default async function MacroPage() {
-  const decisionLabSnapshot = await queryLatestDecisionLabSnapshot();
+  const [decisionLabSnapshot, osSnapshot] = await Promise.all([queryLatestDecisionLabSnapshot(), queryLatestSnapshot()]);
 
   // 四條參考序列：TAIEX(上市大盤) / TPEX(櫃買指數，上櫃大盤對照) / 2330台積電(權值股參考，
   // 大盤裡單一權重最高的個股，用來看季節性是不是被它主導) / SPX(S&P 500，美股對照組，資料源是FRED
@@ -52,7 +54,11 @@ export default async function MacroPage() {
           <DecisionLabDashboard snapshot={decisionLabSnapshot} />
         </div>
 
-        <div className="tw-reveal" style={{ animationDelay: "140ms" }}>
+        <div className="tw-reveal" style={{ animationDelay: "100ms" }}>
+          <CrossSystemCheck osSnapshot={osSnapshot} labSnapshot={decisionLabSnapshot} />
+        </div>
+
+        <div className="tw-reveal" style={{ animationDelay: "160ms" }}>
           <MonthlySeasonalityPanel series={seasonality} />
         </div>
       </main>

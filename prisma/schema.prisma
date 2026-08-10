@@ -658,3 +658,59 @@ model ScenarioForecast {
   @@unique([snapshotDate, label])
   @@map("scenario_forecasts")
 }
+
+enum TradeSide {
+  long
+  short
+}
+
+enum TradeStatus {
+  open
+  closed
+  cancelled
+}
+
+/// 這筆交易的靈感來源，用來事後做績效歸因（例如「trend entry訊號實際賺錢嗎」不能只看
+/// backtest，要看使用者真的照訊號進出場的紀錄）。跟TacticalStatus/regime脫鉤成獨立enum，
+/// 是因為Trade Log要長期累積，不該因為訊號分類邏輯改名就要backfill舊資料。
+enum TradeSignalSource {
+  twTrendEntry
+  twTrendBuyDip
+  twTrendReversal
+  twTrendPullback
+  twTrendBullish
+  decisionOsFutures
+  decisionLabGlobal
+  manual
+}
+
+/// 使用者手動記錄的真實進出場，不是任何策略自動產生——這是所有backtest/訊號研究最終
+/// 要對照的「真實有沒有照著做、做了有沒有賺錢」基準線，見專業經理人角度review第3點。
+model TradeLogEntry {
+  id     BigInt @id @default(autoincrement())
+  market Market
+  ticker String
+
+  side         TradeSide
+  signalSource TradeSignalSource? @map("signal_source")
+
+  entryDate  DateTime @map("entry_date") @db.Date
+  entryPrice Decimal  @map("entry_price") @db.Decimal(12, 2)
+  quantity   Decimal  @db.Decimal(14, 2)
+
+  exitDate  DateTime? @map("exit_date") @db.Date
+  exitPrice Decimal?  @map("exit_price") @db.Decimal(12, 2)
+
+  stopLossPrice   Decimal? @map("stop_loss_price") @db.Decimal(12, 2)
+  takeProfitPrice Decimal? @map("take_profit_price") @db.Decimal(12, 2)
+
+  status TradeStatus @default(open)
+  notes  String?     @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([market, ticker])
+  @@index([status])
+  @@map("trade_log_entries")
+}

@@ -1,17 +1,14 @@
-import { computeTaifexOverview } from "@/lib/futures/computeTaifexOverview";
-import { FuturesBasisChart } from "@/components/futures/FuturesBasisChart";
-import { PutCallRatioChart } from "@/components/futures/PutCallRatioChart";
-import { DashboardSummary } from "@/components/decisionOs/DashboardSummary";
-import { CrossSystemCheck } from "@/components/CrossSystemCheck";
-import { queryLatestSnapshot } from "@/lib/decisionOs/queryLatestSnapshot";
-import { queryLatestDecisionLabSnapshot } from "@/lib/decisionLab/querySnapshot";
+import { queryTradeLogEntries, computeAttribution } from "@/lib/tradeLog/queryTradeLog";
+import { TradeLogForm } from "@/components/tradeLog/TradeLogForm";
+import { TradeLogTable } from "@/components/tradeLog/TradeLogTable";
+import { TradeLogSummary } from "@/components/tradeLog/TradeLogSummary";
 
 // 這個頁面直接查資料庫，不能被當成靜態頁面在 build time 凍結一份快照
 export const dynamic = "force-dynamic";
 
-export default async function FuturesPage() {
-  const { basisDays, putCallDays } = await computeTaifexOverview();
-  const [snapshot, labSnapshot] = await Promise.all([queryLatestSnapshot(), queryLatestDecisionLabSnapshot()]);
+export default async function TradeLogPage() {
+  const entries = await queryTradeLogEntries();
+  const attribution = computeAttribution(entries);
 
   return (
     <div
@@ -30,32 +27,28 @@ export default async function FuturesPage() {
                 color: "transparent",
               }}
             >
-              台指期
+              交易紀錄
             </h1>
             <span className="font-[family:var(--font-tw-mono)] text-xs font-medium tracking-wide text-amber-800/60 dark:text-amber-400/70">
-              WOLFTRACK · TX
+              WOLFTRACK · TRADE LOG
             </span>
           </div>
           <div className="mt-2 h-px w-24 bg-gradient-to-r from-amber-700/50 to-transparent dark:from-amber-400/40" />
           <p className="mt-3 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
-            微型台指波段交易 Decision OS——每天用八層分析框架走一遍市場，給一句誠實的結論，包括「今天空手」。
+            手動記錄真實進出場——所有訊號backtest最終都要對照這裡：不是模擬出來的報酬，是實際照著做、實際賺賠多少。
           </p>
         </header>
 
         <div className="tw-reveal" style={{ animationDelay: "60ms" }}>
-          <DashboardSummary snapshot={snapshot} />
+          <TradeLogForm />
         </div>
 
-        <div className="tw-reveal" style={{ animationDelay: "100ms" }}>
-          <CrossSystemCheck osSnapshot={snapshot} labSnapshot={labSnapshot} />
-        </div>
-
-        <div className="tw-reveal" style={{ animationDelay: "140ms" }}>
-          <FuturesBasisChart days={basisDays} />
+        <div className="tw-reveal" style={{ animationDelay: "120ms" }}>
+          <TradeLogSummary attribution={attribution} />
         </div>
 
         <div className="tw-reveal" style={{ animationDelay: "180ms" }}>
-          <PutCallRatioChart days={putCallDays} />
+          <TradeLogTable entries={entries} />
         </div>
       </main>
     </div>

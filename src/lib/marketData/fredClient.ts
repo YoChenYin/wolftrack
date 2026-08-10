@@ -19,7 +19,9 @@ export interface FredObservation {
  */
 export async function fetchFredSeries(seriesId: string): Promise<FredObservation[]> {
   const url = `${FRED_CSV_BASE_URL}?id=${encodeURIComponent(seriesId)}`;
-  const res = await fetch(url);
+  // 沒設 timeout 的 fetch() 卡住不會拋錯也不會回傳，之前在別的地方踩過一次卡了18小時才發現
+  // （見 src/lib/prisma.ts 對 statement_timeout 的說明），這裡FRED偶爾也會這樣掛住，所以要設。
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
   if (!res.ok) {
     throw new Error(`[fred] HTTP ${res.status} for series ${seriesId}`);
   }
