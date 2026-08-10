@@ -17,8 +17,14 @@ export interface FredObservation {
  * 是「值直接留空」（"YYYY-MM-DD,"）——不特別檢查空字串的話，Number("") 會算出 0 而不是 NaN，
  * 假日就會被誤存成收盤價0，需要靠這個特例濾掉。
  */
-export async function fetchFredSeries(seriesId: string): Promise<FredObservation[]> {
-  const url = `${FRED_CSV_BASE_URL}?id=${encodeURIComponent(seriesId)}`;
+/**
+ * @param sinceDate 選填，YYYY-MM-DD——只拿這天(含)以後的資料（FRED的cosd參數），用來做
+ * 增量同步。不給就跟以前一樣拿整段可回溯歷史，只有第一次回填才需要。
+ */
+export async function fetchFredSeries(seriesId: string, sinceDate?: string): Promise<FredObservation[]> {
+  const params = new URLSearchParams({ id: seriesId });
+  if (sinceDate) params.set("cosd", sinceDate);
+  const url = `${FRED_CSV_BASE_URL}?${params.toString()}`;
   // 沒設 timeout 的 fetch() 卡住不會拋錯也不會回傳，之前在別的地方踩過一次卡了18小時才發現
   // （見 src/lib/prisma.ts 對 statement_timeout 的說明），這裡FRED偶爾也會這樣掛住，所以要設。
   const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });

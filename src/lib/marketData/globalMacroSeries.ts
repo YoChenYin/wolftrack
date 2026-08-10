@@ -3,11 +3,12 @@ import { fetchFredSeries } from "./fredClient";
 
 /**
  * Decision Lab（總經頁，見 docs/decision-lab-prd.html Module 1/3）全球市場 + 波動度參考序列。
- * 全部走 FRED（免金鑰），跟 SP500 用同一套模式——一次請求拿回整段可回溯歷史，upsert 進
- * tw_daily_price（沿用 TAIEX/TPEX/SPX 的合成股票模式，這幾檔也不是任何可交易商品）。
+ * 全部走 FRED（免金鑰），upsert 進 tw_daily_price（沿用 TAIEX/TPEX/SPX 的合成股票模式，
+ * 這幾檔也不是任何可交易商品）。
  *
  * FRED 只給每日單一收盤值，沒有OHLC，四個價格欄位都存同一個值、volume=0（跟 backfill-sp500-history.ts
- * 一致）。因為每次呼叫都拿完整歷史範圍，這支函式同時是「一次性回填」跟「每日更新」——不用分開兩支腳本。
+ * 一致）。這支函式同時是「一次性回填」跟「每日更新」——不用分開兩支腳本：DB目前沒有這檔序列時
+ * 拿整段可回溯歷史，已經有資料時只拿最新一筆之後的增量（見 syncOneSeries 的 sinceDate）。
  *
  * ⚠️GOLD 沒有列在這裡：FRED 的金價序列（GOLDAMGBD228NLBM/GOLDPMGBD228NLBM/WGOLDUSD）
  * 這次實測都已經停用（回傳HTML不是CSV），需要另尋資料源，見 docs/decision-lab-prd.html 第14節。
@@ -30,13 +31,22 @@ export interface GlobalMacroSyncResult {
   error?: string;
 }
 
-/** 同步單一序列：抓 FRED 完整歷史 → upsert 進 tw_daily_price。單一序列失敗不影響其他序列（各自獨立try/catch）。 */
+/**
+ * 同步單一序列：只抓「DB目前最新一筆之後」的資料，不是每次都整段歷史逐筆upsert。
+ * ⚠️2026-08-10發現：改之前這裡每天都把FRED整段歷史(IXIC近14000筆)逐筆upsert一次，
+ * 單筆都是一次網路來回，nasdaq這種序列單日同步就要跑數十分鐘——production的daily cron
+ * 是fire-and-forget（見 src/app/api/cron/global-macro-sync/route.ts），背景工作跑不完
+ * 就等於每天永遠同步不到最新一天，決策看到的一直是好幾天前的舊資料，也是這次故障的根因。
+ */
 async function syncOneSeries(ticker: string, fredSeriesId: string): Promise<GlobalMacroSyncResult> {
   const stock = await prisma.stock.findUnique({ where: { market_ticker: { market: "US", ticker } } });
   if (!stock) return { ticker, written: 0, error: `找不到 ${ticker} 合成股票紀錄，先跑 prisma db seed` };
 
   try {
-    const observations = await fetchFredSeries(fredSeriesId);
+    const latest = await prisma.twDailyPrice.findFirst({ where: { stockId: stock.id }, orderBy: { tradeDate: "desc" } });
+    const sinceDate = latest ? latest.tradeDate.toISOString().slice(0, 10) : undefined;
+
+    const observations = await fetchFredSeries(fredSeriesId, sinceDate);
     let written = 0;
     for (const obs of observations) {
       await prisma.twDailyPrice.upsert({
