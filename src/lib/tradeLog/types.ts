@@ -6,6 +6,7 @@ export const SIGNAL_SOURCE_LABELS: Record<string, string> = {
   twTrendBullish: "台股趨勢／趨勢穩健",
   decisionOsFutures: "台指期 Decision OS",
   decisionLabGlobal: "總經 Decision Lab",
+  expectationGap: "預期差研究判斷",
   manual: "自行判斷（無訊號依據）",
 };
 

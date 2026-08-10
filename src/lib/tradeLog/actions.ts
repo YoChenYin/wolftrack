@@ -14,6 +14,7 @@ const VALID_SIGNAL_SOURCES = [
   "twTrendBullish",
   "decisionOsFutures",
   "decisionLabGlobal",
+  "expectationGap",
   "manual",
 ] as const;
 
