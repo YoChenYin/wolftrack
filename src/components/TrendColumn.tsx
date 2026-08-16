@@ -10,6 +10,9 @@ import {
   AlertTriangle,
   Rocket,
   CircleAlert,
+  ChevronsUp,
+  ChevronsDown,
+  Minimize2,
   type LucideIcon,
 } from "lucide-react";
 import type { SectorTrendItem, TacticalStatus } from "@/lib/trend/sectorTrendsQuery";
@@ -206,6 +209,33 @@ export function TrendColumn({
                       {item.revenueYoyGrowthPct >= 20 && <Rocket className="h-3 w-3" strokeWidth={2.25} />}
                       營收{item.revenueYoyGrowthPct >= 0 ? "+" : ""}
                       {item.revenueYoyGrowthPct.toFixed(0)}%
+                    </span>
+                  )}
+                  {item.bollingerStatus === "high" && (
+                    <span
+                      className="inline-flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400"
+                      title={`布林偏高：貼近通道上緣（${item.bollingerDetail}）`}
+                    >
+                      <ChevronsUp className="h-3 w-3" strokeWidth={2.25} />
+                      布林偏高
+                    </span>
+                  )}
+                  {item.bollingerStatus === "low" && (
+                    <span
+                      className="inline-flex items-center gap-0.5 text-xs text-blue-600 dark:text-blue-400"
+                      title={`布林偏低：貼近通道下緣（${item.bollingerDetail}）`}
+                    >
+                      <ChevronsDown className="h-3 w-3" strokeWidth={2.25} />
+                      布林偏低
+                    </span>
+                  )}
+                  {item.bollingerStatus === "squeeze" && (
+                    <span
+                      className="inline-flex items-center gap-0.5 text-xs text-violet-600 dark:text-violet-400"
+                      title={`通道收斂：帶寬明顯窄於20日均值，方向未定但波動可能即將放大（${item.bollingerDetail}）`}
+                    >
+                      <Minimize2 className="h-3 w-3" strokeWidth={2.25} />
+                      通道收斂
                     </span>
                   )}
                 </div>

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { TrendStatus, Market } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { findIndustryThemeByName, getAllThemedTickers, UNCATEGORIZED_THEME_CODE } from "@/lib/valuation/groupConfig";
+import { bollingerBands } from "@/lib/trend/indicators";
 
 /**
  * 三段式戰術面板顯示的狀態。刻意用明確列舉（不是 Exclude<TrendStatus, "limitMove"> 這種衍生型別）——
@@ -59,6 +60,10 @@ export interface SectorTrendItem {
   revenueMonth: string | null;
   /** 近20個交易日收盤價，給表格內的迷你走勢圖用；沿用computeVolatilityStats已經抓好的90日歷史，不多打一次查詢 */
   sparkline: number[] | null;
+  /** 布林通道位置判斷：high=貼近上軌(%b≥0.8)、low=貼近下軌(%b≤0.2)、squeeze=帶寬<20日均帶寬的一半(即將起漲/起跌但方向未定)、normal=通道中段。資料不足20+20根K棒時是null。 */
+  bollingerStatus: "high" | "low" | "squeeze" | "normal" | null;
+  /** 布林狀態的實際數值，UI hover顯示用，例如 "%b=0.92，帶寬2.1%（20日均3.4%）" */
+  bollingerDetail: string | null;
 }
 
 export interface SectorTrendsGrouped {
@@ -98,6 +103,34 @@ interface VolatilityStats {
   todayChangePct: number | null;
   volatilitySinceSignal: number | null;
   sparkline: number[] | null;
+  bollingerStatus: "high" | "low" | "squeeze" | "normal" | null;
+  bollingerDetail: string | null;
+}
+
+/** 20期布林通道 + 20日均帶寬（判斷squeeze用），沿用 scoreL6Technical.ts 的 %b/帶寬門檻邏輯，
+ * 差別是這裡只需要單一分類結果給列表用，不用回傳完整分數。 */
+function classifyBollinger(closes: number[]): { status: VolatilityStats["bollingerStatus"]; detail: string | null } {
+  if (closes.length < 40) return { status: null, detail: null };
+  const bb = bollingerBands(closes);
+  const last = closes.length - 1;
+  const percentB = bb.percentB[last];
+  const bandwidth = bb.bandwidth[last];
+  if (percentB === null || bandwidth === null) return { status: null, detail: null };
+
+  const recentBandwidths = bb.bandwidth.slice(last - 19, last + 1).filter((b): b is number => b !== null);
+  const bandwidthAvg20 = recentBandwidths.length > 0 ? recentBandwidths.reduce((a, b) => a + b, 0) / recentBandwidths.length : null;
+  const squeeze = bandwidthAvg20 !== null && bandwidth < bandwidthAvg20 * 0.5;
+
+  const detail = `%b=${percentB.toFixed(2)}，帶寬${(bandwidth * 100).toFixed(1)}%${bandwidthAvg20 !== null ? `（20日均${(bandwidthAvg20 * 100).toFixed(1)}%）` : ""}`;
+
+  const status: VolatilityStats["bollingerStatus"] = squeeze
+    ? "squeeze"
+    : percentB >= 0.8
+      ? "high"
+      : percentB <= 0.2
+        ? "low"
+        : "normal";
+  return { status, detail };
 }
 
 function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
@@ -133,6 +166,8 @@ function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
     changePctSinceSignal,
     todayChangePct: stats?.todayChangePct ?? null,
     volatilitySinceSignal: stats?.volatilitySinceSignal ?? null,
+    bollingerStatus: stats?.bollingerStatus ?? null,
+    bollingerDetail: stats?.bollingerDetail ?? null,
     revenueYoyGrowthPct: latestRevenue?.yoyGrowthPct !== undefined && latestRevenue?.yoyGrowthPct !== null ? Number(latestRevenue.yoyGrowthPct) : null,
     revenueMonth: latestRevenue ? latestRevenue.revenueMonth.toISOString().slice(0, 7) : null,
     sparkline: stats?.sparkline ?? null,
@@ -143,25 +178,31 @@ function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
 const VOLATILITY_LOOKBACK_DAYS = 90;
 
 /**
- * 批次算「當天漲跌幅」+「訊號後波動率」，只對最終要顯示的那一小批(已經slice過limit)股票查詢，
- * 不對整個板塊全部股票算——這兩個指標都需要額外抓每檔股票的歷史序列，對還沒篩選過的
+ * 批次算「當天漲跌幅」+「訊號後波動率」+ 布林通道位置，只對最終要顯示的那一小批(已經slice過limit)
+ * 股票查詢，不對整個板塊全部股票算——這幾個指標都需要額外抓每檔股票的歷史序列，對還沒篩選過的
  * 全板塊（可能300+檔）逐一算會是不必要的查詢量。
+ *
+ * ⚠️2026-08-16修正：原本這裡查 daily_trend_signals 當「歷史收盤序列」，但那張表只有「當天status
+ * 不是none」才會寫一筆（見 runTwDailyBatch.ts），是稀疏的訊號事件記錄，不是連續交易日序列——
+ * 例如2330最近查到的紀錄是7/8跳到8/4，中間缺了快一個月的交易日。拿這個當波動率/迷你走勢圖/
+ * 布林通道的資料源，等於用有缺口的資料算「逐日報酬率」，缺口那幾天會被誤算成單日暴漲暴跌。
+ * 改查 tw_daily_price，那張表才是每個交易日都會有一筆的連續OHLCV歷史。
  */
 async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, VolatilityStats>> {
   if (rows.length === 0) return new Map();
 
   const stockIds = [...new Set(rows.map((r) => r.stockId))];
   const cutoff = new Date(Date.now() - VOLATILITY_LOOKBACK_DAYS * 86_400_000);
-  const history = await prisma.dailyTrendSignal.findMany({
+  const history = await prisma.twDailyPrice.findMany({
     where: { stockId: { in: stockIds }, tradeDate: { gte: cutoff } },
     orderBy: [{ stockId: "asc" }, { tradeDate: "asc" }],
-    select: { stockId: true, tradeDate: true, closePrice: true },
+    select: { stockId: true, tradeDate: true, close: true },
   });
 
   const seriesByStock = new Map<number, { tradeDate: Date; close: number }[]>();
   for (const h of history) {
     const list = seriesByStock.get(h.stockId) ?? [];
-    list.push({ tradeDate: h.tradeDate, close: Number(h.closePrice) });
+    list.push({ tradeDate: h.tradeDate, close: Number(h.close) });
     seriesByStock.set(h.stockId, list);
   }
   const reversalDateByStock = new Map(rows.map((r) => [r.stockId, r.reversalPointDate]));
@@ -196,8 +237,9 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
     }
 
     const sparkline = series.length >= 2 ? series.slice(-SPARKLINE_POINTS).map((s) => s.close) : null;
+    const { status: bollingerStatus, detail: bollingerDetail } = classifyBollinger(series.map((s) => s.close));
 
-    result.set(stockId, { todayChangePct, volatilitySinceSignal, sparkline });
+    result.set(stockId, { todayChangePct, volatilitySinceSignal, sparkline, bollingerStatus, bollingerDetail });
   }
   return result;
 }

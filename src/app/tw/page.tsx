@@ -1,9 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { fetchSectorTrendsGrouped } from "@/lib/trend/sectorTrendsQuery";
 import { SectorTrendsBoard } from "@/components/SectorTrendsBoard";
-import { VideoMentionsSection } from "@/components/youtube/VideoMentionsSection";
-import { StockMentionOverviewSection } from "@/components/youtube/StockMentionOverviewSection";
-import { fetchRecentVideoMentions, fetchStockMentionOverview } from "@/lib/youtube/queries";
 import {
   listAllThemeNames,
   getAllThemedTickers,
@@ -44,8 +41,6 @@ export default async function HomeTw() {
   }
 
   const initialData = await fetchSectorTrendsGrouped({ market: "TW", sectorCode: "all", themeCode: "all" });
-  const recentVideos = await fetchRecentVideoMentions();
-  const stockMentionOverview = await fetchStockMentionOverview();
 
   return (
     <div
@@ -82,12 +77,9 @@ export default async function HomeTw() {
           <SectorTrendsBoard market="TW" sectors={themeOptions} themes={[]} initialData={initialData} />
         </div>
 
-        <div className="tw-reveal" style={{ animationDelay: "140ms" }}>
-          <StockMentionOverviewSection items={stockMentionOverview} />
-        </div>
-        <div className="tw-reveal" style={{ animationDelay: "200ms" }}>
-          <VideoMentionsSection videos={recentVideos} />
-        </div>
+        {/* 2026-08-16：「網紅視角」/「網紅視角總覽」先從首頁隱藏（使用者要求）。元件跟
+            youtube-mention 的資料抓取/解析pipeline都還在，之後要恢復只要把這兩個區塊跟
+            上面 import/fetchRecentVideoMentions()/fetchStockMentionOverview() 加回來即可。 */}
       </main>
     </div>
   );
