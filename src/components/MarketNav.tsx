@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Construction, LineChart, CandlestickChart, NotebookText, FileSearch } from "lucide-react";
+import { Construction, LineChart, CandlestickChart, NotebookText, FileSearch, Presentation } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 const TABS: { href: string; flag?: string; icon?: LucideIcon; label: string; underConstruction: boolean }[] = [
   { href: "/", flag: "🇺🇸", label: "WolfTrack 狼蹤", underConstruction: true },
   { href: "/tw", flag: "🇹🇼", label: "WolfTrack TW", underConstruction: false },
   { href: "/macro", icon: LineChart, label: "總經", underConstruction: false },
+  { href: "/fundamentals", icon: Presentation, label: "基本面", underConstruction: false },
   { href: "/futures", icon: CandlestickChart, label: "台指期", underConstruction: false },
   { href: "/trade-log", icon: NotebookText, label: "交易紀錄", underConstruction: false },
   { href: "/expectation-gap", icon: FileSearch, label: "預期差", underConstruction: false },

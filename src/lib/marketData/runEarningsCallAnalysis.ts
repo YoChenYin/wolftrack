@@ -1,18 +1,19 @@
 import { prisma } from "@/lib/prisma";
-import { getAllLeaderTickers } from "@/lib/valuation/groupConfig";
+import { getLeaderAndSecondTierTickers } from "@/lib/valuation/researchUniverse";
 import { fetchFinMindStockInfo } from "./finmindClient";
 import { fetchEarningsConferenceList, downloadMopsPdf } from "./mopsClient";
 import { extractPdfText } from "./extractPdfText";
 import { parseEarningsCall } from "./parseEarningsCall";
 
 /**
- * 2026-07-25：龍頭股法說會基本面訊號批次處理。只掃 group_config.json 標記的leader股票
- * （目前48檔），法說會一季一次，MOPS清單查詢很輕量（純HTML GET/POST，48次請求對公開
- * 政府網站來說微不足道），但PDF下載+LLM解析比較重，所以用PROCESS_BUDGET限制單次呼叫
- * 真正處理（下載+LLM）的篇數，維持跟backfillTwHistory.ts一樣的「小批次、awaited、
- * 快速回應」設計——2026-07-21修YouTube LLM解析fire-and-forget問題的教訓：長時間工作
- * 不能丟給單一個Zeabur request，由外部（GitHub Actions排程）反覆呼叫來達成。
- * 已經處理過的法說會（pdfFileName已存在）永遠會被跳過，不會重複消耗LLM額度。
+ * 2026-07-25：龍頭股法說會基本面訊號批次處理，2026-08-16擴大到「龍頭+二軍」
+ * （getLeaderAndSecondTierTickers，目前約150-250檔，見該函式說明），不是全部~800檔
+ * （成本/尖峰財報季processing lag換算過不划算）。法說會一季一次，MOPS清單查詢很輕量
+ * （純HTML GET/POST，對公開政府網站來說微不足道），但PDF下載+LLM解析比較重，所以用
+ * PROCESS_BUDGET限制單次呼叫真正處理（下載+LLM）的篇數，維持跟backfillTwHistory.ts
+ * 一樣的「小批次、awaited、快速回應」設計——2026-07-21修YouTube LLM解析fire-and-forget
+ * 問題的教訓：長時間工作不能丟給單一個Zeabur request，由外部（GitHub Actions排程）
+ * 反覆呼叫來達成。已經處理過的法說會（pdfFileName已存在）永遠會被跳過，不會重複消耗LLM額度。
  */
 const PROCESS_BUDGET_PER_INVOCATION = 8;
 /** 內容太短的PDF擷取結果視為異常（可能是掃描圖檔或下載失敗），跳過不送LLM */
@@ -92,9 +93,9 @@ export interface EarningsCallBatchResult {
 }
 
 export async function runEarningsCallAnalysisBatch(): Promise<EarningsCallBatchResult> {
-  const leaderTickers = getAllLeaderTickers();
+  const universeTickers = await getLeaderAndSecondTierTickers();
   const stocks = await prisma.stock.findMany({
-    where: { market: "TW", ticker: { in: leaderTickers } },
+    where: { market: "TW", ticker: { in: universeTickers } },
     select: { id: true, ticker: true },
     orderBy: { ticker: "asc" },
   });

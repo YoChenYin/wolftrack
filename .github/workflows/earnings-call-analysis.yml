@@ -1,10 +1,12 @@
 name: Leader stock earnings call analysis
 
-# 2026-07-25：抓龍頭股（group_config.json的leader，目前48檔）法說會簡報PDF，LLM解析出
-# 獲利成長/展望/風險，給出基本面訊號（src/lib/marketData/runEarningsCallAnalysis.ts）。
-# 法說會一季一次，但同一波財報季常常很多公司擠在同一兩週公布，單次呼叫限制在8篇
-# （PROCESS_BUDGET_PER_INVOCATION），這裡在同一次排程內連續呼叫幾次把當週新出現的
-# 法說會盡量處理完，不用真的等到下週才處理完一整批財報季的量。
+# 2026-07-25：抓龍頭+二軍股票（2026-08-16從只掃leader擴大到getLeaderAndSecondTierTickers()，
+# 目前約155檔）法說會簡報PDF，LLM解析出獲利成長/展望/風險，給出基本面訊號
+# （src/lib/marketData/runEarningsCallAnalysis.ts）。法說會一季一次，但同一波財報季常常
+# 很多公司擠在同一兩週公布，單次呼叫限制在8篇（PROCESS_BUDGET_PER_INVOCATION），這裡在
+# 同一次排程內連續呼叫幾次把當週新出現的法說會盡量處理完，不用真的等到下週才處理完
+# 一整批財報季的量。155檔規模下5輪×8篇=40篇/週的上限仍有餘裕（季度~155篇 ÷ 13週 ≈ 12篇/週
+# 穩態，就算財報季集中到剩2週爆量也還在40篇/週以內），暫不用調高輪數。
 on:
   schedule:
     # 每週一台北時間 06:00
