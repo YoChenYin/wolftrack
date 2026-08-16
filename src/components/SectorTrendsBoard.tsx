@@ -7,6 +7,7 @@ import { GroupValuationTable } from "./tw/GroupValuationTable";
 import { ThemeHeatmap } from "./tw/ThemeHeatmap";
 import { ThemeFlowChart } from "./tw/ThemeFlowChart";
 import { ChainSignalLights } from "./tw/ChainSignalLights";
+import { ChainRotationChart } from "./tw/ChainRotationChart";
 import { UNCATEGORIZED_THEME_CODE } from "@/lib/valuation/groupConfig";
 import { Card } from "./ui/Card";
 import { SectionHeader } from "./ui/SectionHeader";
@@ -95,6 +96,7 @@ export function SectorTrendsBoard({
             全市場總覽（不受下方篩選影響）
           </h2>
           <ChainSignalLights />
+          <ChainRotationChart />
           <ThemeFlowChart />
           <ThemeHeatmap onSelectTheme={handleSelectSector} />
         </div>
