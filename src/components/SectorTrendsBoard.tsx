@@ -107,8 +107,6 @@ export function SectorTrendsBoard({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">依板塊篩選選股結果</h2>
-
         <div className="flex flex-col gap-2">
           {/* 2026-08-19：板塊下拉選單移除（使用者要求）——現在改用/tw/chains的板塊熱圖點選來篩選
               （見ThemeHeatmapWithNavigation.tsx，導到 /tw?sector=X），這裡只保留「目前篩選中」的

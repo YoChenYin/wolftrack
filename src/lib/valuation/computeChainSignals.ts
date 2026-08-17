@@ -9,8 +9,21 @@ export interface ChainStageMember {
   status: string | null;
   /** 近5日報酬(%)，null=沒有足夠股價資料 */
   return5d: number | null;
+  /** 最新收盤價，null=沒有股價資料 */
+  closePrice: number | null;
+  /** 最新交易日對前一交易日的漲跌金額/幅度(%)，null=資料不足（少於2個交易日） */
+  todayChangeAmount: number | null;
+  todayChangePct: number | null;
   /** 是不是這個階段任一個theme標記的龍頭股（group_config.json的leader欄位） */
   isLeader: boolean;
+}
+
+/** 表格要顯示「這檔股票的上/下游關聯」——目前資料只到「哪些股票屬於哪個階段」的粒度，
+ * 沒有個股對個股的實際供應鏈配對，所以這裡是階段級的關聯（同一階段全部股票共用同一份
+ * 上游/下游名單），不是每檔股票各自不同的供應商/客戶清單 */
+export interface ChainAdjacentStock {
+  ticker: string;
+  companyName: string;
 }
 
 /** 龍頭/二軍分開統計用的小結構，避免ChainStageSignal裡龍頭跟二軍各四個同名欄位重複宣告 */
@@ -49,6 +62,8 @@ export interface ChainStageSignal {
   phase: "leadersOnly" | "broadRally" | "followersCatchingUp" | "mixed";
   /** 點開燈號要看的個別成員股票，依報酬率由高到低排序 */
   members: ChainStageMember[];
+  /** 上一階段/下一階段的成員股票（鏈的頭尾階段其中一邊會是空陣列），見ChainAdjacentStock說明 */
+  adjacentMembers: { upstream: ChainAdjacentStock[]; downstream: ChainAdjacentStock[] };
 }
 
 export interface ChainSignalResult {
@@ -136,6 +151,7 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
         followers: { count: 0, avgReturn5d: null, risingCount: 0, fallingCount: 0 },
         phase: "mixed",
         members: [],
+        adjacentMembers: { upstream: [], downstream: [] },
       });
       continue;
     }
@@ -178,7 +194,17 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
       barsByStockId.set(row.stockId, list);
     }
     const return5dByStockId = new Map<number, number>();
+    // barsByStockId 是每檔股票最新在前的收盤價陣列，closes[0]=最新收盤、closes[1]=前一交易日，
+    // 剛好可以直接算今日漲跌，不用再多查一次DB
+    const closePriceByStockId = new Map<number, number>();
+    const todayChangeAmountByStockId = new Map<number, number>();
+    const todayChangePctByStockId = new Map<number, number>();
     for (const [stockId, closes] of barsByStockId) {
+      if (closes.length >= 1) closePriceByStockId.set(stockId, closes[0]);
+      if (closes.length >= 2 && closes[1] !== 0) {
+        todayChangeAmountByStockId.set(stockId, Math.round((closes[0] - closes[1]) * 100) / 100);
+        todayChangePctByStockId.set(stockId, Math.round(((closes[0] - closes[1]) / closes[1]) * 10000) / 100);
+      }
       if (closes.length <= 5 || closes[5] === 0) continue;
       return5dByStockId.set(stockId, Math.round(((closes[0] - closes[5]) / closes[5]) * 10000) / 100);
     }
@@ -203,6 +229,9 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
         companyName: s.companyName,
         status: statusByStockId.get(s.id) ?? null,
         return5d: return5dByStockId.get(s.id) ?? null,
+        closePrice: closePriceByStockId.get(s.id) ?? null,
+        todayChangeAmount: todayChangeAmountByStockId.get(s.id) ?? null,
+        todayChangePct: todayChangePctByStockId.get(s.id) ?? null,
         isLeader: leaderTickers.has(s.ticker),
       }))
       .sort((a, b) => (b.return5d ?? -Infinity) - (a.return5d ?? -Infinity));
@@ -223,7 +252,23 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
       followers,
       phase: light === "declining" ? "mixed" : decidePhase(leaders, followers),
       members,
+      adjacentMembers: { upstream: [], downstream: [] }, // 下面second pass再補
     });
+  }
+
+  // group_config.json裡每條鏈的階段本來就是照upstream→midstream→downstream→support寫的，
+  // 不用再額外排序；這裡才知道「上一階段」「下一階段」是誰，所以要等整條鏈的stages都算完
+  // 才能回填每個階段的adjacentMembers
+  for (let i = 0; i < stages.length; i++) {
+    const toAdjacent = (s: ChainStageSignal): ChainAdjacentStock[] =>
+      s.members.map((m) => ({ ticker: m.ticker, companyName: m.companyName }));
+    stages[i] = {
+      ...stages[i],
+      adjacentMembers: {
+        upstream: i > 0 ? toAdjacent(stages[i - 1]) : [],
+        downstream: i < stages.length - 1 ? toAdjacent(stages[i + 1]) : [],
+      },
+    };
   }
 
   return { chainName, chainNameFull: chain.chainNameFull, stages };
