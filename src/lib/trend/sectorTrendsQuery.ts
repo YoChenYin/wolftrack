@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { TrendStatus, Market } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { findIndustryThemeByName, getAllThemedTickers, UNCATEGORIZED_THEME_CODE } from "@/lib/valuation/groupConfig";
-import { bollingerBands } from "@/lib/trend/indicators";
+import { bollingerBands, sma } from "@/lib/trend/indicators";
 
 /**
  * 戰術面板顯示的狀態。刻意用明確列舉（不是 Exclude<TrendStatus, "limitMove"> 這種衍生型別）——
@@ -74,6 +74,18 @@ export interface SectorTrendItem {
   bollingerStatus: "high" | "low" | "squeeze" | "normal" | null;
   /** 布林狀態的實際數值，UI hover顯示用，例如 "%b=0.92，帶寬2.1%（20日均3.4%）" */
   bollingerDetail: string | null;
+  /** 當天(最新交易日)漲跌金額 = 今天收盤 - 前一天收盤，TW表格版要顯示金額不只是% */
+  todayChangeAmount: number | null;
+  /** MA5>MA10>MA20 是否成立（多頭排列），資料不足時是null，TW表格版用 */
+  maAligned: boolean | null;
+  /** 2026-08-18新增：當天外資+投信合計買賣超金額，單位百萬元（張數×1000股/張×收盤價÷1,000,000）。
+   * 沒有當天籌碼資料時是null，跟chipConcentration5/10/20一樣是TW限定的表格欄位 */
+  netBuySellAmountMillions: number | null;
+  /** 最新一筆籌碼集中度(5/10/20日，投信+外資買超佔量能比例)，直接來自daily_trend_signals
+   * 既有欄位（每天批次都會算），不用額外查詢 */
+  chipConcentration5: number | null;
+  chipConcentration10: number | null;
+  chipConcentration20: number | null;
 }
 
 export interface SectorTrendsGrouped {
@@ -98,6 +110,10 @@ type SignalRow = {
   triggerReason: string | null;
   closePrice: unknown;
   tradeDate: Date;
+  /** TW限定，已經是daily_trend_signals的既有欄位（每天批次都會算），美股版永遠是null */
+  chipConcentration5: unknown;
+  chipConcentration10: unknown;
+  chipConcentration20: unknown;
   stock: {
     ticker: string;
     companyName: string;
@@ -111,10 +127,13 @@ const SPARKLINE_POINTS = 20;
 
 interface VolatilityStats {
   todayChangePct: number | null;
+  todayChangeAmount: number | null;
   volatilitySinceSignal: number | null;
   sparkline: number[] | null;
   bollingerStatus: "high" | "low" | "squeeze" | "normal" | null;
   bollingerDetail: string | null;
+  maAligned: boolean | null;
+  netBuySellAmountMillions: number | null;
 }
 
 /** 20期布林通道 + 20日均帶寬（判斷squeeze用），沿用 scoreL6Technical.ts 的 %b/帶寬門檻邏輯，
@@ -178,6 +197,12 @@ function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
     volatilitySinceSignal: stats?.volatilitySinceSignal ?? null,
     bollingerStatus: stats?.bollingerStatus ?? null,
     bollingerDetail: stats?.bollingerDetail ?? null,
+    todayChangeAmount: stats?.todayChangeAmount ?? null,
+    maAligned: stats?.maAligned ?? null,
+    netBuySellAmountMillions: stats?.netBuySellAmountMillions ?? null,
+    chipConcentration5: row.chipConcentration5 !== null && row.chipConcentration5 !== undefined ? Number(row.chipConcentration5) : null,
+    chipConcentration10: row.chipConcentration10 !== null && row.chipConcentration10 !== undefined ? Number(row.chipConcentration10) : null,
+    chipConcentration20: row.chipConcentration20 !== null && row.chipConcentration20 !== undefined ? Number(row.chipConcentration20) : null,
     revenueYoyGrowthPct: latestRevenue?.yoyGrowthPct !== undefined && latestRevenue?.yoyGrowthPct !== null ? Number(latestRevenue.yoyGrowthPct) : null,
     revenueMonth: latestRevenue ? latestRevenue.revenueMonth.toISOString().slice(0, 7) : null,
     sparkline: stats?.sparkline ?? null,
@@ -187,9 +212,15 @@ function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
 /** 抓寬鬆一點的歷史窗口，涵蓋大多數reversalPointDate的情況（沒有訊號日的就用能查到的全部） */
 const VOLATILITY_LOOKBACK_DAYS = 90;
 
+/** 買賣超金額只需要最新一天的三大法人資料，跟找「昨天」的turn訊號用同一套新鮮度概念——
+ * 太舊的資料就不顯示金額，不要拿舊資料湊數字誤導使用者（見classifyChipFlow.ts的
+ * MAX_INSTITUTIONAL_DATA_GAP_DAYS說明，這裡沿用同樣的5天門檻但獨立宣告避免跨模組耦合） */
+const MAX_INSTITUTIONAL_DATA_GAP_DAYS = 5;
+
 /**
- * 批次算「當天漲跌幅」+「訊號後波動率」+ 布林通道位置，只對最終要顯示的那一小批(已經slice過limit)
- * 股票查詢，不對整個板塊全部股票算——這幾個指標都需要額外抓每檔股票的歷史序列，對還沒篩選過的
+ * 批次算「當天漲跌幅/金額」+「訊號後波動率」+「布林通道位置」+「MA5>10>20排列」+
+ * 「當天外資投信合計買賣超金額」，只對最終要顯示的那一小批(已經slice過limit)股票查詢，
+ * 不對整個板塊全部股票算——這幾個指標都需要額外抓每檔股票的歷史序列，對還沒篩選過的
  * 全板塊（可能300+檔）逐一算會是不必要的查詢量。
  *
  * ⚠️2026-08-16修正：原本這裡查 daily_trend_signals 當「歷史收盤序列」，但那張表只有「當天status
@@ -203,11 +234,19 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
 
   const stockIds = [...new Set(rows.map((r) => r.stockId))];
   const cutoff = new Date(Date.now() - VOLATILITY_LOOKBACK_DAYS * 86_400_000);
-  const history = await prisma.twDailyPrice.findMany({
-    where: { stockId: { in: stockIds }, tradeDate: { gte: cutoff } },
-    orderBy: [{ stockId: "asc" }, { tradeDate: "asc" }],
-    select: { stockId: true, tradeDate: true, close: true },
-  });
+  const [history, institutionalHistory] = await Promise.all([
+    prisma.twDailyPrice.findMany({
+      where: { stockId: { in: stockIds }, tradeDate: { gte: cutoff } },
+      orderBy: [{ stockId: "asc" }, { tradeDate: "asc" }],
+      select: { stockId: true, tradeDate: true, close: true },
+    }),
+    prisma.twInstitutionalTrading.findMany({
+      where: { stockId: { in: stockIds }, tradeDate: { gte: cutoff } },
+      orderBy: [{ stockId: "asc" }, { tradeDate: "desc" }],
+      distinct: ["stockId"],
+      select: { stockId: true, tradeDate: true, foreignNetBuyShares: true, investTrustNetBuyShares: true },
+    }),
+  ]);
 
   const seriesByStock = new Map<number, { tradeDate: Date; close: number }[]>();
   for (const h of history) {
@@ -215,15 +254,18 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
     list.push({ tradeDate: h.tradeDate, close: Number(h.close) });
     seriesByStock.set(h.stockId, list);
   }
+  const latestInstitutionalByStock = new Map(institutionalHistory.map((h) => [h.stockId, h]));
   const reversalDateByStock = new Map(rows.map((r) => [r.stockId, r.reversalPointDate]));
 
   const result = new Map<number, VolatilityStats>();
   for (const [stockId, series] of seriesByStock) {
     let todayChangePct: number | null = null;
+    let todayChangeAmount: number | null = null;
     if (series.length >= 2) {
       const prev = series[series.length - 2].close;
       const curr = series[series.length - 1].close;
       if (prev !== 0) todayChangePct = Math.round(((curr - prev) / prev) * 10000) / 100;
+      todayChangeAmount = Math.round((curr - prev) * 100) / 100;
     }
 
     const reversalDate = reversalDateByStock.get(stockId);
@@ -246,10 +288,43 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
       }
     }
 
-    const sparkline = series.length >= 2 ? series.slice(-SPARKLINE_POINTS).map((s) => s.close) : null;
-    const { status: bollingerStatus, detail: bollingerDetail } = classifyBollinger(series.map((s) => s.close));
+    const closes = series.map((s) => s.close);
+    const sparkline = series.length >= 2 ? closes.slice(-SPARKLINE_POINTS) : null;
+    const { status: bollingerStatus, detail: bollingerDetail } = classifyBollinger(closes);
 
-    result.set(stockId, { todayChangePct, volatilitySinceSignal, sparkline, bollingerStatus, bollingerDetail });
+    let maAligned: boolean | null = null;
+    if (closes.length >= 20) {
+      const ma5 = sma(closes, 5);
+      const ma10 = sma(closes, 10);
+      const ma20 = sma(closes, 20);
+      const last = closes.length - 1;
+      const m5 = ma5[last];
+      const m10 = ma10[last];
+      const m20 = ma20[last];
+      if (m5 !== null && m10 !== null && m20 !== null) maAligned = m5 > m10 && m10 > m20;
+    }
+
+    let netBuySellAmountMillions: number | null = null;
+    const latestInstitutional = latestInstitutionalByStock.get(stockId);
+    const latestClose = series.length > 0 ? series[series.length - 1].close : null;
+    if (latestInstitutional && latestClose !== null) {
+      const daysStale = Math.abs(Date.now() - latestInstitutional.tradeDate.getTime()) / 86_400_000;
+      if (daysStale <= MAX_INSTITUTIONAL_DATA_GAP_DAYS) {
+        const netLots = Number(latestInstitutional.foreignNetBuyShares) + Number(latestInstitutional.investTrustNetBuyShares);
+        netBuySellAmountMillions = Math.round(((netLots * latestClose) / 1000) * 100) / 100;
+      }
+    }
+
+    result.set(stockId, {
+      todayChangePct,
+      todayChangeAmount,
+      volatilitySinceSignal,
+      sparkline,
+      bollingerStatus,
+      bollingerDetail,
+      maAligned,
+      netBuySellAmountMillions,
+    });
   }
   return result;
 }

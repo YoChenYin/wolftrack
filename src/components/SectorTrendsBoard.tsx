@@ -3,6 +3,8 @@
 import { useEffect, useState, useTransition } from "react";
 import { Scale } from "lucide-react";
 import { TrendColumn } from "./TrendColumn";
+import { TrendTable } from "./TrendTable";
+import { TACTICAL_STATUS_META } from "@/lib/trend/tacticalStatusMeta";
 import { GroupValuationTable } from "./tw/GroupValuationTable";
 import { ThemeHeatmap } from "./tw/ThemeHeatmap";
 import { ThemeFlowChart } from "./tw/ThemeFlowChart";
@@ -50,8 +52,16 @@ export function SectorTrendsBoard({
   const [data, setData] = useState<SectorTrendsGrouped>(initialData);
   const [isPending, startTransition] = useTransition();
   /** 2026-08-17：台股改多空五段式，UI用tab切換要看多方（投信轉買/投信外資合買/逢低布局）
-   * 還是空方（投信轉賣/投信外資合賣，沒有逢低布局的空方對應概念）三/兩欄 */
+   * 還是空方（投信轉賣/投信外資合賣，沒有逢低布局的空方對應概念）。
+   * 2026-08-18：多方/空方底下的3(或2)個分類本身也改成tab切換（原本是並排卡片），一次只看
+   * 一個分類的表格，切換分類跟切換多空是兩層不同的tab，UI故意做出不同樣式區分層級。 */
   const [twSide, setTwSide] = useState<"long" | "short">("long");
+  const [selectedCategory, setSelectedCategory] = useState<TacticalStatus>(TW_LONG_STATUSES[0]);
+
+  function handleSelectSide(side: "long" | "short") {
+    setTwSide(side);
+    setSelectedCategory(side === "long" ? TW_LONG_STATUSES[0] : TW_SHORT_STATUSES[0]);
+  }
 
   // 選了非「全部」的板塊時秀出該族群的 PE/PB 估值比較（只有 TW 的板塊對應 group_config.json
   // theme，「未分類」是虛擬選項沒有對應 theme，兩者都不用打這支 API）
@@ -173,14 +183,15 @@ export function SectorTrendsBoard({
         {market === "TW" ? (
           <>
             <div className="flex gap-2">
-              <FilterPill label="多方" active={twSide === "long"} onClick={() => setTwSide("long")} />
-              <FilterPill label="空方" active={twSide === "short"} onClick={() => setTwSide("short")} />
+              <FilterPill label="多方" active={twSide === "long"} onClick={() => handleSelectSide("long")} />
+              <FilterPill label="空方" active={twSide === "short"} onClick={() => handleSelectSide("short")} />
             </div>
-            <div className={`grid grid-cols-1 gap-4 ${twSide === "long" ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-              {(twSide === "long" ? TW_LONG_STATUSES : TW_SHORT_STATUSES).map((status) => (
-                <TrendColumn key={status} market={market} status={status} items={data.groups[status]} loading={isPending} />
-              ))}
-            </div>
+            <CategoryTabs
+              statuses={twSide === "long" ? TW_LONG_STATUSES : TW_SHORT_STATUSES}
+              selected={selectedCategory}
+              onSelect={setSelectedCategory}
+            />
+            <TrendTable status={selectedCategory} items={data.groups[selectedCategory]} loading={isPending} />
           </>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -190,6 +201,40 @@ export function SectorTrendsBoard({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** 多方/空方底下的分類切換——用底線tab（不是圓角pill）跟上一層的FilterPill做出樣式區分，
+ * 讓使用者一眼看出這是巢狀的第二層篩選，不是跟多方/空方平行的另一組選項。 */
+function CategoryTabs({
+  statuses,
+  selected,
+  onSelect,
+}: {
+  statuses: TacticalStatus[];
+  selected: TacticalStatus;
+  onSelect: (status: TacticalStatus) => void;
+}) {
+  return (
+    <div className="flex gap-4 overflow-x-auto border-b border-zinc-200 dark:border-white/10">
+      {statuses.map((status) => {
+        const active = status === selected;
+        return (
+          <button
+            key={status}
+            type="button"
+            onClick={() => onSelect(status)}
+            className={`shrink-0 whitespace-nowrap border-b-2 px-1 pb-2 text-sm font-medium transition-colors ${
+              active
+                ? "border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100"
+                : "border-transparent text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+            }`}
+          >
+            {TACTICAL_STATUS_META[status].title}
+          </button>
+        );
+      })}
     </div>
   );
 }
