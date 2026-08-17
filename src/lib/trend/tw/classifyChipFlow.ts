@@ -20,12 +20,33 @@ import type { InstitutionalDay } from "./chipScore";
  *
  * 多空兩組條件在同一天結構上互斥（轉買要求投信今日>0、轉賣要求<0，合買要求雙方>0、
  * 合賣要求雙方<0），不會同一天同時符合多方跟空方條件，判斷順序只在同一側內有意義。
+ *
+ * 2026-08-18：轉買/轉賣/合買/合賣都加了資料新鮮度檢查（MAX_INSTITUTIONAL_DATA_GAP_DAYS），
+ * 不是單純「跳過週末」——用陣列裡最近一筆當「今天/昨天」，如果那筆資料離目標交易日太遠
+ * （例如中間缺了兩週的資料，不是只缺週末），不該被當成有效的翻轉/合買合賣比較基準，見
+ * 該常數上方的詳細說明（萬潤/6187案例）。
  */
 
 const BUY_DIP_BAND_PCT = 1.5;
 const BUY_DIP_CONCENTRATION_THRESHOLD = 15;
 /** 找「這個訊號連續成立幾天」的錨點時，最多往回找幾天（避免極端情況掃全部歷史） */
 const MAX_STREAK_LOOKBACK_DAYS = 90;
+/**
+ * 2026-08-18：轉買/轉賣/合買/合賣都要求「今天」的三大法人資料離目標交易日夠近，不能拿
+ * 陳舊資料當「今天」、也不能把「昨日」拿去比對一筆其實是好幾週前的舊資料——法人買賣超
+ * 資料正常一個交易日發布一次，5天足以涵蓋週末(2天)+最多再抓寬一點的單一國定假日缺口，
+ * 但抓不住像萬潤(6187)那種8/3~8/17中間缺了兩週資料的情況（這不是週末造成的缺口，是
+ * 資料源本身有缺，見對話紀錄的診斷：804檔裡有188檔法人資料超過5天沒更新）——這種情況下
+ * 硬要拿「陣列裡最近一筆」當「昨日/今日」比對，會產生假的翻轉訊號，也會讓這檔股票錯誤地
+ * 卡在轉買/轉賣分類、輪不到後面的合買/合賣判斷（萬潤的案例：8/17真正符合的其實是合買，
+ * 卻因為跟8/3的舊資料比較出「轉買」而被攔在前面）。單純的「跳過週末」做不到這件事——
+ * 週末只是缺口眾多成因之一，真正該檢查的是「資料到底夠不夠新」，不是「今天是不是週一」。
+ */
+const MAX_INSTITUTIONAL_DATA_GAP_DAYS = 5;
+
+function calendarDaysBetween(a: string, b: string): number {
+  return Math.abs(new Date(a).getTime() - new Date(b).getTime()) / 86_400_000;
+}
 
 export interface ChipFlowIndicators {
   /** 逢低布局唯一需要的技術指標（股價貼近季線） */
@@ -42,39 +63,48 @@ function formatLots(value: number): string {
   return `${sign}${Math.round(value).toLocaleString()}張`;
 }
 
-/** institutionalDaysUpToDate已經是「截止到目標日期(含)」的陣列，最後一筆就是當天 */
-function todayAndYesterday(institutionalDaysUpToDate: InstitutionalDay[]): [InstitutionalDay, InstitutionalDay] | null {
+/** institutionalDaysUpToDate已經是「截止到目標日期(含)」的陣列，最後一筆理論上就是當天——
+ * 但要求它離asOfDate不能太遠，避免拿陳舊資料當「今天」（見MAX_INSTITUTIONAL_DATA_GAP_DAYS說明） */
+function today(institutionalDaysUpToDate: InstitutionalDay[], asOfDate: string): InstitutionalDay | null {
   const n = institutionalDaysUpToDate.length;
-  if (n < 2) return null;
-  return [institutionalDaysUpToDate[n - 1], institutionalDaysUpToDate[n - 2]];
-}
-function today(institutionalDaysUpToDate: InstitutionalDay[]): InstitutionalDay | null {
-  const n = institutionalDaysUpToDate.length;
-  return n < 1 ? null : institutionalDaysUpToDate[n - 1];
+  if (n < 1) return null;
+  const t = institutionalDaysUpToDate[n - 1];
+  if (calendarDaysBetween(t.date, asOfDate) > MAX_INSTITUTIONAL_DATA_GAP_DAYS) return null;
+  return t;
 }
 
-function isTrustTurnBuy(institutionalDaysUpToDate: InstitutionalDay[]): boolean {
-  const pair = todayAndYesterday(institutionalDaysUpToDate);
+/** 「昨天」除了要存在，跟「今天」的間隔也不能太大，避免把跨了好幾週的舊資料當成翻轉比較基準 */
+function todayAndYesterday(institutionalDaysUpToDate: InstitutionalDay[], asOfDate: string): [InstitutionalDay, InstitutionalDay] | null {
+  const t = today(institutionalDaysUpToDate, asOfDate);
+  const n = institutionalDaysUpToDate.length;
+  if (!t || n < 2) return null;
+  const y = institutionalDaysUpToDate[n - 2];
+  if (calendarDaysBetween(t.date, y.date) > MAX_INSTITUTIONAL_DATA_GAP_DAYS) return null;
+  return [t, y];
+}
+
+function isTrustTurnBuy(institutionalDaysUpToDate: InstitutionalDay[], asOfDate: string): boolean {
+  const pair = todayAndYesterday(institutionalDaysUpToDate, asOfDate);
   if (!pair) return false;
   const [t, y] = pair;
   return t.investTrustNetBuyShares > 0 && y.investTrustNetBuyShares <= 0;
 }
 
-function isTrustTurnSell(institutionalDaysUpToDate: InstitutionalDay[]): boolean {
-  const pair = todayAndYesterday(institutionalDaysUpToDate);
+function isTrustTurnSell(institutionalDaysUpToDate: InstitutionalDay[], asOfDate: string): boolean {
+  const pair = todayAndYesterday(institutionalDaysUpToDate, asOfDate);
   if (!pair) return false;
   const [t, y] = pair;
   return t.investTrustNetBuyShares < 0 && y.investTrustNetBuyShares >= 0;
 }
 
-function isCombinedBuy(institutionalDaysUpToDate: InstitutionalDay[]): boolean {
-  const t = today(institutionalDaysUpToDate);
+function isCombinedBuy(institutionalDaysUpToDate: InstitutionalDay[], asOfDate: string): boolean {
+  const t = today(institutionalDaysUpToDate, asOfDate);
   if (!t) return false;
   return t.foreignNetBuyShares > 0 && t.investTrustNetBuyShares > 0;
 }
 
-function isCombinedSell(institutionalDaysUpToDate: InstitutionalDay[]): boolean {
-  const t = today(institutionalDaysUpToDate);
+function isCombinedSell(institutionalDaysUpToDate: InstitutionalDay[], asOfDate: string): boolean {
+  const t = today(institutionalDaysUpToDate, asOfDate);
   if (!t) return false;
   return t.foreignNetBuyShares < 0 && t.investTrustNetBuyShares < 0;
 }
@@ -87,28 +117,28 @@ function isBuyDip(idx: number, bars: OhlcvBar[], ind: ChipFlowIndicators, instit
   return calculateChipConcentration(institutionalDaysUpToDate).concentration5 >= BUY_DIP_CONCENTRATION_THRESHOLD;
 }
 
-function describeTrustTurnBuyReason(institutionalDaysUpToDate: InstitutionalDay[]): string {
-  const pair = todayAndYesterday(institutionalDaysUpToDate);
+function describeTrustTurnBuyReason(institutionalDaysUpToDate: InstitutionalDay[], asOfDate: string): string {
+  const pair = todayAndYesterday(institutionalDaysUpToDate, asOfDate);
   if (!pair) return "投信由賣轉買";
   const [t, y] = pair;
   return `投信由賣轉買：昨日${formatLots(y.investTrustNetBuyShares)}→今日${formatLots(t.investTrustNetBuyShares)}`;
 }
 
-function describeTrustTurnSellReason(institutionalDaysUpToDate: InstitutionalDay[]): string {
-  const pair = todayAndYesterday(institutionalDaysUpToDate);
+function describeTrustTurnSellReason(institutionalDaysUpToDate: InstitutionalDay[], asOfDate: string): string {
+  const pair = todayAndYesterday(institutionalDaysUpToDate, asOfDate);
   if (!pair) return "投信由買轉賣";
   const [t, y] = pair;
   return `投信由買轉賣：昨日${formatLots(y.investTrustNetBuyShares)}→今日${formatLots(t.investTrustNetBuyShares)}`;
 }
 
-function describeCombinedBuyReason(institutionalDaysUpToDate: InstitutionalDay[], streakDays: number): string {
-  const t = today(institutionalDaysUpToDate);
+function describeCombinedBuyReason(institutionalDaysUpToDate: InstitutionalDay[], asOfDate: string, streakDays: number): string {
+  const t = today(institutionalDaysUpToDate, asOfDate);
   if (!t) return "投信外資同時買超";
   return `投信外資同時買超第${streakDays}天（外資${formatLots(t.foreignNetBuyShares)}、投信${formatLots(t.investTrustNetBuyShares)}）`;
 }
 
-function describeCombinedSellReason(institutionalDaysUpToDate: InstitutionalDay[], streakDays: number): string {
-  const t = today(institutionalDaysUpToDate);
+function describeCombinedSellReason(institutionalDaysUpToDate: InstitutionalDay[], asOfDate: string, streakDays: number): string {
+  const t = today(institutionalDaysUpToDate, asOfDate);
   if (!t) return "投信外資同時賣超";
   return `投信外資同時賣超第${streakDays}天（外資${formatLots(t.foreignNetBuyShares)}、投信${formatLots(t.investTrustNetBuyShares)}）`;
 }
@@ -164,24 +194,25 @@ export function classifyChipFlow(
 
   const institutionalDaysUpToDate = institutionalDays.filter((d) => d.date <= bars[targetIndex].date);
   const institutionalDaysUpToIndex = (idx: number) => institutionalDays.filter((d) => d.date <= bars[idx].date);
+  const asOfDate = bars[targetIndex].date;
 
-  if (isTrustTurnBuy(institutionalDaysUpToDate)) {
-    const anchorIdx = findStreakStart(targetIndex, (i) => isTrustTurnBuy(institutionalDaysUpToIndex(i)));
+  if (isTrustTurnBuy(institutionalDaysUpToDate, asOfDate)) {
+    const anchorIdx = findStreakStart(targetIndex, (i) => isTrustTurnBuy(institutionalDaysUpToIndex(i), bars[i].date));
     return {
       status: "trustTurnBuy",
       signalPointDate: bars[anchorIdx].date,
       priceAtSignal: bars[anchorIdx].close,
-      triggerReason: describeTrustTurnBuyReason(institutionalDaysUpToDate),
+      triggerReason: describeTrustTurnBuyReason(institutionalDaysUpToDate, asOfDate),
     };
   }
 
-  if (isCombinedBuy(institutionalDaysUpToDate)) {
-    const anchorIdx = findStreakStart(targetIndex, (i) => isCombinedBuy(institutionalDaysUpToIndex(i)));
+  if (isCombinedBuy(institutionalDaysUpToDate, asOfDate)) {
+    const anchorIdx = findStreakStart(targetIndex, (i) => isCombinedBuy(institutionalDaysUpToIndex(i), bars[i].date));
     return {
       status: "combinedBuy",
       signalPointDate: bars[anchorIdx].date,
       priceAtSignal: bars[anchorIdx].close,
-      triggerReason: describeCombinedBuyReason(institutionalDaysUpToDate, targetIndex - anchorIdx + 1),
+      triggerReason: describeCombinedBuyReason(institutionalDaysUpToDate, asOfDate, targetIndex - anchorIdx + 1),
     };
   }
 
@@ -195,23 +226,23 @@ export function classifyChipFlow(
     };
   }
 
-  if (isTrustTurnSell(institutionalDaysUpToDate)) {
-    const anchorIdx = findStreakStart(targetIndex, (i) => isTrustTurnSell(institutionalDaysUpToIndex(i)));
+  if (isTrustTurnSell(institutionalDaysUpToDate, asOfDate)) {
+    const anchorIdx = findStreakStart(targetIndex, (i) => isTrustTurnSell(institutionalDaysUpToIndex(i), bars[i].date));
     return {
       status: "trustTurnSell",
       signalPointDate: bars[anchorIdx].date,
       priceAtSignal: bars[anchorIdx].close,
-      triggerReason: describeTrustTurnSellReason(institutionalDaysUpToDate),
+      triggerReason: describeTrustTurnSellReason(institutionalDaysUpToDate, asOfDate),
     };
   }
 
-  if (isCombinedSell(institutionalDaysUpToDate)) {
-    const anchorIdx = findStreakStart(targetIndex, (i) => isCombinedSell(institutionalDaysUpToIndex(i)));
+  if (isCombinedSell(institutionalDaysUpToDate, asOfDate)) {
+    const anchorIdx = findStreakStart(targetIndex, (i) => isCombinedSell(institutionalDaysUpToIndex(i), bars[i].date));
     return {
       status: "combinedSell",
       signalPointDate: bars[anchorIdx].date,
       priceAtSignal: bars[anchorIdx].close,
-      triggerReason: describeCombinedSellReason(institutionalDaysUpToDate, targetIndex - anchorIdx + 1),
+      triggerReason: describeCombinedSellReason(institutionalDaysUpToDate, asOfDate, targetIndex - anchorIdx + 1),
     };
   }
 
