@@ -76,6 +76,19 @@ function BollingerBadge({ status, detail }: { status: SectorTrendItem["bollinger
   );
 }
 
+/** 產業(TWSE官方產業別) + 對應板塊(group_config.json主題，如果有的話)——兩者是不同分類系統，
+ * 板塊比較貼近使用者實際想看的供應鏈/概念族群，有的話一起顯示 */
+function IndustryCell({ sector, themes }: { sector: SectorTrendItem["sector"]; themes: SectorTrendItem["themes"] }) {
+  return (
+    <div className="min-w-0">
+      <div className="truncate">{sector.nameZh ?? sector.name}</div>
+      {themes.length > 0 && (
+        <div className="truncate text-[11px] text-zinc-400 dark:text-zinc-500">{themes.map((t) => t.nameZh ?? t.code).join("、")}</div>
+      )}
+    </div>
+  );
+}
+
 function UnprovenBadge() {
   return (
     <span
@@ -128,8 +141,9 @@ export function TrendTable({ status, items, loading }: { status: TacticalStatus;
                   <th className="px-3 py-2 text-left font-medium">產業</th>
                   <th className="px-3 py-2 text-right font-medium">收盤價</th>
                   <th className="px-3 py-2 text-right font-medium">今日漲跌</th>
-                  <th className="px-3 py-2 text-right font-medium">買賣超張數</th>
-                  <th className="px-3 py-2 text-right font-medium">買賣超(百萬)</th>
+                  <th className="px-3 py-2 text-right font-medium">買賣超張數(整體)</th>
+                  <th className="px-3 py-2 text-right font-medium">買賣超(百萬,整體)</th>
+                  <th className="px-3 py-2 text-right font-medium">投信買賣超</th>
                   <th className="px-3 py-2 text-right font-medium">買賣超天數</th>
                   <th className="px-3 py-2 text-right font-medium">籌碼5日</th>
                   <th className="px-3 py-2 text-right font-medium">10日</th>
@@ -147,10 +161,10 @@ export function TrendTable({ status, items, loading }: { status: TacticalStatus;
                         <div className="text-xs text-zinc-400 dark:text-zinc-500">{item.ticker}</div>
                       </Link>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-xs text-zinc-500 dark:text-zinc-400">
-                      {item.sector.nameZh ?? item.sector.name}
+                    <td className="max-w-[160px] px-3 py-2.5 text-xs text-zinc-500 dark:text-zinc-400">
+                      <IndustryCell sector={item.sector} themes={item.themes} />
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                    <td className={`whitespace-nowrap px-3 py-2.5 text-right tabular-nums ${changeColorClass(item.todayChangeAmount)}`}>
                       {item.priceNow.toFixed(2)}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right">
@@ -161,6 +175,9 @@ export function TrendTable({ status, items, loading }: { status: TacticalStatus;
                     </td>
                     <td className={`whitespace-nowrap px-3 py-2.5 text-right tabular-nums ${changeColorClass(item.netBuySellAmountMillions)}`}>
                       {formatAmount(item.netBuySellAmountMillions)}
+                    </td>
+                    <td className={`whitespace-nowrap px-3 py-2.5 text-right tabular-nums ${changeColorClass(item.trustNetBuyLots)}`}>
+                      {formatLots(item.trustNetBuyLots)}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                       {formatStreakDays(item.signalStreakTradingDays)}
@@ -192,28 +209,32 @@ export function TrendTable({ status, items, loading }: { status: TacticalStatus;
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate font-semibold text-zinc-900 dark:text-zinc-100">{stripCompanySuffix(item.companyName)}</div>
-                    <div className="flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500">
-                      <span>{item.ticker}</span>
-                      <span>·</span>
-                      <span className="truncate">{item.sector.nameZh ?? item.sector.name}</span>
+                    <div className="text-xs text-zinc-400 dark:text-zinc-500">{item.ticker}</div>
+                    <div className="mt-0.5 truncate text-[11px] text-zinc-400 dark:text-zinc-500">
+                      {item.sector.nameZh ?? item.sector.name}
+                      {item.themes.length > 0 && <> · {item.themes.map((t) => t.nameZh ?? t.code).join("、")}</>}
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
-                    <div className="tabular-nums text-zinc-700 dark:text-zinc-300">{item.priceNow.toFixed(2)}</div>
+                    <div className={`tabular-nums ${changeColorClass(item.todayChangeAmount)}`}>{item.priceNow.toFixed(2)}</div>
                     <ChangeCell amount={item.todayChangeAmount} pct={item.todayChangePct} />
                   </div>
                 </div>
 
                 <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
                   <div className="flex items-center justify-between rounded bg-zinc-50 px-2 py-1 dark:bg-white/[0.04]">
-                    <span className="text-zinc-400 dark:text-zinc-500">買賣超張數</span>
+                    <span className="text-zinc-400 dark:text-zinc-500">買賣超張數(整體)</span>
                     <span className={`tabular-nums font-medium ${changeColorClass(item.netBuySellLots)}`}>{formatLots(item.netBuySellLots)}</span>
                   </div>
                   <div className="flex items-center justify-between rounded bg-zinc-50 px-2 py-1 dark:bg-white/[0.04]">
-                    <span className="text-zinc-400 dark:text-zinc-500">買賣超(百萬)</span>
+                    <span className="text-zinc-400 dark:text-zinc-500">買賣超(百萬,整體)</span>
                     <span className={`tabular-nums font-medium ${changeColorClass(item.netBuySellAmountMillions)}`}>
                       {formatAmount(item.netBuySellAmountMillions)}
                     </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded bg-zinc-50 px-2 py-1 dark:bg-white/[0.04]">
+                    <span className="text-zinc-400 dark:text-zinc-500">投信買賣超</span>
+                    <span className={`tabular-nums font-medium ${changeColorClass(item.trustNetBuyLots)}`}>{formatLots(item.trustNetBuyLots)}</span>
                   </div>
                   <div className="flex items-center justify-between rounded bg-zinc-50 px-2 py-1 dark:bg-white/[0.04]">
                     <span className="text-zinc-400 dark:text-zinc-500">買賣超天數</span>
@@ -227,8 +248,8 @@ export function TrendTable({ status, items, loading }: { status: TacticalStatus;
                     </span>
                   </div>
                   <div className="col-span-2 flex items-center justify-between rounded bg-zinc-50 px-2 py-1 dark:bg-white/[0.04]">
-                    <span className="text-zinc-400 dark:text-zinc-500">籌碼集中度 5日 / 10日 / 20日</span>
-                    <span className="tabular-nums font-medium text-zinc-600 dark:text-zinc-300">
+                    <span className="shrink-0 text-zinc-400 dark:text-zinc-500">籌碼集中度 5/10/20日</span>
+                    <span className="whitespace-nowrap tabular-nums font-medium text-zinc-600 dark:text-zinc-300">
                       {formatConcentration(item.chipConcentration5)} / {formatConcentration(item.chipConcentration10)} / {formatConcentration(item.chipConcentration20)}
                     </span>
                   </div>

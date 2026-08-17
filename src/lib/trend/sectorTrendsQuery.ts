@@ -32,7 +32,10 @@ export function tacticalStatusesForMarket(market: Market): TacticalStatus[] {
   return market === "TW" ? TW_TACTICAL_STATUSES : US_TACTICAL_STATUSES;
 }
 
-export const DEFAULT_LIMIT = 10;
+/** 2026-08-19：從10調到30——改成表格版之後單頁能舒服顯示更多列，且實測單一分類（如投信轉買）
+ * 常態就有30+檔符合條件，原本的10很容易讓使用者誤以為「符合條件的股票變少了」，其實只是被
+ * 這個上限擋掉沒顯示 */
+export const DEFAULT_LIMIT = 30;
 export const MAX_LIMIT = 50;
 /** 籌碼領先是觀察名單性質，給比主要三欄更寬的預設筆數 */
 export const CHIP_LEADING_LIMIT = 20;
@@ -84,6 +87,10 @@ export interface SectorTrendItem {
   /** 當天外資+投信合計買賣超張數（原始單位，netBuySellAmountMillions是換算成金額後的版本），
    * 新鮮度門檻跟netBuySellAmountMillions一致 */
   netBuySellLots: number | null;
+  /** 2026-08-19新增：投信單獨（不含外資）的當日買賣超張數——投信轉買/轉賣是純投信訊號，
+   * 原本的買賣超張數/百萬是外資+投信合計，容易誤會成「外資投信一起在買」，這裡拆出投信
+   * 自己的數字，跟netBuySellLots新鮮度門檻一致 */
+  trustNetBuyLots: number | null;
   /** 目前這個狀態連續成立幾個「交易日」（不是daysSinceSignal的日曆天，會被週末灌水）——
    * 例如「投信外資合買」連續3個交易日，這裡就是3。單日型訊號（轉買/轉賣定義上只會成立1天）
    * 這欄通常是1。用signalPointDate對照series裡的交易日直接數，跟classifyChipFlow.ts
@@ -143,6 +150,7 @@ interface VolatilityStats {
   maAligned: boolean | null;
   netBuySellAmountMillions: number | null;
   netBuySellLots: number | null;
+  trustNetBuyLots: number | null;
   signalStreakTradingDays: number | null;
 }
 
@@ -211,6 +219,7 @@ function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
     maAligned: stats?.maAligned ?? null,
     netBuySellAmountMillions: stats?.netBuySellAmountMillions ?? null,
     netBuySellLots: stats?.netBuySellLots ?? null,
+    trustNetBuyLots: stats?.trustNetBuyLots ?? null,
     signalStreakTradingDays: stats?.signalStreakTradingDays ?? null,
     chipConcentration5: row.chipConcentration5 !== null && row.chipConcentration5 !== undefined ? Number(row.chipConcentration5) : null,
     chipConcentration10: row.chipConcentration10 !== null && row.chipConcentration10 !== undefined ? Number(row.chipConcentration10) : null,
@@ -318,12 +327,14 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
 
     let netBuySellAmountMillions: number | null = null;
     let netBuySellLots: number | null = null;
+    let trustNetBuyLots: number | null = null;
     const latestInstitutional = latestInstitutionalByStock.get(stockId);
     const latestClose = series.length > 0 ? series[series.length - 1].close : null;
     if (latestInstitutional && latestClose !== null) {
       const daysStale = Math.abs(Date.now() - latestInstitutional.tradeDate.getTime()) / 86_400_000;
       if (daysStale <= MAX_INSTITUTIONAL_DATA_GAP_DAYS) {
-        netBuySellLots = Number(latestInstitutional.foreignNetBuyShares) + Number(latestInstitutional.investTrustNetBuyShares);
+        trustNetBuyLots = Number(latestInstitutional.investTrustNetBuyShares);
+        netBuySellLots = Number(latestInstitutional.foreignNetBuyShares) + trustNetBuyLots;
         netBuySellAmountMillions = Math.round(((netBuySellLots * latestClose) / 1000) * 100) / 100;
       }
     }
@@ -342,6 +353,7 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
       maAligned,
       netBuySellAmountMillions,
       netBuySellLots,
+      trustNetBuyLots,
       signalStreakTradingDays,
     });
   }

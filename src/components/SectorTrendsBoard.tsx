@@ -110,24 +110,20 @@ export function SectorTrendsBoard({
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">依板塊篩選選股結果</h2>
 
         <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <label htmlFor="sector-select" className="w-14 shrink-0 text-xs font-medium text-zinc-400 dark:text-zinc-500">
-              板塊
-            </label>
-            <select
-              id="sector-select"
-              value={selectedSector}
-              onChange={(e) => handleSelectSector(e.target.value)}
-              className="rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-[0_1px_2px_rgba(24,24,27,0.04)] ring-1 ring-zinc-900/[0.06] dark:bg-zinc-900 dark:text-zinc-300 dark:ring-white/10"
-            >
-              <option value="all">全部板塊</option>
-              {sectors.map((sector) => (
-                <option key={sector.sectorCode} value={sector.sectorCode}>
-                  {sector.sectorNameZh ?? sector.sectorName}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* 2026-08-19：板塊下拉選單移除（使用者要求）——現在改用/tw/chains的板塊熱圖點選來篩選
+              （見ThemeHeatmapWithNavigation.tsx，導到 /tw?sector=X），這裡只保留「目前篩選中」的
+              狀態顯示 + 清除按鈕，不提供從這頁手動選板塊的入口 */}
+          {selectedSector !== "all" && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-zinc-400 dark:text-zinc-500">篩選中</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900">
+                {sectors.find((s) => s.sectorCode === selectedSector)?.sectorNameZh ?? selectedSector}
+                <button type="button" onClick={() => handleSelectSector("all")} className="text-white/70 hover:text-white dark:text-zinc-900/60 dark:hover:text-zinc-900">
+                  ✕
+                </button>
+              </span>
+            </div>
+          )}
 
           {themes.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">

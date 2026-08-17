@@ -1,11 +1,14 @@
 import { queryFundamentalsOverview } from "@/lib/marketData/queryFundamentalsOverview";
 import { FundamentalsSummary } from "@/components/fundamentals/FundamentalsSummary";
 import { FundamentalsList } from "@/components/fundamentals/FundamentalsList";
+import { TwSectionNav } from "@/components/tw/TwSectionNav";
 
 // 這個頁面直接查資料庫，不能被當成靜態頁面在 build time 凍結一份快照
 export const dynamic = "force-dynamic";
 
-export default async function FundamentalsPage() {
+/** 2026-08-19：從頂層 /fundamentals 搬過來，內容本來就是TW限定（龍頭+二軍法說會），
+ * 移到TwSectionNav底下當第三個分頁比放在MarketNav頂層更合理。 */
+export default async function TwFundamentalsPage() {
   const overview = await queryFundamentalsOverview();
 
   return (
@@ -35,6 +38,9 @@ export default async function FundamentalsPage() {
           <p className="mt-3 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
             每個產業龍頭+二軍股票的法說會簡報（公開資訊觀測站PDF），LLM解析出獲利成長/展望/風險，一季更新一次。
           </p>
+          <div className="mt-4">
+            <TwSectionNav />
+          </div>
         </header>
 
         <div className="tw-reveal" style={{ animationDelay: "60ms" }}>
