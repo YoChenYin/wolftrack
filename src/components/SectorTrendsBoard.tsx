@@ -6,10 +6,6 @@ import { TrendColumn } from "./TrendColumn";
 import { TrendTable } from "./TrendTable";
 import { TACTICAL_STATUS_META } from "@/lib/trend/tacticalStatusMeta";
 import { GroupValuationTable } from "./tw/GroupValuationTable";
-import { ThemeHeatmap } from "./tw/ThemeHeatmap";
-import { ThemeFlowChart } from "./tw/ThemeFlowChart";
-import { ChainSignalLights } from "./tw/ChainSignalLights";
-import { ChainRotationChart } from "./tw/ChainRotationChart";
 import { UNCATEGORIZED_THEME_CODE } from "@/lib/valuation/groupConfig";
 import { Card } from "./ui/Card";
 import { SectionHeader } from "./ui/SectionHeader";
@@ -110,18 +106,6 @@ export function SectorTrendsBoard({
 
   return (
     <div className="flex flex-col gap-6">
-      {market === "TW" && (
-        <div className="flex flex-col gap-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-            全市場總覽（不受下方篩選影響）
-          </h2>
-          <ChainSignalLights />
-          <ChainRotationChart />
-          <ThemeFlowChart />
-          <ThemeHeatmap onSelectTheme={handleSelectSector} />
-        </div>
-      )}
-
       <div className="flex flex-col gap-4">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">依板塊篩選選股結果</h2>
 

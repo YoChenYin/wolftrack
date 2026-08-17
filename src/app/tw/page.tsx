@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { fetchSectorTrendsGrouped } from "@/lib/trend/sectorTrendsQuery";
 import { SectorTrendsBoard } from "@/components/SectorTrendsBoard";
+import { TwSectionNav } from "@/components/tw/TwSectionNav";
 import {
   listAllThemeNames,
   getAllThemedTickers,
@@ -11,7 +12,7 @@ import {
 // 這個頁面直接查資料庫顯示每日更新的訊號，不能被當成靜態頁面在 build time 凍結一份快照
 export const dynamic = "force-dynamic";
 
-export default async function HomeTw() {
+export default async function HomeTw({ searchParams }: { searchParams: Promise<{ sector?: string }> }) {
   const activeTickers = await prisma.stock.findMany({
     where: { market: "TW", isActive: true, ticker: { not: "TAIEX" } },
     select: { ticker: true },
@@ -40,7 +41,10 @@ export default async function HomeTw() {
     });
   }
 
-  const initialData = await fetchSectorTrendsGrouped({ market: "TW", sectorCode: "all", themeCode: "all" });
+  // 2026-08-18：從/tw/chains的板塊熱圖點主題會導到 /tw?sector=X，這裡讀query param當初始篩選
+  const { sector: sectorParam } = await searchParams;
+
+  const initialData = await fetchSectorTrendsGrouped({ market: "TW", sectorCode: sectorParam ?? "all", themeCode: "all" });
 
   return (
     <div
@@ -67,10 +71,15 @@ export default async function HomeTw() {
           </div>
           <div className="mt-2 h-px w-24 bg-gradient-to-r from-amber-700/50 to-transparent dark:from-amber-400/40" />
           <p className="mt-3 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
-            每日掃描台股，依投信/外資籌碼流分類三種戰術狀態：
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">進場 / 出場 / 逢低布局</span>
-            （Core Score = 50% 技術面 + 50% 籌碼面）
+            每日掃描台股，依投信/外資籌碼流分類多空戰術狀態：
+            <span className="font-medium text-zinc-700 dark:text-zinc-300">投信轉買 / 投信外資合買 / 逢低布局</span>
+            （多方）與
+            <span className="font-medium text-zinc-700 dark:text-zinc-300">投信轉賣 / 投信外資合賣</span>
+            （空方）
           </p>
+          <div className="mt-4">
+            <TwSectionNav />
+          </div>
         </header>
 
         <div className="tw-reveal" style={{ animationDelay: "80ms" }}>
