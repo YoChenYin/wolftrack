@@ -3,8 +3,6 @@ import {
   Radar,
   Hourglass,
   TrendingUp,
-  LogIn,
-  LogOut,
   ArrowDownToLine,
   CheckCircle2,
   AlertTriangle,
@@ -13,6 +11,8 @@ import {
   ChevronsUp,
   ChevronsDown,
   Minimize2,
+  Repeat,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import type { SectorTrendItem, TacticalStatus } from "@/lib/trend/sectorTrendsQuery";
@@ -71,27 +71,26 @@ const COLUMN_META: Record<
       "確立中的強勢多頭趨勢：① 均線多頭排列且MA20/MA50/MA200近5日都上揚 ② ADX14>25且持續走高 ③ 近20日內至少2次「新高」 ④ 從近60日高點回檔不到5%。",
     signalLabel: "反轉點",
   },
-  entry: {
-    icon: LogIn,
+  trustTurnBuy: {
+    icon: Repeat,
     iconColor: "blue",
-    title: "進場",
-    subtitle: "籌碼+技術面同步轉強 — 符合條件，效果待驗證",
+    title: "投信轉買",
+    subtitle: "投信由賣轉買的翻轉日 — 效果待驗證",
     accent: "border-t-blue-500",
     badge: "bg-blue-50 text-blue-700 dark:bg-blue-400/10 dark:text-blue-400",
     unproven: true,
-    criteria:
-      "① 投信/外資近3個月合計買超 ② 買超力道與籌碼集中度呈5日>10日>20日加速排列 ③ MA5>MA10>MA20多頭排列 ④ KD黃金交叉、K持續走強、且KD<80未過熱。注意：用真實production資料回測過，這組條件本身的20日超額報酬中位數約-0.04%（接近打平，不是驗證有效的alpha訊號），只是「符合這組條件」，出現不代表歷史上會賺錢，請搭配「出場」訊號嚴格執行風控。",
+    criteria: "投信今日淨買超轉正、昨日淨買超<=0（由賣轉買的翻轉日）。2026-08-17新規則，還沒有backtest數據，出現不代表歷史上會賺錢，請自行搭配風控。",
     signalLabel: "訊號起點",
   },
-  exit: {
-    icon: LogOut,
-    iconColor: "rose",
-    title: "出場",
-    subtitle: "至少一項風控條件觸發 — 建議減碼或出場",
-    accent: "border-t-rose-500",
-    badge: "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-400",
-    criteria:
-      "任一成立即觸發：① MA5跌破MA10 ② 投信/外資賣超力道呈2日>5日>10日加速（且近2日確實淨賣超）③ 近3日漲幅>15%且股價跌破MA5，或近3日漲幅>10%且跌破MA10（噴出後停利）。回測驗證投信/外資賣超加速是預測力最強的出場訊號（20日中位超額報酬約-2%），MA死叉次之（約-0.5%~-1.4%，時間拉越長越準）。",
+  combinedBuy: {
+    icon: Users,
+    iconColor: "blue",
+    title: "投信外資合買",
+    subtitle: "外資投信同步買超 — 效果待驗證",
+    accent: "border-t-blue-500",
+    badge: "bg-blue-50 text-blue-700 dark:bg-blue-400/10 dark:text-blue-400",
+    unproven: true,
+    criteria: "外資、投信當日同時淨買超（不要求連續天數，訊號本身會標註目前是連續第幾天買超）。2026-08-17新規則，還沒有backtest數據。",
     signalLabel: "訊號起點",
   },
   buyDip: {
@@ -103,6 +102,28 @@ const COLUMN_META: Record<
     badge: "bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-400",
     criteria:
       "① 股價落在季線(MA60)±1.5%範圍內 ② 近5日籌碼集中度≥15%。用真實production資料回測過，是目前這套策略裡唯一有穩健正超額報酬的訊號：20日中位超額報酬約+2.1%~+2.3%，勝率70%以上。",
+    signalLabel: "訊號起點",
+  },
+  trustTurnSell: {
+    icon: Repeat,
+    iconColor: "rose",
+    title: "投信轉賣",
+    subtitle: "投信由買轉賣的翻轉日 — 效果待驗證",
+    accent: "border-t-rose-500",
+    badge: "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-400",
+    unproven: true,
+    criteria: "投信今日淨買超轉負、昨日淨買超>=0（由買轉賣的翻轉日）。2026-08-17新規則，還沒有backtest數據，出現不代表歷史上會下跌，請自行搭配風控。",
+    signalLabel: "訊號起點",
+  },
+  combinedSell: {
+    icon: Users,
+    iconColor: "rose",
+    title: "投信外資合賣",
+    subtitle: "外資投信同步賣超 — 效果待驗證",
+    accent: "border-t-rose-500",
+    badge: "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-400",
+    unproven: true,
+    criteria: "外資、投信當日同時淨賣超（不要求連續天數，訊號本身會標註目前是連續第幾天賣超）。2026-08-17新規則，還沒有backtest數據。",
     signalLabel: "訊號起點",
   },
 };

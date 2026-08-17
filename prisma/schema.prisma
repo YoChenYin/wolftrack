@@ -103,9 +103,15 @@ enum TrendStatus {
   bullish
   limitMove
   chipLeading
+  /// 2026-07-23~2026-08-17版籌碼流策略的歷史值，2026-08-17改版後不再產生新資料，見
+  /// src/lib/trend/types.ts的TrendStatus說明
   entry
   exit
   buyDip
+  trustTurnBuy
+  combinedBuy
+  trustTurnSell
+  combinedSell
 }
 
 /// 籌碼集中度動態訊號：轉強 / 持平 / 轉弱（docs/wolftrack-tw-spec.md 3.6）

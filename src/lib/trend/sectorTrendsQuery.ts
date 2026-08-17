@@ -5,19 +5,29 @@ import { findIndustryThemeByName, getAllThemedTickers, UNCATEGORIZED_THEME_CODE 
 import { bollingerBands } from "@/lib/trend/indicators";
 
 /**
- * 三段式戰術面板顯示的狀態。刻意用明確列舉（不是 Exclude<TrendStatus, "limitMove"> 這種衍生型別）——
- * limitMove 是特殊狀態不算戰術分類，chipLeading 是舊版台股邏輯（2026-07-09~2026-07-23）留下的
- * 歷史觀察名單狀態，改版後不再產生新資料。
+ * 戰術面板顯示的狀態。刻意用明確列舉（不是 Exclude<TrendStatus, "limitMove"> 這種衍生型別）——
+ * limitMove 是特殊狀態不算戰術分類，chipLeading/entry/exit 是舊版台股邏輯留下的歷史狀態，
+ * 改版後不再產生新資料。
  *
- * 2026-07-23：美股/台股各自有一套互不相同的三段式詞彙（見 src/lib/trend/types.ts 的 TrendStatus
- * 說明），所以這裡的型別是兩組共6個literal的聯集，用 tacticalStatusesForMarket() 依market
- * 動態決定實際要用哪一組，不是單一固定的3個literal。
+ * 2026-08-17：美股維持三段式（reversal/pullback/bullish），台股改成多空五段式
+ * （trustTurnBuy/combinedBuy/buyDip 多方，trustTurnSell/combinedSell 空方，見
+ * src/lib/trend/types.ts 的 TrendStatus 說明）。UI（SectorTrendsBoard.tsx）用多方/空方
+ * tab切換要顯示哪幾欄，這裡的型別跟 tacticalStatusesForMarket() 只負責「這個market
+ * 合法的狀態有哪些」，不管tab怎麼分組。
  */
-export type TacticalStatus = "reversal" | "pullback" | "bullish" | "entry" | "exit" | "buyDip";
+export type TacticalStatus =
+  | "reversal"
+  | "pullback"
+  | "bullish"
+  | "trustTurnBuy"
+  | "combinedBuy"
+  | "buyDip"
+  | "trustTurnSell"
+  | "combinedSell";
 
 const US_TACTICAL_STATUSES: TacticalStatus[] = ["reversal", "pullback", "bullish"];
-const TW_TACTICAL_STATUSES: TacticalStatus[] = ["entry", "exit", "buyDip"];
-/** 兩個市場實際用的三段式詞彙不同（見上方TacticalStatus說明），依market選對應那一組 */
+const TW_TACTICAL_STATUSES: TacticalStatus[] = ["trustTurnBuy", "combinedBuy", "buyDip", "trustTurnSell", "combinedSell"];
+/** 兩個市場實際用的詞彙不同（見上方TacticalStatus說明），依market選對應那一組 */
 export function tacticalStatusesForMarket(market: Market): TacticalStatus[] {
   return market === "TW" ? TW_TACTICAL_STATUSES : US_TACTICAL_STATUSES;
 }
@@ -345,9 +355,11 @@ export async function fetchSectorTrendsGrouped(options: {
     reversal: [],
     pullback: [],
     bullish: [],
-    entry: [],
-    exit: [],
+    trustTurnBuy: [],
+    combinedBuy: [],
     buyDip: [],
+    trustTurnSell: [],
+    combinedSell: [],
   };
 
   if (!asOfDate) {
@@ -363,7 +375,16 @@ export async function fetchSectorTrendsGrouped(options: {
 
   const marketStatuses = tacticalStatusesForMarket(market);
   const latestPerStock = await fetchLatestSignalPerStock(stockFilter, asOfDate);
-  const groups: Record<TacticalStatus, SignalRow[]> = { reversal: [], pullback: [], bullish: [], entry: [], exit: [], buyDip: [] };
+  const groups: Record<TacticalStatus, SignalRow[]> = {
+    reversal: [],
+    pullback: [],
+    bullish: [],
+    trustTurnBuy: [],
+    combinedBuy: [],
+    buyDip: [],
+    trustTurnSell: [],
+    combinedSell: [],
+  };
   const chipLeadingRows: SignalRow[] = [];
   for (const row of latestPerStock) {
     if (marketStatuses.includes(row.status as TacticalStatus)) {

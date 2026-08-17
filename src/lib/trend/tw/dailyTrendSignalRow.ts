@@ -25,7 +25,7 @@ export function buildTwDailyTrendSignalRow(signal: TwDailySignal) {
     chipConcentration20: signal.chipConcentration20,
     chipMomentum: signal.chipMomentum,
     chipBadge: signal.chipBadge,
-    status: signal.status as "entry" | "exit" | "buyDip" | "limitMove",
+    status: signal.status as "trustTurnBuy" | "combinedBuy" | "buyDip" | "trustTurnSell" | "combinedSell" | "limitMove",
     reversalPointDate: signal.reversalPointDate ? new Date(signal.reversalPointDate) : null,
     priceAtSignal: signal.priceAtSignal,
     triggerReason: signal.triggerReason,

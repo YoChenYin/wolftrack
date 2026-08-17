@@ -21,16 +21,17 @@ function diffOrNull(a: number | null, b: number | null): number | null {
 }
 
 /**
- * 計算台股某一天的 Core Score（技術面+籌碼面）與籌碼流三段分類（含漲跌停特殊狀態）。
+ * 計算台股某一天的 Core Score（技術面+籌碼面）與籌碼流多空五段分類（含漲跌停特殊狀態）。
  *
- * 2026-07-23改版：分類邏輯從美股共用的 classify.ts 三段式（reversal/pullback/bullish）換成
- * 台股專用的籌碼流策略（entry/exit/buyDip，見 classifyChipFlow.ts），已用真實 production
- * 投信/外資資料回測驗證過。technicalScore/coreScore/chipScore 這些既有的分數欄位不受影響，
- * 只有 status（分類結果）跟 reversalPointDate/priceAtSignal（現在代表「這個狀態連續成立的
- * 起點」，不是MA交叉錨點）的計算方式改變。舊版的 chipBadge（籌碼確認/背離徽章）跟
- * chipLeading（技術面未觸發但籌碼加速的觀察名單）概念在新版裡不再有意義——籌碼流已經是
- * 主要訊號來源，不是疊加在技術面分類之上的次要訊號，兩者都停止產生新資料（欄位保留、
- * 舊資料還能顯示，避免另外跑一次migration）。
+ * 2026-08-17改版：分類邏輯從2026-07-23版的entry/exit/buyDip三段式換成多空五段式——多方
+ * trustTurnBuy(投信轉買)/combinedBuy(投信外資合買)/buyDip(逢低布局)，空方trustTurnSell
+ * (投信轉賣)/combinedSell(投信外資合賣)，見 classifyChipFlow.ts。只有buyDip沿用2026-07-23版
+ * backtest驗證過的參數，其餘4個是全新規則、還沒有backtest數據。technicalScore/coreScore/
+ * chipScore 這些既有的分數欄位不受影響，只有 status（分類結果）跟 reversalPointDate/
+ * priceAtSignal（代表「這個狀態連續成立的起點」）的計算方式改變。舊版的 chipBadge（籌碼確認/
+ * 背離徽章）跟 chipLeading（技術面未觸發但籌碼加速的觀察名單）概念在新版裡不再有意義——
+ * 籌碼流已經是主要訊號來源，不是疊加在技術面分類之上的次要訊號，兩者都停止產生新資料
+ * （欄位保留、舊資料還能顯示，避免另外跑一次migration）。
  *
  * rawBars：**未還原**的原始日線（漲跌停判斷要用原始價格，見 limitMove.ts 說明）
  * institutionalDays：三大法人買賣超歷史，需涵蓋到 rawBars[targetIndex] 當天（含）往前至少20個交易日，

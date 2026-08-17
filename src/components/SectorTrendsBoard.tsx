@@ -11,9 +11,16 @@ import { ChainRotationChart } from "./tw/ChainRotationChart";
 import { UNCATEGORIZED_THEME_CODE } from "@/lib/valuation/groupConfig";
 import { Card } from "./ui/Card";
 import { SectionHeader } from "./ui/SectionHeader";
-import type { SectorTrendsGrouped } from "@/lib/trend/sectorTrendsQuery";
+import type { SectorTrendsGrouped, TacticalStatus } from "@/lib/trend/sectorTrendsQuery";
 import type { GroupValuationResult } from "@/lib/valuation/computeGroupValuation";
 import type { Market } from "@/generated/prisma/enums";
+
+/** 台股五段式依多空分組，給下面的tab切換用。刻意定義在這個client component裡而不是
+ * sectorTrendsQuery.ts——那個檔案開頭 import { prisma }，就算只匯出這兩個常數，value import
+ * （不像type import會被erase）還是會把整個module、連帶Prisma client一起打進client bundle，
+ * 2026-08-17第一次這樣做時本機就直接500（"chunking context does not support external modules"）。 */
+const TW_LONG_STATUSES: TacticalStatus[] = ["trustTurnBuy", "combinedBuy", "buyDip"];
+const TW_SHORT_STATUSES: TacticalStatus[] = ["trustTurnSell", "combinedSell"];
 
 export interface SectorOption {
   sectorCode: string;
@@ -42,6 +49,9 @@ export function SectorTrendsBoard({
   const [selectedTheme, setSelectedTheme] = useState<string>(initialData.theme);
   const [data, setData] = useState<SectorTrendsGrouped>(initialData);
   const [isPending, startTransition] = useTransition();
+  /** 2026-08-17：台股改多空五段式，UI用tab切換要看多方（投信轉買/投信外資合買/逢低布局）
+   * 還是空方（投信轉賣/投信外資合賣，沒有逢低布局的空方對應概念）三/兩欄 */
+  const [twSide, setTwSide] = useState<"long" | "short">("long");
 
   // 選了非「全部」的板塊時秀出該族群的 PE/PB 估值比較（只有 TW 的板塊對應 group_config.json
   // theme，「未分類」是虛擬選項沒有對應 theme，兩者都不用打這支 API）
@@ -161,11 +171,17 @@ export function SectorTrendsBoard({
         )}
 
         {market === "TW" ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <TrendColumn market={market} status="entry" items={data.groups.entry} loading={isPending} />
-            <TrendColumn market={market} status="exit" items={data.groups.exit} loading={isPending} />
-            <TrendColumn market={market} status="buyDip" items={data.groups.buyDip} loading={isPending} />
-          </div>
+          <>
+            <div className="flex gap-2">
+              <FilterPill label="多方" active={twSide === "long"} onClick={() => setTwSide("long")} />
+              <FilterPill label="空方" active={twSide === "short"} onClick={() => setTwSide("short")} />
+            </div>
+            <div className={`grid grid-cols-1 gap-4 ${twSide === "long" ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+              {(twSide === "long" ? TW_LONG_STATUSES : TW_SHORT_STATUSES).map((status) => (
+                <TrendColumn key={status} market={market} status={status} items={data.groups[status]} loading={isPending} />
+              ))}
+            </div>
+          </>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <TrendColumn market={market} status="reversal" items={data.groups.reversal} loading={isPending} />
