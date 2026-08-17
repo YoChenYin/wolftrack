@@ -81,6 +81,14 @@ export interface SectorTrendItem {
   /** 2026-08-18新增：當天外資+投信合計買賣超金額，單位百萬元（張數×1000股/張×收盤價÷1,000,000）。
    * 沒有當天籌碼資料時是null，跟chipConcentration5/10/20一樣是TW限定的表格欄位 */
   netBuySellAmountMillions: number | null;
+  /** 當天外資+投信合計買賣超張數（原始單位，netBuySellAmountMillions是換算成金額後的版本），
+   * 新鮮度門檻跟netBuySellAmountMillions一致 */
+  netBuySellLots: number | null;
+  /** 目前這個狀態連續成立幾個「交易日」（不是daysSinceSignal的日曆天，會被週末灌水）——
+   * 例如「投信外資合買」連續3個交易日，這裡就是3。單日型訊號（轉買/轉賣定義上只會成立1天）
+   * 這欄通常是1。用signalPointDate對照series裡的交易日直接數，跟classifyChipFlow.ts
+   * 內部算「第幾天」用的是同一個概念，只是這裡在查詢層重算一次给表格用，不用改觸發文字的格式 */
+  signalStreakTradingDays: number | null;
   /** 最新一筆籌碼集中度(5/10/20日，投信+外資買超佔量能比例)，直接來自daily_trend_signals
    * 既有欄位（每天批次都會算），不用額外查詢 */
   chipConcentration5: number | null;
@@ -134,6 +142,8 @@ interface VolatilityStats {
   bollingerDetail: string | null;
   maAligned: boolean | null;
   netBuySellAmountMillions: number | null;
+  netBuySellLots: number | null;
+  signalStreakTradingDays: number | null;
 }
 
 /** 20期布林通道 + 20日均帶寬（判斷squeeze用），沿用 scoreL6Technical.ts 的 %b/帶寬門檻邏輯，
@@ -200,6 +210,8 @@ function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
     todayChangeAmount: stats?.todayChangeAmount ?? null,
     maAligned: stats?.maAligned ?? null,
     netBuySellAmountMillions: stats?.netBuySellAmountMillions ?? null,
+    netBuySellLots: stats?.netBuySellLots ?? null,
+    signalStreakTradingDays: stats?.signalStreakTradingDays ?? null,
     chipConcentration5: row.chipConcentration5 !== null && row.chipConcentration5 !== undefined ? Number(row.chipConcentration5) : null,
     chipConcentration10: row.chipConcentration10 !== null && row.chipConcentration10 !== undefined ? Number(row.chipConcentration10) : null,
     chipConcentration20: row.chipConcentration20 !== null && row.chipConcentration20 !== undefined ? Number(row.chipConcentration20) : null,
@@ -305,15 +317,20 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
     }
 
     let netBuySellAmountMillions: number | null = null;
+    let netBuySellLots: number | null = null;
     const latestInstitutional = latestInstitutionalByStock.get(stockId);
     const latestClose = series.length > 0 ? series[series.length - 1].close : null;
     if (latestInstitutional && latestClose !== null) {
       const daysStale = Math.abs(Date.now() - latestInstitutional.tradeDate.getTime()) / 86_400_000;
       if (daysStale <= MAX_INSTITUTIONAL_DATA_GAP_DAYS) {
-        const netLots = Number(latestInstitutional.foreignNetBuyShares) + Number(latestInstitutional.investTrustNetBuyShares);
-        netBuySellAmountMillions = Math.round(((netLots * latestClose) / 1000) * 100) / 100;
+        netBuySellLots = Number(latestInstitutional.foreignNetBuyShares) + Number(latestInstitutional.investTrustNetBuyShares);
+        netBuySellAmountMillions = Math.round(((netBuySellLots * latestClose) / 1000) * 100) / 100;
       }
     }
+
+    // sinceSignalSeries已經是「reversalPointDate(含)到今天」的交易日序列，長度就是這個狀態
+    // 連續成立的交易日數——跟classifyChipFlow.ts內部算「合買/合賣第幾天」是同一個概念
+    const signalStreakTradingDays = reversalDate ? sinceSignalSeries.length : null;
 
     result.set(stockId, {
       todayChangePct,
@@ -324,6 +341,8 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
       bollingerDetail,
       maAligned,
       netBuySellAmountMillions,
+      netBuySellLots,
+      signalStreakTradingDays,
     });
   }
   return result;
