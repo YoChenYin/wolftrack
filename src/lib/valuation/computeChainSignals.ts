@@ -26,6 +26,17 @@ export interface ChainAdjacentStock {
   companyName: string;
 }
 
+/** 2026-08-19：一個階段常常橫跨好幾個原始theme（例如「上游：IP與IC設計」＝「IC設計：
+ * 高階運算與邊緣AI」43檔＋「矽智財：IP與ASIC設計服務」7檔），全部攤成一張大表格會讓使用者
+ * 分不清哪些股票其實是同類別、可以互相比較——依原始theme分組後，同一組才是真正的同儕比較對象。
+ * members依龍頭優先、其餘依近5日報酬排序（跟階段層級members的純報酬排序不同，這裡是給
+ * UI預設收合用：龍頭不該因為報酬不是前幾名就被摺起來看不到）。 */
+export interface ChainThemeGroup {
+  themeName: string;
+  memberCount: number;
+  members: ChainStageMember[];
+}
+
 /** 龍頭/二軍分開統計用的小結構，避免ChainStageSignal裡龍頭跟二軍各四個同名欄位重複宣告 */
 export interface ChainTierStats {
   count: number;
@@ -60,8 +71,11 @@ export interface ChainStageSignal {
    * followersCatchingUp=二軍補漲、龍頭已經緩下來；mixed=多空不明或資料不足，看不出階段。
    * 判斷邏輯見 decidePhase()。 */
   phase: "leadersOnly" | "broadRally" | "followersCatchingUp" | "mixed";
-  /** 點開燈號要看的個別成員股票，依報酬率由高到低排序 */
+  /** 點開燈號要看的個別成員股票，依報酬率由高到低排序（跨底下所有theme的扁平清單，
+   * 給adjacentMembers等不需要分組的用途用；UI表格顯示請用themeGroups） */
   members: ChainStageMember[];
+  /** 依原始theme分組後的成員股票，見ChainThemeGroup說明 */
+  themeGroups: ChainThemeGroup[];
   /** 上一階段/下一階段的成員股票（鏈的頭尾階段其中一邊會是空陣列），見ChainAdjacentStock說明 */
   adjacentMembers: { upstream: ChainAdjacentStock[]; downstream: ChainAdjacentStock[] };
 }
@@ -151,6 +165,7 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
         followers: { count: 0, avgReturn5d: null, risingCount: 0, fallingCount: 0 },
         phase: "mixed",
         members: [],
+        themeGroups: [],
         adjacentMembers: { upstream: [], downstream: [] },
       });
       continue;
@@ -223,18 +238,41 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
     const leaders = computeTierStats(leaderReturns);
     const followers = computeTierStats(followerReturns);
 
-    const members: ChainStageMember[] = stocks
-      .map((s) => ({
-        ticker: s.ticker,
-        companyName: s.companyName,
-        status: statusByStockId.get(s.id) ?? null,
-        return5d: return5dByStockId.get(s.id) ?? null,
-        closePrice: closePriceByStockId.get(s.id) ?? null,
-        todayChangeAmount: todayChangeAmountByStockId.get(s.id) ?? null,
-        todayChangePct: todayChangePctByStockId.get(s.id) ?? null,
-        isLeader: leaderTickers.has(s.ticker),
-      }))
-      .sort((a, b) => (b.return5d ?? -Infinity) - (a.return5d ?? -Infinity));
+    const memberByTicker = new Map<string, ChainStageMember>(
+      stocks.map((s) => [
+        s.ticker,
+        {
+          ticker: s.ticker,
+          companyName: s.companyName,
+          status: statusByStockId.get(s.id) ?? null,
+          return5d: return5dByStockId.get(s.id) ?? null,
+          closePrice: closePriceByStockId.get(s.id) ?? null,
+          todayChangeAmount: todayChangeAmountByStockId.get(s.id) ?? null,
+          todayChangePct: todayChangePctByStockId.get(s.id) ?? null,
+          isLeader: leaderTickers.has(s.ticker),
+        },
+      ])
+    );
+
+    const members: ChainStageMember[] = [...memberByTicker.values()].sort(
+      (a, b) => (b.return5d ?? -Infinity) - (a.return5d ?? -Infinity)
+    );
+
+    // 依原始theme分組（見ChainThemeGroup說明）：龍頭優先、其餘依近5日報酬排序，同一檔股票
+    // 如果同時屬於這個階段的好幾個theme，會分別出現在每一組裡面（目前6條鏈裡沒有這種重疊，
+    // 但資料結構上允許，不特別去重)
+    const themeGroups: ChainThemeGroup[] = stage.themes
+      .map((theme) => {
+        const groupMembers = theme.members
+          .map((t) => memberByTicker.get(t))
+          .filter((m): m is ChainStageMember => m !== undefined)
+          .sort((a, b) => {
+            if (a.isLeader !== b.isLeader) return a.isLeader ? -1 : 1;
+            return (b.return5d ?? -Infinity) - (a.return5d ?? -Infinity);
+          });
+        return { themeName: theme.theme_name, memberCount: groupMembers.length, members: groupMembers };
+      })
+      .filter((g) => g.memberCount > 0);
 
     const light = decideLight(signalRate, avgReturn5d);
 
@@ -252,6 +290,7 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
       followers,
       phase: light === "declining" ? "mixed" : decidePhase(leaders, followers),
       members,
+      themeGroups,
       adjacentMembers: { upstream: [], downstream: [] }, // 下面second pass再補
     });
   }

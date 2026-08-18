@@ -2,7 +2,20 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Flame, Zap, Circle, TrendingDown, TrendingUp, CheckCircle2, Crown, Workflow, ArrowUp, ArrowDown, type LucideIcon } from "lucide-react";
+import {
+  Flame,
+  Zap,
+  Circle,
+  TrendingDown,
+  TrendingUp,
+  CheckCircle2,
+  Crown,
+  Workflow,
+  ArrowUp,
+  ArrowDown,
+  ChevronDown,
+  type LucideIcon,
+} from "lucide-react";
 import { InfoTooltip } from "../InfoTooltip";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 import { Card, SubCard } from "../ui/Card";
@@ -33,6 +46,12 @@ interface ChainTierStats {
   fallingCount: number;
 }
 
+interface ChainThemeGroup {
+  themeName: string;
+  memberCount: number;
+  members: ChainStageMember[];
+}
+
 interface ChainStageSignal {
   stageKey: string;
   label: string;
@@ -47,6 +66,7 @@ interface ChainStageSignal {
   followers: ChainTierStats;
   phase: "leadersOnly" | "broadRally" | "followersCatchingUp" | "mixed";
   members: ChainStageMember[];
+  themeGroups: ChainThemeGroup[];
   adjacentMembers: { upstream: ChainAdjacentStock[]; downstream: ChainAdjacentStock[] };
 }
 
@@ -191,17 +211,35 @@ function StageSummary({ stage }: { stage: ChainStageSignal }) {
   );
 }
 
-function StageTable({ stage }: { stage: ChainStageSignal }) {
-  if (stage.memberCount === 0) {
-    return <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">這個階段目前沒有追蹤中的股票</p>;
-  }
+/** 超過這個數量的主題分組，預設收合只顯示前COLLAPSED_VISIBLE_COUNT檔（members本身已經
+ * 龍頭優先排序，所以收合狀態不會漏掉龍頭股），避免使用者一打開就要看50檔攤平的表格 */
+const COLLAPSE_THRESHOLD = 15;
+const COLLAPSED_VISIBLE_COUNT = 8;
 
-  const hasUpstream = stage.adjacentMembers.upstream.length > 0;
-  const hasDownstream = stage.adjacentMembers.downstream.length > 0;
+function ThemeGroupTable({
+  group,
+  hasUpstream,
+  hasDownstream,
+  adjacentMembers,
+}: {
+  group: ChainThemeGroup;
+  hasUpstream: boolean;
+  hasDownstream: boolean;
+  adjacentMembers: { upstream: ChainAdjacentStock[]; downstream: ChainAdjacentStock[] };
+}) {
+  const needsCollapse = group.memberCount > COLLAPSE_THRESHOLD;
+  const [expanded, setExpanded] = useState(false);
+  const visibleMembers = needsCollapse && !expanded ? group.members.slice(0, COLLAPSED_VISIBLE_COUNT) : group.members;
+  const hiddenCount = group.memberCount - visibleMembers.length;
 
   return (
-    <>
-      <div className="mt-3 hidden overflow-x-auto md:block">
+    <div className="mt-4">
+      <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+        {group.themeName}
+        <span className="ml-1.5 font-normal text-zinc-400 dark:text-zinc-500">（{group.memberCount}檔）</span>
+      </p>
+
+      <div className="mt-1.5 hidden overflow-x-auto md:block">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-zinc-100 text-left text-[11px] font-medium text-zinc-400 dark:border-white/10 dark:text-zinc-500">
@@ -215,7 +253,7 @@ function StageTable({ stage }: { stage: ChainStageSignal }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100 dark:divide-white/10">
-            {stage.members.map((m) => (
+            {visibleMembers.map((m) => (
               <tr key={m.ticker} className="group">
                 <td className="py-2.5 pr-3">
                   <Link href={`/tw/stock/${m.ticker}`} className="flex items-center gap-1.5 hover:underline">
@@ -242,12 +280,12 @@ function StageTable({ stage }: { stage: ChainStageSignal }) {
                 </td>
                 {hasUpstream && (
                   <td className="px-3 py-2.5">
-                    <AdjacentChips label="上游" stocks={stage.adjacentMembers.upstream} />
+                    <AdjacentChips label="上游" stocks={adjacentMembers.upstream} />
                   </td>
                 )}
                 {hasDownstream && (
                   <td className="px-3 py-2.5">
-                    <AdjacentChips label="下游" stocks={stage.adjacentMembers.downstream} />
+                    <AdjacentChips label="下游" stocks={adjacentMembers.downstream} />
                   </td>
                 )}
               </tr>
@@ -256,8 +294,8 @@ function StageTable({ stage }: { stage: ChainStageSignal }) {
         </table>
       </div>
 
-      <div className="mt-3 flex flex-col divide-y divide-zinc-100 md:hidden dark:divide-white/10">
-        {stage.members.map((m) => (
+      <div className="mt-1.5 flex flex-col divide-y divide-zinc-100 md:hidden dark:divide-white/10">
+        {visibleMembers.map((m) => (
           // 卡片本身不整張包在<Link>裡——下面的上/下游關聯各自也是可點的<Link>，HTML不允許<a>巢狀<a>
           <div key={m.ticker} className="py-2.5">
             <Link href={`/tw/stock/${m.ticker}`} className="block active:opacity-70">
@@ -285,13 +323,13 @@ function StageTable({ stage }: { stage: ChainStageSignal }) {
                 {hasUpstream && (
                   <div className="flex items-center gap-1.5 text-[11px]">
                     <span className="shrink-0 text-zinc-400 dark:text-zinc-500">上游</span>
-                    <AdjacentChips label="上游" stocks={stage.adjacentMembers.upstream} />
+                    <AdjacentChips label="上游" stocks={adjacentMembers.upstream} />
                   </div>
                 )}
                 {hasDownstream && (
                   <div className="flex items-center gap-1.5 text-[11px]">
                     <span className="shrink-0 text-zinc-400 dark:text-zinc-500">下游</span>
-                    <AdjacentChips label="下游" stocks={stage.adjacentMembers.downstream} />
+                    <AdjacentChips label="下游" stocks={adjacentMembers.downstream} />
                   </div>
                 )}
               </div>
@@ -299,7 +337,41 @@ function StageTable({ stage }: { stage: ChainStageSignal }) {
           </div>
         ))}
       </div>
-    </>
+
+      {needsCollapse && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-2 flex items-center gap-1 text-xs font-medium text-violet-600 hover:underline dark:text-violet-400"
+        >
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} strokeWidth={2.25} />
+          {expanded ? "收合" : `顯示全部 ${group.memberCount} 檔（還有 ${hiddenCount} 檔）`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function StageTable({ stage }: { stage: ChainStageSignal }) {
+  if (stage.memberCount === 0) {
+    return <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">這個階段目前沒有追蹤中的股票</p>;
+  }
+
+  const hasUpstream = stage.adjacentMembers.upstream.length > 0;
+  const hasDownstream = stage.adjacentMembers.downstream.length > 0;
+
+  return (
+    <div className="divide-y divide-zinc-100 dark:divide-white/10">
+      {stage.themeGroups.map((group) => (
+        <ThemeGroupTable
+          key={group.themeName}
+          group={group}
+          hasUpstream={hasUpstream}
+          hasDownstream={hasDownstream}
+          adjacentMembers={stage.adjacentMembers}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -343,7 +415,7 @@ export function ChainExplorer() {
         title="產業鏈"
         tooltip={
           <InfoTooltip>
-            每條鏈依上游→中游→下游（部分鏈另有支援層）拆解，每個階段列出全部追蹤中的成員股票：收盤價與今日漲跌（紅漲綠跌）、近5日報酬、目前的戰術訊號，以及所屬階段的上/下游關聯股票。
+            每條鏈依上游→中游→下游（部分鏈另有支援層）拆解，每個階段再依原始細分主題分組列出成員股票（例如「上游：IP與IC設計」拆成「IC設計：高階運算與邊緣AI」跟「矽智財：IP與ASIC設計服務」兩組）——同一組才是真正同類、值得互相比較的股票；超過15檔的大宗主題預設只顯示龍頭+前幾名，可點「顯示全部」展開。每檔股票顯示收盤價與今日漲跌（紅漲綠跌）、近5日報酬、目前的戰術訊號，以及所屬階段的上/下游關聯股票。
             <br />
             <br />
             階段標頭的燈號綜合「多少比例成員有觸發戰術訊號」+「近5日族群平均報酬」判斷：走弱（近5日報酬&lt;-1%，優先判定）、活躍（報酬≥3%或訊號比例≥30%且未轉負）、初動（有訊號或報酬&gt;0）、平靜（都沒有）。另外把龍頭股（皇冠圖示）跟二軍分開算，標示「龍頭領漲」「全面齊漲」「二軍補漲」判斷現在是哪個階段。
