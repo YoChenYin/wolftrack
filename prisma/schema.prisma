@@ -488,13 +488,17 @@ model EarningsCallAnalysis {
   /// MOPS的中文簡報檔名（例如233020260716M001.pdf），拿來判斷這場法說會有沒有處理過，避免重複
   pdfFileName    String   @unique @map("pdf_file_name")
 
-  /// LLM整理的獲利成長重點（營收/毛利率/淨利等數字與趨勢），簡報沒提到具體數字就描述定性判斷
-  profitGrowthSummary String            @map("profit_growth_summary") @db.Text
+  /// LLM整理的獲利成長重點（營收/毛利率/淨利等數字與趨勢），簡報沒提到具體數字就描述定性判斷。
+  /// 2026-08-19起可以是null——擴大爬取範圍後，發現的簡報會先建立一筆只有pdfFileName的
+  /// 「待解析」紀錄，LLM額度不夠時這幾個欄位先留空，之後排程有額度再補上（不會因為當下沒額度
+  /// 就整個丟掉，使用者在UI上還是看得到簡報連結）
+  profitGrowthSummary String?            @map("profit_growth_summary") @db.Text
   /// 下一季/下一年度的展望與guidance
-  outlookSummary      String            @map("outlook_summary") @db.Text
+  outlookSummary      String?            @map("outlook_summary") @db.Text
   /// 簡報裡提到的具體風險因素，不是Safe Harbor那種制式法律免責聲明
-  riskSummary         String            @map("risk_summary") @db.Text
-  signal              FundamentalSignal
+  riskSummary         String?            @map("risk_summary") @db.Text
+  /// null=還沒解析（待解析），見上面profitGrowthSummary說明
+  signal              FundamentalSignal?
 
   createdAt DateTime @default(now()) @map("created_at")
 

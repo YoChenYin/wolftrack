@@ -14,9 +14,19 @@ export function Card({ children, className = "" }: { children: React.ReactNode; 
   );
 }
 
-export function SubCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+export function SubCard({
+  children,
+  className = "",
+  title,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  /** 原生title屬性，滑鼠停留顯示tooltip，不是視覺上的標題文字 */
+  title?: string;
+}) {
   return (
     <div
+      title={title}
       className={`rounded-xl bg-zinc-50/70 p-3 ring-1 ring-zinc-900/[0.04] dark:bg-white/[0.04] dark:ring-white/[0.06] ${className}`}
     >
       {children}

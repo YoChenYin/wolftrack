@@ -99,6 +99,14 @@ export async function fetchEarningsConferenceList(
   return parseEarningsConferenceList(html, ticker);
 }
 
+/** 給前端直接開新分頁下載/預覽PDF用的靜態連結。FileDownLoad文件上是表單POST，但實測
+ * 同一組參數包成query string一樣可以GET拿到PDF（curl驗證過200 application/pdf），
+ * 瀏覽器<a href>可以直接打開，不用另外做一個proxy route轉發POST請求。 */
+export function buildMopsPdfUrl(fileName: string): string {
+  const filePath = encodeURIComponent("/home/html/nas/STR/");
+  return `${MOPS_BASE_URL}/server-java/FileDownLoad?step=9&filePath=${filePath}&fileName=${encodeURIComponent(fileName)}`;
+}
+
 export async function downloadMopsPdf(fileName: string): Promise<Buffer> {
   const body = `step=9&filePath=${encodeURIComponent("/home/html/nas/STR/")}&fileName=${encodeURIComponent(fileName)}`;
   const res = await fetchWithRetry(`${MOPS_BASE_URL}/server-java/FileDownLoad`, body);

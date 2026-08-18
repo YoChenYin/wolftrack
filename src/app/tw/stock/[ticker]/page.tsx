@@ -15,6 +15,7 @@ import type { InstitutionalDay } from "@/lib/trend/tw/chipScore";
 import { StockMentionsPanel } from "@/components/youtube/StockMentionsPanel";
 import { fetchStockMentions } from "@/lib/youtube/queries";
 import { EarningsCallPanel } from "@/components/tw/EarningsCallPanel";
+import { buildMopsPdfUrl } from "@/lib/marketData/mopsClient";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 
 export const dynamic = "force-dynamic";
@@ -180,6 +181,7 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
           <EarningsCallPanel
             analyses={earningsCallAnalyses.map((a) => ({
               conferenceDate: a.conferenceDate.toISOString().slice(0, 10),
+              pdfUrl: buildMopsPdfUrl(a.pdfFileName),
               profitGrowthSummary: a.profitGrowthSummary,
               outlookSummary: a.outlookSummary,
               riskSummary: a.riskSummary,
