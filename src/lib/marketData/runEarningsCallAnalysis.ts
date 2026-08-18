@@ -19,12 +19,38 @@ import { parseEarningsCall } from "./parseEarningsCall";
  * 額度用完的股票這輪只留下待解析紀錄，下次呼叫時（見processStock裡existing.signal===null
  * 分支）會被撿回來繼續解析，不會因為某一輪額度不夠就整份掉了。
  *
- * 龍頭股（getAllLeaderTickers）排在遍歷順序最前面，額度不夠時優先保證解析完，二軍/其餘
- * 板塊成員排後面——同樣是「額度不夠沒解析」，龍頭股比較少見，其餘股票比較常見也可接受。
+ * 2026-08-19再加一個範圍來源：近7天出現「投信轉買」或「投信外資合買」戰術訊號的股票
+ * （getInstitutionalAccumulationTickers），不限於有分類到板塊——投信/外資才剛開始佈局的
+ * 股票，使用者最想知道的正是這時候的法說會基本面，不該因為沒被收進某個板塊主題就漏掉。
+ * 跟板塊股票是同一份universeTickers（Set聯集），寫進同一張earnings_call_analyses表、
+ * 同一個/tw/fundamentals清單——不會因為股票的「入選理由」不同就分成兩個區塊。
+ *
+ * 遍歷優先順序：龍頭股 > 剛被投信/外資點名的股票 > 其餘板塊成員（依代號排序）。額度不夠時
+ * 最先保證解析完的是這兩種「時間敏感」的股票——龍頭股本身少見，投信外資剛佈局的訊號如果
+ * 拖到幾週後才解析，時效性的意義就打折了。
  */
 const PROCESS_BUDGET_PER_INVOCATION = 8;
 /** 內容太短的PDF擷取結果視為異常（可能是掃描圖檔或下載失敗），跳過不送LLM */
 const MIN_TEXT_LENGTH = 200;
+/** 「投信外資開始佈局」訊號的時效窗口，跟computeChainSignals.ts的RECENCY_WINDOW_DAYS同一套邏輯 */
+const ACCUMULATION_SIGNAL_RECENCY_DAYS = 7;
+
+/** 近幾天出現「投信由賣轉買」或「投信外資同時買超」的股票代號（見classifyChipFlow.ts），
+ * 不限於group_config.json收錄的板塊——這是「當下正在發生的籌碼動向」，跟板塊分類是
+ * 兩套獨立的入選邏輯，各自都可能覆蓋到另一邊沒有的股票 */
+async function getInstitutionalAccumulationTickers(): Promise<string[]> {
+  const cutoff = new Date(Date.now() - ACCUMULATION_SIGNAL_RECENCY_DAYS * 86_400_000);
+  const rows = await prisma.dailyTrendSignal.findMany({
+    where: {
+      tradeDate: { gte: cutoff },
+      status: { in: ["trustTurnBuy", "combinedBuy"] },
+      stock: { market: "TW" },
+    },
+    select: { stock: { select: { ticker: true } } },
+    distinct: ["stockId"],
+  });
+  return rows.map((r) => r.stock.ticker);
+}
 
 interface StockResult {
   ticker: string;
@@ -112,11 +138,16 @@ export interface EarningsCallBatchResult {
 
 export async function runEarningsCallAnalysisBatch(): Promise<EarningsCallBatchResult> {
   const themedTickers = getAllThemedTickers();
+  const accumulationTickers = await getInstitutionalAccumulationTickers();
   const leaderTickers = new Set(getAllLeaderTickers());
-  // 龍頭優先、其餘依代號排序——額度不夠時最先保證解析完的是龍頭股
-  const universeTickers = [...themedTickers].sort((a, b) => {
-    const aRank = leaderTickers.has(a) ? 0 : 1;
-    const bRank = leaderTickers.has(b) ? 0 : 1;
+  const accumulationSet = new Set(accumulationTickers);
+
+  // 板塊股票 ∪ 投信外資剛佈局的股票，去重後統一排序——同一檔股票不會因為兩邊都有它
+  // 而被處理兩次，也不會因為入選理由不同被分到不同區塊（見上面函式說明）
+  const universeTickers = [...new Set([...themedTickers, ...accumulationTickers])].sort((a, b) => {
+    const rank = (t: string) => (leaderTickers.has(t) ? 0 : accumulationSet.has(t) ? 1 : 2);
+    const aRank = rank(a);
+    const bRank = rank(b);
     return aRank !== bRank ? aRank - bRank : a.localeCompare(b);
   });
 
