@@ -25,9 +25,13 @@ export function buildTwDailyTrendSignalRow(signal: TwDailySignal) {
     chipConcentration20: signal.chipConcentration20,
     chipMomentum: signal.chipMomentum,
     chipBadge: signal.chipBadge,
-    status: signal.status as "trustTurnBuy" | "combinedBuy" | "buyDip" | "trustTurnSell" | "combinedSell" | "limitMove",
+    status: signal.status as "trustTurnBuy" | "combinedBuy" | "buyDip" | "trustTurnSell" | "combinedSell" | "limitMove" | "none",
     reversalPointDate: signal.reversalPointDate ? new Date(signal.reversalPointDate) : null,
     priceAtSignal: signal.priceAtSignal,
     triggerReason: signal.triggerReason,
+    bottomPatternType: signal.bottomPatternType,
+    bottomPatternStage: signal.bottomPatternStage,
+    bottomPatternDescription: signal.bottomPatternDescription,
+    bottomPatternTargetPrice: signal.bottomPatternTargetPrice,
   };
 }

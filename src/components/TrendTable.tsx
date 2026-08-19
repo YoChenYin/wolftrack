@@ -1,5 +1,18 @@
 import Link from "next/link";
-import { CircleAlert, ChevronsUp, ChevronsDown, Minimize2, CheckCircle2, ArrowUp, ArrowDown } from "lucide-react";
+import {
+  CircleAlert,
+  ChevronsUp,
+  ChevronsDown,
+  Minimize2,
+  CheckCircle2,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpToLine,
+  ArrowDownToLine,
+  Globe,
+  Landmark,
+  Waves,
+} from "lucide-react";
 import type { SectorTrendItem, TacticalStatus } from "@/lib/trend/sectorTrendsQuery";
 import { TACTICAL_STATUS_META } from "@/lib/trend/tacticalStatusMeta";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
@@ -40,8 +53,9 @@ function formatPrice(value: number | null): string {
 }
 
 /** 支撐/壓力（近60個交易日高低點，見supportResistance.ts）——壓力=建議停利參考、
- * 支撐=建議進場參考，同一組數字，用標籤直接標明用途不用另外多兩欄。今天如果已經站上
- * 壓力或跌破支撐，額外標一個小標籤（這代表這個方法本身的參考意義降低，不是常態） */
+ * 支撐=建議進場參考，用圖示直接標明用途（壓力=上緣、支撐=下緣）取代文字標籤，縮成緊湊的
+ * icon+數字兩行，不用像文字標籤那樣佔橫向空間。今天如果已經站上壓力或跌破支撐，用顏色+
+ * 粗體標出來（不再另外多一行文字），滑鼠停留看完整說明 */
 function SupportResistanceCell({
   support,
   resistance,
@@ -52,27 +66,70 @@ function SupportResistanceCell({
   priceStatus: SectorTrendItem["priceStatus"];
 }) {
   if (support === null || resistance === null) return <span className="text-zinc-300 dark:text-zinc-600">—</span>;
+  const aboveResistance = priceStatus === "aboveResistance";
+  const belowSupport = priceStatus === "belowSupport";
   return (
-    <div className="flex flex-col items-end gap-0.5 text-xs text-zinc-600 dark:text-zinc-300">
-      <span>壓力 {formatPrice(resistance)}</span>
-      <span>支撐 {formatPrice(support)}</span>
-      {priceStatus === "aboveResistance" && (
-        <span className="font-medium text-red-600 dark:text-red-400">已站上壓力</span>
-      )}
-      {priceStatus === "belowSupport" && (
-        <span className="font-medium text-emerald-600 dark:text-emerald-400">已跌破支撐</span>
-      )}
+    <div className="flex flex-col items-end gap-1 text-xs tabular-nums text-zinc-600 dark:text-zinc-300">
+      <span
+        className={`inline-flex items-center gap-1 ${aboveResistance ? "font-semibold text-red-600 dark:text-red-400" : ""}`}
+        title={aboveResistance ? "已站上近60日壓力價" : "壓力價（近60日高點）"}
+      >
+        <ArrowUpToLine className="h-3 w-3 shrink-0" strokeWidth={2.25} />
+        {formatPrice(resistance)}
+      </span>
+      <span
+        className={`inline-flex items-center gap-1 ${belowSupport ? "font-semibold text-emerald-600 dark:text-emerald-400" : ""}`}
+        title={belowSupport ? "已跌破近60日支撐價" : "支撐價（近60日低點）"}
+      >
+        <ArrowDownToLine className="h-3 w-3 shrink-0" strokeWidth={2.25} />
+        {formatPrice(support)}
+      </span>
     </div>
   );
 }
 
-/** 外資/投信近60個交易日持續買超部位的加權平均成本，見institutionalCostBasis.ts */
+/** 外資/投信近60個交易日持續買超部位的加權平均成本，見institutionalCostBasis.ts——用圖示
+ * 區分兩種法人（地球=外資、建物=投信）取代文字標籤，跟支撐/壓力欄位同樣的緊湊排法 */
 function CostBasisCell({ foreignCostBasis, trustCostBasis }: { foreignCostBasis: number | null; trustCostBasis: number | null }) {
   if (foreignCostBasis === null && trustCostBasis === null) return <span className="text-zinc-300 dark:text-zinc-600">—</span>;
   return (
-    <div className="flex flex-col items-end gap-0.5 text-xs text-zinc-600 dark:text-zinc-300">
-      <span>外資 {formatPrice(foreignCostBasis)}</span>
-      <span>投信 {formatPrice(trustCostBasis)}</span>
+    <div className="flex flex-col items-end gap-1 text-xs tabular-nums text-zinc-600 dark:text-zinc-300">
+      <span className="inline-flex items-center gap-1" title="外資近60日加權平均成本價">
+        <Globe className="h-3 w-3 shrink-0 text-blue-500 dark:text-blue-400" strokeWidth={2.25} />
+        {formatPrice(foreignCostBasis)}
+      </span>
+      <span className="inline-flex items-center gap-1" title="投信近60日加權平均成本價">
+        <Landmark className="h-3 w-3 shrink-0 text-violet-500 dark:text-violet-400" strokeWidth={2.25} />
+        {formatPrice(trustCostBasis)}
+      </span>
+    </div>
+  );
+}
+
+/** 底部反轉型態（頭肩底/N字底，見detectBottomPattern.ts）——獨立於status，其他5個分頁的股票
+ * 也可能剛好有值（型態跟籌碼流是不同來源的訊號，不互斥），順便讓使用者發現額外的訊號重疊。
+ * 完整描述（含突破價位/目標價）放title，滑鼠停留看，欄位本身只放型態名稱+階段，維持緊湊 */
+function BottomPatternCell({
+  type,
+  stage,
+  description,
+}: {
+  type: SectorTrendItem["bottomPatternType"];
+  stage: SectorTrendItem["bottomPatternStage"];
+  description: string | null;
+}) {
+  if (type === null) return <span className="text-zinc-300 dark:text-zinc-600">—</span>;
+  const label = type === "headShoulders" ? "頭肩底" : "N字底";
+  const confirmed = stage === "confirmed";
+  return (
+    <div className="flex flex-col items-end gap-1 text-xs text-zinc-600 dark:text-zinc-300" title={description ?? undefined}>
+      <span className="inline-flex items-center gap-1">
+        <Waves className="h-3 w-3 shrink-0" strokeWidth={2.25} />
+        {label}
+      </span>
+      <span className={confirmed ? "font-semibold text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}>
+        {confirmed ? "已突破確認" : "即將突破"}
+      </span>
     </div>
   );
 }
@@ -192,8 +249,27 @@ export function TrendTable({ status, items, loading }: { status: TacticalStatus;
                   <th className="px-3 py-2 text-right font-medium">20日</th>
                   <th className="px-3 py-2 text-center font-medium">MA排列</th>
                   <th className="px-3 py-2 text-center font-medium">布林訊號</th>
-                  <th className="px-3 py-2 text-right font-medium">支撐/壓力</th>
-                  <th className="px-3 py-2 text-right font-medium">外資/投信成本</th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    支撐/壓力
+                    <InfoTooltip align="right">
+                      <ArrowUpToLine className="mr-1 inline h-3 w-3" strokeWidth={2.25} />壓力價（近60日高點）／
+                      <ArrowDownToLine className="mr-1 inline h-3 w-3" strokeWidth={2.25} />支撐價（近60日低點）。已站上壓力或跌破支撐時數字會變色加粗。
+                    </InfoTooltip>
+                  </th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    外資/投信成本
+                    <InfoTooltip align="right">
+                      <Globe className="mr-1 inline h-3 w-3" strokeWidth={2.25} />外資／
+                      <Landmark className="mr-1 inline h-3 w-3" strokeWidth={2.25} />投信，近60個交易日持續買超部位的加權平均成本價。
+                    </InfoTooltip>
+                  </th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    型態訊號
+                    <InfoTooltip align="right">
+                      <Waves className="mr-1 inline h-3 w-3" strokeWidth={2.25} />
+                      偵測到的底部反轉型態（頭肩底/N字底），獨立於上面的戰術分類，跟其他分頁不互斥。滑鼠停留看完整說明。
+                    </InfoTooltip>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-white/10">
@@ -246,6 +322,13 @@ export function TrendTable({ status, items, loading }: { status: TacticalStatus;
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5">
                       <CostBasisCell foreignCostBasis={item.foreignCostBasis} trustCostBasis={item.trustCostBasis} />
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5">
+                      <BottomPatternCell
+                        type={item.bottomPatternType}
+                        stage={item.bottomPatternStage}
+                        description={item.bottomPatternDescription}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -326,6 +409,24 @@ export function TrendTable({ status, items, loading }: { status: TacticalStatus;
                         }`}
                       >
                         {item.priceStatus === "aboveResistance" ? "已站上壓力" : "已跌破支撐"}
+                      </span>
+                    </div>
+                  )}
+                  {item.bottomPatternType !== null && (
+                    <div
+                      className="col-span-2 flex items-center justify-between rounded bg-zinc-50 px-2 py-1 dark:bg-white/[0.04]"
+                      title={item.bottomPatternDescription ?? undefined}
+                    >
+                      <span className="text-zinc-400 dark:text-zinc-500">型態訊號</span>
+                      <span
+                        className={`font-medium ${
+                          item.bottomPatternStage === "confirmed"
+                            ? "text-red-600 dark:text-red-400"
+                            : "text-amber-600 dark:text-amber-400"
+                        }`}
+                      >
+                        {item.bottomPatternType === "headShoulders" ? "頭肩底" : "N字底"}・
+                        {item.bottomPatternStage === "confirmed" ? "已突破確認" : "即將突破"}
                       </span>
                     </div>
                   )}

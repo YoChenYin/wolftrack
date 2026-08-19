@@ -88,7 +88,10 @@ export async function runTwDailyBatch(tickerFilter?: string[]): Promise<TwDailyB
         benchmarkTargetIndex
       );
 
-      if (signal.status === "none") {
+      // 2026-08-20起：status="none"（籌碼流五段分類都不符合）本來整筆跳過不寫DB，現在多一個
+      // 例外——如果偵測到底部反轉型態（bottomPatternStage不是null，見detectBottomPattern.ts），
+      // 這筆還是要寫，只是status維持"none"（籌碼流真的沒有分類），純粹是為了存放型態欄位
+      if (signal.status === "none" && signal.bottomPatternStage === null) {
         skippedNone++;
         continue;
       }

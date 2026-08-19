@@ -5,6 +5,7 @@ import {
   ArrowDownToLine,
   Repeat,
   Users,
+  Waves,
   type LucideIcon,
 } from "lucide-react";
 import type { TacticalStatus } from "./sectorTrendsQuery";
@@ -91,6 +92,18 @@ export const TACTICAL_STATUS_META: Record<TacticalStatus, TacticalStatusMeta> = 
     criteria:
       "① 股價落在季線(MA60)±1.5%範圍內 ② 近5日籌碼集中度≥15%。用真實production資料回測過，是目前這套策略裡唯一有穩健正超額報酬的訊號：20日中位超額報酬約+2.1%~+2.3%，勝率70%以上。",
     signalLabel: "訊號起點",
+  },
+  bottomPattern: {
+    icon: Waves,
+    iconColor: "emerald",
+    title: "底部出現",
+    subtitle: "頭肩底/N字底反轉型態成形中 — 效果未驗證",
+    accent: "border-t-emerald-500",
+    badge: "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-400",
+    unproven: true,
+    criteria:
+      "偵測兩種經典打底型態：①頭肩底（左肩-頭部-右肩三個轉折低點，頭部最低，右肩已成形，等突破頸線）②N字底（第1腳-反彈高點-第2腳，第2腳不破前低，等突破反彈高點）。只在型態主體已經成形（頭肩底的右肩、N字底的第2腳都已確認）才會出現，分「即將突破」「已突破確認」兩階段，見個股狀態描述。這是主觀的圖形辨識，容忍度是判斷不是backtest出來的最佳參數，還沒有勝率資料。",
+    signalLabel: "型態階段",
   },
   trustTurnSell: {
     icon: Repeat,

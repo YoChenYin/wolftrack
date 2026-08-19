@@ -114,6 +114,12 @@ enum TrendStatus {
   combinedBuy
   trustTurnSell
   combinedSell
+  /// 2026-08-20新增：籌碼流五段分類皆不符合，但這天有寫入這筆訊號，只是為了存放獨立於
+  /// 籌碼流的底部型態偵測結果（bottomPatternType/Stage，見detectBottomPattern.ts）。
+  /// 在此之前"none"是TS-only的哨兵值、規則上永遠不會寫進DB（見src/lib/trend/types.ts
+  /// 說明），這是第一次真的把它寫進資料庫——只有台股會寫，美股runUsDailyBatch.ts
+  /// 的skip邏輯沒有動，那邊維持"none"不寫入row的舊規則。
+  none
 }
 
 /// 籌碼集中度動態訊號：轉強 / 持平 / 轉弱（docs/wolftrack-tw-spec.md 3.6）
@@ -127,6 +133,24 @@ enum ChipMomentum {
 enum ChipBadge {
   confirmed
   divergence
+}
+
+/// 底部反轉型態種類（2026-08-20新增，見detectBottomPattern.ts），台股限定
+enum BottomPatternType {
+  /// 頭肩底：左肩-頭部-右肩三個轉折低點，頭部最低，突破頸線(兩個轉折高點)確認
+  headShoulders
+  /// N字底：第1腳(轉折低點)-反彈高點-第2腳(不破前低的轉折低點)，突破反彈高點確認
+  nShape
+}
+
+/// 底部型態目前走到哪個階段（2026-08-20新增）——刻意只分兩段，不是完整型態成形前的每個
+/// 細部階段（左肩剛形成、頭部剛形成…太早期、假訊號風險太高），只有型態主體（頭肩底的左肩+
+/// 頭部+右肩、N字底的第1腳+反彈高點+第2腳）都已經成形，才會開始有值，用實際突破與否分兩段
+enum BottomPatternStage {
+  /// 型態主體已成形，股價尚未站上突破價位（頸線／反彈高點），但已經在接近的範圍內
+  nearBreakout
+  /// 股價已經站上突破價位，型態確認
+  confirmed
 }
 
 /// 每股每日一筆的 Core Score + 三段分類計算結果（US + TW 共用，TW 專屬欄位皆為 nullable）
@@ -178,6 +202,17 @@ model DailyTrendSignal {
   /// （非規則本身），見 classifyChipFlow.ts 的 describeEntryReason/describeExitReasons/
   /// describeBuyDipReason。美股版跟台股 limitMove/none 狀態永遠是 null。
   triggerReason String? @map("trigger_reason") @db.Text
+
+  // 2026-08-20新增：底部反轉型態偵測（頭肩底/N字底，見detectBottomPattern.ts），台股限定，
+  // 刻意獨立於上面的status（籌碼流分類）——一檔股票可能同時符合逢低布局又在走頭肩底，
+  // 兩者是不同來源的訊號，不用互相排擠，UI上是新增的「底部出現」分頁，篩選條件是
+  // bottomPatternStage不是null，不是status等於特定值
+  bottomPatternType        BottomPatternType?  @map("bottom_pattern_type")
+  bottomPatternStage       BottomPatternStage? @map("bottom_pattern_stage")
+  /// 目前型態走到哪一步的中文描述，例如「右肩形成中，等待突破頸線1234.00元」，見describeBottomPattern()
+  bottomPatternDescription String?             @map("bottom_pattern_description") @db.Text
+  /// 型態確認後的量測目標價（頸線/反彈高點 + 型態深度），nearBreakout階段也會先算好給使用者參考
+  bottomPatternTargetPrice Decimal?            @map("bottom_pattern_target_price") @db.Decimal(12, 4)
 
   createdAt DateTime @default(now()) @map("created_at")
 

@@ -34,4 +34,9 @@ export interface TwDailySignal {
    * 只是保留欄位讓舊資料還能正常顯示，不用另外跑一次移除欄位的migration。
    */
   chipBadge: ChipBadge | null;
+  /** 2026-08-20新增：底部反轉型態偵測，獨立於status（籌碼流分類），見detectBottomPattern.ts */
+  bottomPatternType: "headShoulders" | "nShape" | null;
+  bottomPatternStage: "nearBreakout" | "confirmed" | null;
+  bottomPatternDescription: string | null;
+  bottomPatternTargetPrice: number | null;
 }

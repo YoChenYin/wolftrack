@@ -14,6 +14,7 @@ import { isLimitMoveDay } from "./limitMove";
 import { calculateChipScore, type InstitutionalDay } from "./chipScore";
 import { calculateChipConcentration } from "./chipConcentration";
 import { combineCoreScoreTw } from "./coreScoreTw";
+import { detectBottomPattern } from "./detectBottomPattern";
 import type { TwDailySignal } from "./types";
 
 function diffOrNull(a: number | null, b: number | null): number | null {
@@ -89,6 +90,10 @@ export function calculateTwTrendSignalAtIndex(
 
   const status = isLimitMove ? "limitMove" : classification.status;
 
+  // 底部型態偵測獨立於上面的籌碼流分類（見detectBottomPattern.ts），漲跌停日不特別排除——
+  // 型態辨識只看收盤價序列，跟當天是否漲跌停無關
+  const bottomPattern = detectBottomPattern(bars.slice(0, targetIndex + 1).map((b) => b.close));
+
   return {
     tradeDate: bar.date,
     closePrice: bar.close,
@@ -123,5 +128,9 @@ export function calculateTwTrendSignalAtIndex(
     chipConcentration20: concentration20,
     chipMomentum: momentum,
     chipBadge: null,
+    bottomPatternType: bottomPattern?.patternType ?? null,
+    bottomPatternStage: bottomPattern?.stage ?? null,
+    bottomPatternDescription: bottomPattern?.description ?? null,
+    bottomPatternTargetPrice: bottomPattern?.targetPrice ?? null,
   };
 }

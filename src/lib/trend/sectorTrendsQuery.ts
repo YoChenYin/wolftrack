@@ -16,6 +16,13 @@ import { calculateInstitutionalCostBasis } from "@/lib/trend/tw/institutionalCos
  * src/lib/trend/types.ts 的 TrendStatus 說明）。UI（SectorTrendsBoard.tsx）用多方/空方
  * tab切換要顯示哪幾欄，這裡的型別跟 tacticalStatusesForMarket() 只負責「這個market
  * 合法的狀態有哪些」，不管tab怎麼分組。
+ *
+ * 2026-08-20新增"bottomPattern"（底部出現，見detectBottomPattern.ts）——這個「分類」比較
+ * 特殊：不是對應daily_trend_signals.status的某個值（DB裡沒有這個status），而是「這列的
+ * bottomPatternStage不是null」，因為底部型態是獨立於籌碼流的訊號來源，一檔股票可能同時符合
+ * buyDip又在走頭肩底。fetchSectorTrendsForMode/fetchSectorTrendsGrouped內部對這個值要走
+ * 不同的過濾條件（用bottomPatternStage不是status），不能只套用一般的「status===mode」邏輯，
+ * 呼叫端（TrendTable等）不需要知道這個差異，一樣當成6選1的tab用。
  */
 export type TacticalStatus =
   | "reversal"
@@ -25,10 +32,18 @@ export type TacticalStatus =
   | "combinedBuy"
   | "buyDip"
   | "trustTurnSell"
-  | "combinedSell";
+  | "combinedSell"
+  | "bottomPattern";
 
 const US_TACTICAL_STATUSES: TacticalStatus[] = ["reversal", "pullback", "bullish"];
-const TW_TACTICAL_STATUSES: TacticalStatus[] = ["trustTurnBuy", "combinedBuy", "buyDip", "trustTurnSell", "combinedSell"];
+const TW_TACTICAL_STATUSES: TacticalStatus[] = [
+  "trustTurnBuy",
+  "combinedBuy",
+  "buyDip",
+  "bottomPattern",
+  "trustTurnSell",
+  "combinedSell",
+];
 /** 兩個市場實際用的詞彙不同（見上方TacticalStatus說明），依market選對應那一組 */
 export function tacticalStatusesForMarket(market: Market): TacticalStatus[] {
   return market === "TW" ? TW_TACTICAL_STATUSES : US_TACTICAL_STATUSES;
@@ -114,6 +129,12 @@ export interface SectorTrendItem {
    * null=這個窗口內該法人淨部位從未轉正 */
   foreignCostBasis: number | null;
   trustCostBasis: number | null;
+  /** 2026-08-20新增：底部反轉型態偵測，見detectBottomPattern.ts，獨立於status，null=沒有
+   * 偵測到型態（不代表股票不好，只是沒有符合頭肩底/N字底這兩種特定圖形） */
+  bottomPatternType: "headShoulders" | "nShape" | null;
+  bottomPatternStage: "nearBreakout" | "confirmed" | null;
+  bottomPatternDescription: string | null;
+  bottomPatternTargetPrice: number | null;
 }
 
 export interface SectorTrendsGrouped {
@@ -142,6 +163,10 @@ type SignalRow = {
   chipConcentration5: unknown;
   chipConcentration10: unknown;
   chipConcentration20: unknown;
+  bottomPatternType: "headShoulders" | "nShape" | null;
+  bottomPatternStage: "nearBreakout" | "confirmed" | null;
+  bottomPatternDescription: string | null;
+  bottomPatternTargetPrice: unknown;
   stock: {
     ticker: string;
     companyName: string;
@@ -250,6 +275,10 @@ function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
     priceStatus: stats?.priceStatus ?? null,
     foreignCostBasis: stats?.foreignCostBasis ?? null,
     trustCostBasis: stats?.trustCostBasis ?? null,
+    bottomPatternType: row.bottomPatternType,
+    bottomPatternStage: row.bottomPatternStage,
+    bottomPatternDescription: row.bottomPatternDescription,
+    bottomPatternTargetPrice: row.bottomPatternTargetPrice !== null ? Number(row.bottomPatternTargetPrice) : null,
   };
 }
 
@@ -533,6 +562,7 @@ export async function fetchSectorTrendsGrouped(options: {
     trustTurnBuy: [],
     combinedBuy: [],
     buyDip: [],
+    bottomPattern: [],
     trustTurnSell: [],
     combinedSell: [],
   };
@@ -557,6 +587,7 @@ export async function fetchSectorTrendsGrouped(options: {
     trustTurnBuy: [],
     combinedBuy: [],
     buyDip: [],
+    bottomPattern: [],
     trustTurnSell: [],
     combinedSell: [],
   };
@@ -566,6 +597,11 @@ export async function fetchSectorTrendsGrouped(options: {
       groups[row.status as TacticalStatus].push(row);
     } else if (row.status === "chipLeading") {
       chipLeadingRows.push(row);
+    }
+    // bottomPattern獨立於status判斷（見TacticalStatus型別說明），一列資料可能同時進status
+    // 對應的分類又進bottomPattern，兩者不互斥
+    if (row.bottomPatternStage !== null && marketStatuses.includes("bottomPattern")) {
+      groups.bottomPattern.push(row);
     }
   }
   for (const status of marketStatuses) {
@@ -621,8 +657,10 @@ export async function fetchSectorTrendsForMode(options: {
   }
 
   const latestPerStock = await fetchLatestSignalPerStock(stockFilter, asOfDate);
+  // bottomPattern不是真正的status值（見TacticalStatus型別說明），過濾條件要看
+  // bottomPatternStage，不是status===mode
   const rows = latestPerStock
-    .filter((row) => row.status === options.mode)
+    .filter((row) => (options.mode === "bottomPattern" ? row.bottomPatternStage !== null : row.status === options.mode))
     .sort((a, b) => Number(b.coreScore) - Number(a.coreScore))
     .slice(0, limit);
 

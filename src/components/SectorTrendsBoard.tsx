@@ -17,7 +17,7 @@ import type { Market } from "@/generated/prisma/enums";
  * sectorTrendsQuery.ts——那個檔案開頭 import { prisma }，就算只匯出這兩個常數，value import
  * （不像type import會被erase）還是會把整個module、連帶Prisma client一起打進client bundle，
  * 2026-08-17第一次這樣做時本機就直接500（"chunking context does not support external modules"）。 */
-const TW_LONG_STATUSES: TacticalStatus[] = ["trustTurnBuy", "combinedBuy", "buyDip"];
+const TW_LONG_STATUSES: TacticalStatus[] = ["trustTurnBuy", "combinedBuy", "buyDip", "bottomPattern"];
 const TW_SHORT_STATUSES: TacticalStatus[] = ["trustTurnSell", "combinedSell"];
 
 export interface SectorOption {
@@ -50,7 +50,11 @@ export function SectorTrendsBoard({
   /** 2026-08-17：台股改多空五段式，UI用tab切換要看多方（投信轉買/投信外資合買/逢低布局）
    * 還是空方（投信轉賣/投信外資合賣，沒有逢低布局的空方對應概念）。
    * 2026-08-18：多方/空方底下的3(或2)個分類本身也改成tab切換（原本是並排卡片），一次只看
-   * 一個分類的表格，切換分類跟切換多空是兩層不同的tab，UI故意做出不同樣式區分層級。 */
+   * 一個分類的表格，切換分類跟切換多空是兩層不同的tab，UI故意做出不同樣式區分層級。
+   * 2026-08-20：多方再加第4個分類「底部出現」（頭肩底/N字底反轉型態，見detectBottomPattern.ts）
+   * ——技術上跟其他4個不同，不是對應status的某個值而是bottomPatternStage不是null，
+   * 但對TW_LONG_STATUSES/UI來說一樣當成6選1 tab的其中一個，見sectorTrendsQuery.ts的
+   * TacticalStatus型別說明。 */
   const [twSide, setTwSide] = useState<"long" | "short">("long");
   const [selectedCategory, setSelectedCategory] = useState<TacticalStatus>(TW_LONG_STATUSES[0]);
 
