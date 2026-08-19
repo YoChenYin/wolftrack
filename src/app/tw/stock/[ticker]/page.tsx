@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { findIndustryThemesForTicker } from "@/lib/valuation/groupConfig";
 import { computeGroupValuation } from "@/lib/valuation/computeGroupValuation";
 import { CoreScoreBreakdown } from "@/components/tw/CoreScoreBreakdown";
+import { EntryExitReferenceCard } from "@/components/tw/EntryExitReferenceCard";
 import { FundamentalsSnapshotCard } from "@/components/tw/FundamentalsSnapshotCard";
 import { InstitutionalAttentionCard, type InstitutionalAttentionData } from "@/components/tw/InstitutionalAttentionCard";
 import { InvestmentThesisCard } from "@/components/tw/InvestmentThesisCard";
@@ -15,6 +16,8 @@ import { InstitutionalFlowChart } from "@/components/tw/InstitutionalFlowChart";
 import { ChipConcentrationChart } from "@/components/tw/ChipConcentrationChart";
 import { StockDetailTabs } from "@/components/tw/StockDetailTabs";
 import { calculateChipConcentration } from "@/lib/trend/tw/chipConcentration";
+import { calculateSupportResistance } from "@/lib/trend/tw/supportResistance";
+import { calculateInstitutionalCostBasis } from "@/lib/trend/tw/institutionalCostBasis";
 import type { InstitutionalDay } from "@/lib/trend/tw/chipScore";
 import { StockMentionsPanel } from "@/components/youtube/StockMentionsPanel";
 import { fetchStockMentions } from "@/lib/youtube/queries";
@@ -116,6 +119,25 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
     };
   });
 
+  // 2026-08-19新增：進出場參考（支撐/壓力+外資/投信成本，見EntryExitReferenceCard.tsx）
+  // 都是純計算，用priceBars/institutionalHistory已經有的資料，不用再查一次DB
+  const supportResistance = calculateSupportResistance(priceBars.map((b) => b.close));
+  const closeByDate = new Map(priceBars.map((b) => [b.date, b.close]));
+  const costBasisDays = institutionalHistory
+    .map((day) => {
+      const close = closeByDate.get(day.date);
+      return close === undefined
+        ? null
+        : { closePrice: close, foreignNetBuyShares: day.foreignNetBuyShares, investTrustNetBuyShares: day.investTrustNetBuyShares };
+    })
+    .filter((d): d is { closePrice: number; foreignNetBuyShares: number; investTrustNetBuyShares: number } => d !== null);
+  const foreignCostBasis = calculateInstitutionalCostBasis(
+    costBasisDays.map((d) => ({ closePrice: d.closePrice, netBuyShares: d.foreignNetBuyShares }))
+  ).costBasis;
+  const trustCostBasis = calculateInstitutionalCostBasis(
+    costBasisDays.map((d) => ({ closePrice: d.closePrice, netBuyShares: d.investTrustNetBuyShares }))
+  ).costBasis;
+
   const themes = findIndustryThemesForTicker(ticker);
   const themesWithData = themes.filter((t) => t.members.length > 0);
   const themesWithoutData = themes.filter((t) => t.members.length === 0);
@@ -204,6 +226,13 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
                     ) : (
                       <p className="text-sm text-zinc-400 dark:text-zinc-500">這檔股票目前沒有任何戰術分類歷史資料。</p>
                     )}
+                    <EntryExitReferenceCard
+                      data={
+                        supportResistance
+                          ? { ...supportResistance, foreignCostBasis, trustCostBasis }
+                          : null
+                      }
+                    />
                     <FundamentalsSnapshotCard
                       data={
                         latestQuarterlyEps

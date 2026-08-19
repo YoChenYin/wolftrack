@@ -35,6 +35,48 @@ function formatStreakDays(value: number | null): string {
   return value === null ? "—" : `${value}天`;
 }
 
+function formatPrice(value: number | null): string {
+  return value === null ? "—" : value.toFixed(2);
+}
+
+/** 支撐/壓力（近60個交易日高低點，見supportResistance.ts）——壓力=建議停利參考、
+ * 支撐=建議進場參考，同一組數字，用標籤直接標明用途不用另外多兩欄。今天如果已經站上
+ * 壓力或跌破支撐，額外標一個小標籤（這代表這個方法本身的參考意義降低，不是常態） */
+function SupportResistanceCell({
+  support,
+  resistance,
+  priceStatus,
+}: {
+  support: number | null;
+  resistance: number | null;
+  priceStatus: SectorTrendItem["priceStatus"];
+}) {
+  if (support === null || resistance === null) return <span className="text-zinc-300 dark:text-zinc-600">—</span>;
+  return (
+    <div className="flex flex-col items-end gap-0.5 text-xs text-zinc-600 dark:text-zinc-300">
+      <span>壓力 {formatPrice(resistance)}</span>
+      <span>支撐 {formatPrice(support)}</span>
+      {priceStatus === "aboveResistance" && (
+        <span className="font-medium text-red-600 dark:text-red-400">已站上壓力</span>
+      )}
+      {priceStatus === "belowSupport" && (
+        <span className="font-medium text-emerald-600 dark:text-emerald-400">已跌破支撐</span>
+      )}
+    </div>
+  );
+}
+
+/** 外資/投信近60個交易日持續買超部位的加權平均成本，見institutionalCostBasis.ts */
+function CostBasisCell({ foreignCostBasis, trustCostBasis }: { foreignCostBasis: number | null; trustCostBasis: number | null }) {
+  if (foreignCostBasis === null && trustCostBasis === null) return <span className="text-zinc-300 dark:text-zinc-600">—</span>;
+  return (
+    <div className="flex flex-col items-end gap-0.5 text-xs text-zinc-600 dark:text-zinc-300">
+      <span>外資 {formatPrice(foreignCostBasis)}</span>
+      <span>投信 {formatPrice(trustCostBasis)}</span>
+    </div>
+  );
+}
+
 /** 漲跌用上下箭頭取代文字+/-，金額在上、%在下——一眼就能分辨方向，不用先讀符號再讀數字 */
 function ChangeCell({ amount, pct }: { amount: number | null; pct: number | null }) {
   if (amount === null) return <span className="text-zinc-300 dark:text-zinc-600">—</span>;
@@ -150,6 +192,8 @@ export function TrendTable({ status, items, loading }: { status: TacticalStatus;
                   <th className="px-3 py-2 text-right font-medium">20日</th>
                   <th className="px-3 py-2 text-center font-medium">MA排列</th>
                   <th className="px-3 py-2 text-center font-medium">布林訊號</th>
+                  <th className="px-3 py-2 text-right font-medium">支撐/壓力</th>
+                  <th className="px-3 py-2 text-right font-medium">外資/投信成本</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-white/10">
@@ -196,6 +240,12 @@ export function TrendTable({ status, items, loading }: { status: TacticalStatus;
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-center">
                       <BollingerBadge status={item.bollingerStatus} detail={item.bollingerDetail} />
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5">
+                      <SupportResistanceCell support={item.support} resistance={item.resistance} priceStatus={item.priceStatus} />
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5">
+                      <CostBasisCell foreignCostBasis={item.foreignCostBasis} trustCostBasis={item.trustCostBasis} />
                     </td>
                   </tr>
                 ))}
@@ -253,6 +303,32 @@ export function TrendTable({ status, items, loading }: { status: TacticalStatus;
                       {formatConcentration(item.chipConcentration5)} / {formatConcentration(item.chipConcentration10)} / {formatConcentration(item.chipConcentration20)}
                     </span>
                   </div>
+                  <div className="flex items-center justify-between rounded bg-zinc-50 px-2 py-1 dark:bg-white/[0.04]">
+                    <span className="text-zinc-400 dark:text-zinc-500">支撐/壓力</span>
+                    <span className="text-right tabular-nums font-medium text-zinc-600 dark:text-zinc-300">
+                      {formatPrice(item.support)} / {formatPrice(item.resistance)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded bg-zinc-50 px-2 py-1 dark:bg-white/[0.04]">
+                    <span className="text-zinc-400 dark:text-zinc-500">外資/投信成本</span>
+                    <span className="text-right tabular-nums font-medium text-zinc-600 dark:text-zinc-300">
+                      {formatPrice(item.foreignCostBasis)} / {formatPrice(item.trustCostBasis)}
+                    </span>
+                  </div>
+                  {(item.priceStatus === "aboveResistance" || item.priceStatus === "belowSupport") && (
+                    <div className="col-span-2 flex items-center justify-between rounded bg-zinc-50 px-2 py-1 dark:bg-white/[0.04]">
+                      <span className="text-zinc-400 dark:text-zinc-500">支撐/壓力狀態</span>
+                      <span
+                        className={`font-medium ${
+                          item.priceStatus === "aboveResistance"
+                            ? "text-red-600 dark:text-red-400"
+                            : "text-emerald-600 dark:text-emerald-400"
+                        }`}
+                      >
+                        {item.priceStatus === "aboveResistance" ? "已站上壓力" : "已跌破支撐"}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </Link>
             ))}

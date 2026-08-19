@@ -3,6 +3,8 @@ import type { TrendStatus, Market } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { findIndustryThemeByName, getAllThemedTickers, UNCATEGORIZED_THEME_CODE } from "@/lib/valuation/groupConfig";
 import { bollingerBands, sma } from "@/lib/trend/indicators";
+import { calculateSupportResistance } from "@/lib/trend/tw/supportResistance";
+import { calculateInstitutionalCostBasis } from "@/lib/trend/tw/institutionalCostBasis";
 
 /**
  * 戰術面板顯示的狀態。刻意用明確列舉（不是 Exclude<TrendStatus, "limitMove"> 這種衍生型別）——
@@ -101,6 +103,17 @@ export interface SectorTrendItem {
   chipConcentration5: number | null;
   chipConcentration10: number | null;
   chipConcentration20: number | null;
+  /** 2026-08-19新增：近60個交易日（不含當天）支撐/壓力參考價，見supportResistance.ts。
+   * 建議進場點＝support、建議停利點＝resistance（同一組數字，UI標籤自己標明用途，
+   * 不重複多存兩個欄位），null=歷史資料不足60個交易日 */
+  support: number | null;
+  resistance: number | null;
+  /** 今天收盤價相對支撐/壓力區間的位置，見supportResistance.ts說明 */
+  priceStatus: "aboveResistance" | "belowSupport" | "withinRange" | null;
+  /** 外資/投信近60個交易日持續買超部位的加權平均成本價，見institutionalCostBasis.ts，
+   * null=這個窗口內該法人淨部位從未轉正 */
+  foreignCostBasis: number | null;
+  trustCostBasis: number | null;
 }
 
 export interface SectorTrendsGrouped {
@@ -152,6 +165,11 @@ interface VolatilityStats {
   netBuySellLots: number | null;
   trustNetBuyLots: number | null;
   signalStreakTradingDays: number | null;
+  support: number | null;
+  resistance: number | null;
+  priceStatus: "aboveResistance" | "belowSupport" | "withinRange" | null;
+  foreignCostBasis: number | null;
+  trustCostBasis: number | null;
 }
 
 /** 20期布林通道 + 20日均帶寬（判斷squeeze用），沿用 scoreL6Technical.ts 的 %b/帶寬門檻邏輯，
@@ -227,6 +245,11 @@ function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
     revenueYoyGrowthPct: latestRevenue?.yoyGrowthPct !== undefined && latestRevenue?.yoyGrowthPct !== null ? Number(latestRevenue.yoyGrowthPct) : null,
     revenueMonth: latestRevenue ? latestRevenue.revenueMonth.toISOString().slice(0, 7) : null,
     sparkline: stats?.sparkline ?? null,
+    support: stats?.support ?? null,
+    resistance: stats?.resistance ?? null,
+    priceStatus: stats?.priceStatus ?? null,
+    foreignCostBasis: stats?.foreignCostBasis ?? null,
+    trustCostBasis: stats?.trustCostBasis ?? null,
   };
 }
 
@@ -255,7 +278,7 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
 
   const stockIds = [...new Set(rows.map((r) => r.stockId))];
   const cutoff = new Date(Date.now() - VOLATILITY_LOOKBACK_DAYS * 86_400_000);
-  const [history, institutionalHistory] = await Promise.all([
+  const [history, institutionalHistory, institutionalDailyHistory] = await Promise.all([
     prisma.twDailyPrice.findMany({
       where: { stockId: { in: stockIds }, tradeDate: { gte: cutoff } },
       orderBy: [{ stockId: "asc" }, { tradeDate: "asc" }],
@@ -267,7 +290,26 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
       distinct: ["stockId"],
       select: { stockId: true, tradeDate: true, foreignNetBuyShares: true, investTrustNetBuyShares: true },
     }),
+    // 2026-08-19新增：外資/投信成本價（institutionalCostBasis.ts）需要完整每日序列，不是
+    // 上面那個只取「最新一天」的institutionalHistory——獨立查一次，一樣受VOLATILITY_LOOKBACK_DAYS
+    // 窗口限制（跟支撐/壓力用同一個90日窗口，內部各自的60交易日邏輯自己再切）
+    prisma.twInstitutionalTrading.findMany({
+      where: { stockId: { in: stockIds }, tradeDate: { gte: cutoff } },
+      orderBy: [{ stockId: "asc" }, { tradeDate: "asc" }],
+      select: { stockId: true, tradeDate: true, foreignNetBuyShares: true, investTrustNetBuyShares: true },
+    }),
   ]);
+
+  const institutionalSeriesByStock = new Map<number, { tradeDate: Date; foreignNetBuyShares: number; investTrustNetBuyShares: number }[]>();
+  for (const h of institutionalDailyHistory) {
+    const list = institutionalSeriesByStock.get(h.stockId) ?? [];
+    list.push({
+      tradeDate: h.tradeDate,
+      foreignNetBuyShares: Number(h.foreignNetBuyShares),
+      investTrustNetBuyShares: Number(h.investTrustNetBuyShares),
+    });
+    institutionalSeriesByStock.set(h.stockId, list);
+  }
 
   const seriesByStock = new Map<number, { tradeDate: Date; close: number }[]>();
   for (const h of history) {
@@ -343,6 +385,28 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
     // 連續成立的交易日數——跟classifyChipFlow.ts內部算「合買/合賣第幾天」是同一個概念
     const signalStreakTradingDays = reversalDate ? sinceSignalSeries.length : null;
 
+    // 2026-08-19新增：支撐/壓力（見supportResistance.ts）純粹用收盤價序列，不需要額外join
+    const supportResistance = calculateSupportResistance(closes);
+
+    // 外資/投信成本價（見institutionalCostBasis.ts）需要把三大法人序列跟收盤價序列依日期
+    // 對齊——兩張表理論上都是同一批交易日，用Map查表比雙迴圈快，缺對應收盤價的那天直接跳過
+    const closeByDateKey = new Map(series.map((s) => [s.tradeDate.getTime(), s.close]));
+    const institutionalSeries = institutionalSeriesByStock.get(stockId) ?? [];
+    const costBasisDays = institutionalSeries
+      .map((d) => {
+        const close = closeByDateKey.get(d.tradeDate.getTime());
+        return close === undefined
+          ? null
+          : { closePrice: close, foreignNetBuyShares: d.foreignNetBuyShares, investTrustNetBuyShares: d.investTrustNetBuyShares };
+      })
+      .filter((d): d is { closePrice: number; foreignNetBuyShares: number; investTrustNetBuyShares: number } => d !== null);
+    const foreignCostBasis = calculateInstitutionalCostBasis(
+      costBasisDays.map((d) => ({ closePrice: d.closePrice, netBuyShares: d.foreignNetBuyShares }))
+    ).costBasis;
+    const trustCostBasis = calculateInstitutionalCostBasis(
+      costBasisDays.map((d) => ({ closePrice: d.closePrice, netBuyShares: d.investTrustNetBuyShares }))
+    ).costBasis;
+
     result.set(stockId, {
       todayChangePct,
       todayChangeAmount,
@@ -355,6 +419,11 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
       netBuySellLots,
       trustNetBuyLots,
       signalStreakTradingDays,
+      support: supportResistance?.support ?? null,
+      resistance: supportResistance?.resistance ?? null,
+      priceStatus: supportResistance?.priceStatus ?? null,
+      foreignCostBasis,
+      trustCostBasis,
     });
   }
   return result;
