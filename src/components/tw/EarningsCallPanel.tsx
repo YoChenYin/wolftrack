@@ -11,6 +11,12 @@ export interface EarningsCallAnalysisItem {
   outlookSummary: string | null;
   riskSummary: string | null;
   signal: "positive" | "neutral" | "negative" | null;
+  /** 2026-08-19新增：質化投資論點四個維度，簡報有明確談到才有值，其餘一律是null
+   * （不是每份簡報都會談到全部四項，見parseEarningsCall.ts說明） */
+  moatSummary: string | null;
+  marketShareSummary: string | null;
+  customerSummary: string | null;
+  catalystSummary: string | null;
 }
 
 const SIGNAL_STYLE: Record<string, { label: string; className: string }> = {
@@ -48,7 +54,7 @@ export function EarningsCallPanel({ analyses }: { analyses: EarningsCallAnalysis
         title="法說會基本面訊號"
         tooltip={
           <InfoTooltip>
-            抓取這檔股票（龍頭股）的法人說明會簡報PDF，用LLM解析出獲利成長、未來展望、風險因素三個重點，並給出整體基本面訊號（正面/中性/負面）。資料來源是公開資訊觀測站的法說會簡報，一季更新一次。
+            抓取這檔股票的法人說明會簡報PDF，用LLM解析出獲利成長、未來展望、風險因素三個重點，並給出整體基本面訊號（正面/中性/負面）；簡報有明確談到的話，額外整理護城河、市占率、客戶、催化劑四個質化投資論點（沒提到就不顯示，不強行湊內容）。資料來源是公開資訊觀測站的法說會簡報，一季更新一次。
           </InfoTooltip>
         }
       />
@@ -81,6 +87,34 @@ export function EarningsCallPanel({ analyses }: { analyses: EarningsCallAnalysis
                     <span className="font-medium text-zinc-500 dark:text-zinc-400">風險：</span>
                     <span className="text-zinc-700 dark:text-zinc-300">{a.riskSummary}</span>
                   </p>
+                  {(a.moatSummary || a.marketShareSummary || a.customerSummary || a.catalystSummary) && (
+                    <div className="mt-1 flex flex-col gap-1 rounded-lg bg-white p-2 ring-1 ring-zinc-900/[0.04] dark:bg-white/[0.03] dark:ring-white/[0.06]">
+                      {a.moatSummary && (
+                        <p>
+                          <span className="font-medium text-zinc-500 dark:text-zinc-400">護城河：</span>
+                          <span className="text-zinc-700 dark:text-zinc-300">{a.moatSummary}</span>
+                        </p>
+                      )}
+                      {a.marketShareSummary && (
+                        <p>
+                          <span className="font-medium text-zinc-500 dark:text-zinc-400">市占率：</span>
+                          <span className="text-zinc-700 dark:text-zinc-300">{a.marketShareSummary}</span>
+                        </p>
+                      )}
+                      {a.customerSummary && (
+                        <p>
+                          <span className="font-medium text-zinc-500 dark:text-zinc-400">客戶：</span>
+                          <span className="text-zinc-700 dark:text-zinc-300">{a.customerSummary}</span>
+                        </p>
+                      )}
+                      {a.catalystSummary && (
+                        <p>
+                          <span className="font-medium text-zinc-500 dark:text-zinc-400">催化劑：</span>
+                          <span className="text-zinc-700 dark:text-zinc-300">{a.catalystSummary}</span>
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="mt-2 flex items-center gap-1.5">

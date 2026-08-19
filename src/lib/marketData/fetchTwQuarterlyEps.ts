@@ -40,6 +40,10 @@ export async function fetchTwQuarterlyEpsSnapshot(): Promise<TwQuarterlyEpsFetch
       update: {
         reportDate: new Date(eps.reportDate),
         epsCumulative: eps.epsCumulative,
+        grossMarginPct: eps.grossMarginPct ?? null,
+        operatingMarginPct: eps.operatingMarginPct ?? null,
+        pretaxMarginPct: eps.pretaxMarginPct ?? null,
+        netMarginPct: eps.netMarginPct ?? null,
       },
       create: {
         stockId: stock.id,
@@ -47,6 +51,10 @@ export async function fetchTwQuarterlyEpsSnapshot(): Promise<TwQuarterlyEpsFetch
         fiscalQuarter: eps.fiscalQuarter,
         reportDate: new Date(eps.reportDate),
         epsCumulative: eps.epsCumulative,
+        grossMarginPct: eps.grossMarginPct ?? null,
+        operatingMarginPct: eps.operatingMarginPct ?? null,
+        pretaxMarginPct: eps.pretaxMarginPct ?? null,
+        netMarginPct: eps.netMarginPct ?? null,
       },
     });
     written++;

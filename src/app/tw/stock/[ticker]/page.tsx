@@ -5,6 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { findIndustryThemesForTicker } from "@/lib/valuation/groupConfig";
 import { computeGroupValuation } from "@/lib/valuation/computeGroupValuation";
 import { CoreScoreBreakdown } from "@/components/tw/CoreScoreBreakdown";
+import { FundamentalsSnapshotCard } from "@/components/tw/FundamentalsSnapshotCard";
+import { InstitutionalAttentionCard, type InstitutionalAttentionData } from "@/components/tw/InstitutionalAttentionCard";
+import { InvestmentThesisCard } from "@/components/tw/InvestmentThesisCard";
 import { ValuationSidePanel } from "@/components/tw/ValuationSidePanel";
 import { MonthlyRevenuePanel } from "@/components/tw/MonthlyRevenuePanel";
 import { PriceTrendChart } from "@/components/tw/PriceTrendChart";
@@ -25,6 +28,32 @@ const TAB_ICON_CLASS = "h-3.5 w-3.5";
 /** 媒體提及沒有像價格/籌碼那樣天然有限的資料量（頻道持續發片就會一直累積），給一個
  * 夠大的上限當「全部歷史」，避免真的unbounded query */
 const STOCK_MENTIONS_DISPLAY_LIMIT = 100;
+const INSTITUTIONAL_ATTENTION_WINDOW_DAYS = 20;
+
+/** 總覽分頁「法人動向」卡用：近20日外資+投信合計淨買賣超，加上從最新一天往回算的
+ * 連續同方向天數（見InstitutionalAttentionCard.tsx）。institutionalHistory本身已經是
+ * 依日期由舊到新排序的完整歷史（page.tsx已經有的陣列直接重用，不用再查一次DB）。 */
+function computeInstitutionalAttention(history: InstitutionalDay[]): InstitutionalAttentionData | null {
+  if (history.length === 0) return null;
+
+  const recentWindow = history.slice(-INSTITUTIONAL_ATTENTION_WINDOW_DAYS);
+  const netBuyLots20d = Math.round(
+    recentWindow.reduce((sum, day) => sum + day.foreignNetBuyShares + day.investTrustNetBuyShares, 0)
+  );
+
+  let streakDays = 0;
+  let streakDirection: "buy" | "sell" | null = null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const net = history[i].foreignNetBuyShares + history[i].investTrustNetBuyShares;
+    const direction = net > 0 ? "buy" : net < 0 ? "sell" : null;
+    if (direction === null) break;
+    if (streakDirection === null) streakDirection = direction;
+    if (direction !== streakDirection) break;
+    streakDays++;
+  }
+
+  return { netBuyLots20d, streakDays, streakDirection, latestDate: history[history.length - 1].date };
+}
 
 export default async function TwStockDetailPage({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker } = await params;
@@ -105,6 +134,18 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
     orderBy: { conferenceDate: "desc" },
   });
 
+  // 2026-08-19新增：總覽分頁「基本面快照」用，取最新一期季報獲利能力資料
+  const latestQuarterlyEps = await prisma.twQuarterlyEps.findFirst({
+    where: { stockId: stock.id },
+    orderBy: [{ fiscalYear: "desc" }, { fiscalQuarter: "desc" }],
+  });
+
+  // 總覽分頁「投資論點」用：最新一份已解析、且至少談到護城河/市占率/客戶/催化劑其中一項
+  // 的法說會（不是每份簡報都會談到，見parseEarningsCall.ts），沒有就整張卡不顯示
+  const latestThesisSource = earningsCallAnalyses.find(
+    (a) => a.signal !== null && (a.moatSummary || a.marketShareSummary || a.customerSummary || a.catalystSummary)
+  );
+
   return (
     <div
       className="relative flex flex-1 flex-col overflow-hidden font-[family:var(--font-tw-sans)] dark:bg-zinc-950"
@@ -151,18 +192,48 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
                 key: "overview",
                 label: "總覽",
                 icon: <Gauge key="overview-icon" className={TAB_ICON_CLASS} strokeWidth={2.25} />,
-                content: latestSignal ? (
-                  <CoreScoreBreakdown
-                    key="overview-content"
-                    coreScore={Number(latestSignal.coreScore)}
-                    technicalScore={latestSignal.technicalScore !== null ? Number(latestSignal.technicalScore) : null}
-                    chipScore={latestSignal.chipScore !== null ? Number(latestSignal.chipScore) : null}
-                    chipBadge={latestSignal.chipBadge}
-                  />
-                ) : (
-                  <p key="overview-content" className="text-sm text-zinc-400 dark:text-zinc-500">
-                    這檔股票目前沒有任何戰術分類歷史資料。
-                  </p>
+                content: (
+                  <div key="overview-content" className="flex flex-col gap-4">
+                    {latestSignal ? (
+                      <CoreScoreBreakdown
+                        coreScore={Number(latestSignal.coreScore)}
+                        technicalScore={latestSignal.technicalScore !== null ? Number(latestSignal.technicalScore) : null}
+                        chipScore={latestSignal.chipScore !== null ? Number(latestSignal.chipScore) : null}
+                        chipBadge={latestSignal.chipBadge}
+                      />
+                    ) : (
+                      <p className="text-sm text-zinc-400 dark:text-zinc-500">這檔股票目前沒有任何戰術分類歷史資料。</p>
+                    )}
+                    <FundamentalsSnapshotCard
+                      data={
+                        latestQuarterlyEps
+                          ? {
+                              fiscalYear: latestQuarterlyEps.fiscalYear,
+                              fiscalQuarter: latestQuarterlyEps.fiscalQuarter,
+                              epsCumulative: Number(latestQuarterlyEps.epsCumulative),
+                              grossMarginPct: latestQuarterlyEps.grossMarginPct !== null ? Number(latestQuarterlyEps.grossMarginPct) : null,
+                              operatingMarginPct:
+                                latestQuarterlyEps.operatingMarginPct !== null ? Number(latestQuarterlyEps.operatingMarginPct) : null,
+                              netMarginPct: latestQuarterlyEps.netMarginPct !== null ? Number(latestQuarterlyEps.netMarginPct) : null,
+                            }
+                          : null
+                      }
+                    />
+                    <InstitutionalAttentionCard data={computeInstitutionalAttention(institutionalHistory)} />
+                    <InvestmentThesisCard
+                      data={
+                        latestThesisSource
+                          ? {
+                              conferenceDate: latestThesisSource.conferenceDate.toISOString().slice(0, 10),
+                              moatSummary: latestThesisSource.moatSummary,
+                              marketShareSummary: latestThesisSource.marketShareSummary,
+                              customerSummary: latestThesisSource.customerSummary,
+                              catalystSummary: latestThesisSource.catalystSummary,
+                            }
+                          : null
+                      }
+                    />
+                  </div>
                 ),
               },
               {
@@ -214,6 +285,10 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
                       outlookSummary: a.outlookSummary,
                       riskSummary: a.riskSummary,
                       signal: a.signal,
+                      moatSummary: a.moatSummary,
+                      marketShareSummary: a.marketShareSummary,
+                      customerSummary: a.customerSummary,
+                      catalystSummary: a.catalystSummary,
                     }))}
                   />
                 ),

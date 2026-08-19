@@ -288,11 +288,14 @@ model TwMonthlyRevenue {
   @@map("tw_monthly_revenue")
 }
 
-/// 季度EPS（2026-08-19新增，給產業鏈頁面「年度累積EPS」欄位用）：TWSE/TPEx官方季報彙總表
-/// （t187ap14系列）的「基本每股盈餘」欄位，依台灣財報慣例是「自年初累計至本季底」的數字
-/// （第2季填報＝上半年累計、第3季＝前三季累計、第4季/年報＝全年累計），不是單季數字，剛好
-/// 就是「年度累積EPS」本身，不用再自己加總多季。端點只回傳「最新一期」快照，沿用
-/// TwMonthlyRevenue的做法：每次抓到就upsert覆蓋，多季歷史靠排程隨時間自然累積。
+/// 季度EPS+獲利能力比率（2026-08-19新增，給產業鏈頁面「年度累積EPS」跟個股頁「總覽」
+/// 基本面快照用）：TWSE/TPEx官方季報彙總表（EPS用t187ap14系列、毛利率等比率用t187ap17
+/// 系列）的數字，依台灣財報慣例都是「自年初累計至本季底」（第2季填報＝上半年累計、第3季＝
+/// 前三季累計、第4季/年報＝全年累計），不是單季數字，不用再自己加總多季。兩個端點都只回傳
+/// 「最新一期」快照，沿用TwMonthlyRevenue的做法：每次抓到就upsert覆蓋，多季歷史靠排程
+/// 隨時間自然累積。模型名稱沿用TwQuarterlyEps（沒有跟著改名成更廣義的名字）是因為EPS是
+/// 最早、最核心的欄位，毛利率等比率是後來擴充進來的相關資料，不想為了改名承擔額外的
+/// migration/程式碼異動風險。
 model TwQuarterlyEps {
   id      BigInt @id @default(autoincrement())
   stockId Int    @map("stock_id")
@@ -303,6 +306,14 @@ model TwQuarterlyEps {
   reportDate    DateTime @map("report_date") @db.Date
 
   epsCumulative Decimal @map("eps_cumulative") @db.Decimal(10, 2)
+
+  /// 2026-08-19新增：毛利率/營業利益率/稅前純益率/稅後純益率(%)，來源t187ap17（上市）/
+  /// 187ap17_O（上櫃）「營益分析查詢彙總表」，跟epsCumulative一樣是自年初累計的比率，
+  /// null=這期查無資料（該端點涵蓋率不如EPS端點，部分公司/期別可能缺）
+  grossMarginPct     Decimal? @map("gross_margin_pct") @db.Decimal(6, 2)
+  operatingMarginPct Decimal? @map("operating_margin_pct") @db.Decimal(6, 2)
+  pretaxMarginPct    Decimal? @map("pretax_margin_pct") @db.Decimal(6, 2)
+  netMarginPct       Decimal? @map("net_margin_pct") @db.Decimal(6, 2)
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -526,6 +537,19 @@ model EarningsCallAnalysis {
   riskSummary         String?            @map("risk_summary") @db.Text
   /// null=還沒解析（待解析），見上面profitGrowthSummary說明
   signal              FundamentalSignal?
+
+  /// 2026-08-19新增：個股頁「總覽」用的質化投資論點四個維度，簡報有明確談到才會有值，
+  /// 沒提到就是null（不強迫LLM硬湊）——不是每份簡報都會談到全部四項，例如一般季報簡報
+  /// 很少會有明確的「市占率」數字，但法說會問答常會談到客戶集中度、產能規劃、對手比較
+  /// 技術/產品/成本結構等競爭優勢，簡報明確描述的才記錄，不是每篇都會有
+  moatSummary        String? @map("moat_summary") @db.Text
+  /// 簡報提到的市占率數字或排名（例如「全球市占率第二」），沒有明確數字/排名就是null
+  marketShareSummary String? @map("market_share_summary") @db.Text
+  /// 簡報提到的主要客戶或客戶集中度資訊，沒提到就是null
+  customerSummary    String? @map("customer_summary") @db.Text
+  /// 簡報提到的具體催化劑（新產能開出、新產品放量、大客戶訂單等有明確時間點的利多事件），
+  /// 沒有具體催化劑就是null（不要把制式的「看好後市」這類空泛說法當催化劑）
+  catalystSummary    String? @map("catalyst_summary") @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")
 

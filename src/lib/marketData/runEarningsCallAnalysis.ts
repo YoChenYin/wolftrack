@@ -177,6 +177,10 @@ export async function parsePendingFilings(budget: number): Promise<ParseFilingsR
           outlookSummary: analysis.outlookSummary,
           riskSummary: analysis.riskSummary,
           signal: analysis.signal,
+          moatSummary: analysis.moatSummary,
+          marketShareSummary: analysis.marketShareSummary,
+          customerSummary: analysis.customerSummary,
+          catalystSummary: analysis.catalystSummary,
         },
       });
       processed++;
