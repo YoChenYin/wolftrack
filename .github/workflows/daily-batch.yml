@@ -18,6 +18,10 @@ on:
     # 台股季度累積EPS：財報公告日期比月營收分散（各公司申報期限不同，集中在季底後1.5-2個月），
     # 抓每月15-17號當中間點常態重跑，端點本身只回傳「最新一期」，重跑是安全的upsert
     - cron: "30 9 15-17 * *"
+    # 法人報告（玉山證券「台股熱點」「總經盤勢」，見esunsecClient.ts）：每天約當台北時間
+    # 17:30，跟在tw-daily/decision-os-daily後面留緩衝。這類文章一天約1-2篇，8篇/次的額度
+    # 綽綽有餘，不用像法說會那樣一次排5輪
+    - cron: "30 9 * * *"
     # YouTube 頻道新影片發現：每天（含週末，頻道週末也發文）約當台北時間 23:30，覆蓋3個頻道
     # 當天典型的發文時間（EBC 21:00、游庭皓 08:30 隔天才追上、Gooaye 不定期）
     - cron: "30 15 * * *"
@@ -100,6 +104,15 @@ jobs:
       - name: Trigger TW quarterly cumulative EPS fetch
         run: |
           curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/tw-quarterly-eps" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+  institutional-reports:
+    if: github.event.schedule == '30 9 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger institutional report ingest (玉山證券台股熱點/總經盤勢)
+        run: |
+          curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/institutional-reports" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
 
   youtube-discovery:

@@ -44,18 +44,19 @@ model Stock {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  sector                SectorMapping             @relation(fields: [sectorId], references: [id])
-  signals               DailyTrendSignal[]
-  themes                StockTheme[]
-  institutionalTrading  TwInstitutionalTrading[]
-  brokerBranchFlow      TwBrokerBranchFlow[]
-  dailyPrices           TwDailyPrice[]
-  fundamentals          TwStockFundamentals[]
-  monthlyRevenues       TwMonthlyRevenue[]
-  quarterlyEps          TwQuarterlyEps[]
-  youtubeMentions       YoutubeStockMention[]
-  historyBackfillStatus TwHistoryBackfillStatus[]
-  earningsCallAnalyses  EarningsCallAnalysis[]
+  sector                      SectorMapping                @relation(fields: [sectorId], references: [id])
+  signals                     DailyTrendSignal[]
+  themes                      StockTheme[]
+  institutionalTrading        TwInstitutionalTrading[]
+  brokerBranchFlow            TwBrokerBranchFlow[]
+  dailyPrices                 TwDailyPrice[]
+  fundamentals                TwStockFundamentals[]
+  monthlyRevenues             TwMonthlyRevenue[]
+  quarterlyEps                TwQuarterlyEps[]
+  youtubeMentions             YoutubeStockMention[]
+  historyBackfillStatus       TwHistoryBackfillStatus[]
+  earningsCallAnalyses        EarningsCallAnalysis[]
+  institutionalReportMentions InstitutionalReportMention[]
 
   @@unique([market, ticker])
   @@index([sectorId])
@@ -532,6 +533,58 @@ model EarningsCallAnalysis {
 
   @@index([stockId])
   @@map("earnings_call_analyses")
+}
+
+/// 2026-08-19新增：法人/投顧產業報告（目前只接玉山證券esunsec.com.tw「台股熱點」「總經盤勢」
+/// 分類，見esunsecClient.ts——文章雖然是券商自家網站的市場評論文章，但常直接引用投顧研究內容
+/// （例如標註「以下內容取自玉山投顧」），跟EarningsCallAnalysis一樣採「先發現、額度夠再LLM解析」
+/// 設計：industryTheme/summary/signal為null代表還沒解析，UI上仍可連到原文。
+model InstitutionalReportArticle {
+  id Int @id @default(autoincrement())
+
+  /// 目前固定"玉山證券"，之後如果加其他券商來源用這個欄位區分
+  sourceName  String   @map("source_name")
+  /// 來源網站的文章ID（esunsec的postid），拿來判斷這篇報告有沒有處理過，避免重複
+  postId      String   @unique @map("post_id")
+  title       String
+  publishDate DateTime @map("publish_date") @db.Date
+  /// 來源網站的分類名稱，例如"台股熱點"、"總經盤勢"
+  category    String
+  sourceUrl   String   @map("source_url") @db.Text
+
+  /// LLM整理的產業趨勢主題（例如"矽晶圓供需缺口擴大"），null=還沒解析
+  industryTheme String?            @map("industry_theme")
+  /// LLM整理的重點摘要，2-4句話
+  summary       String?            @db.Text
+  /// 整體偏多/中性/偏空判斷，null=還沒解析
+  signal        FundamentalSignal?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  mentions InstitutionalReportMention[]
+
+  @@index([publishDate])
+  @@map("institutional_report_articles")
+}
+
+/// 一篇產業報告常常同時提到好幾檔個股（例如矽晶圓報告列出環球晶/合晶/台勝科），
+/// 跟YoutubeStockMention同一套「一篇內容對多檔股票」的關聯設計
+model InstitutionalReportMention {
+  id              BigInt  @id @default(autoincrement())
+  articleId       Int     @map("article_id")
+  /// null=無法自動判定對應股票（見resolveStockMention.ts），resolutionNote會記錄原因
+  stockId         Int?    @map("stock_id")
+  rawNameOrTicker String  @map("raw_name_or_ticker")
+  isNewStock      Boolean @default(false) @map("is_new_stock")
+  resolutionNote  String? @map("resolution_note")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  article InstitutionalReportArticle @relation(fields: [articleId], references: [id])
+  stock   Stock?                     @relation(fields: [stockId], references: [id])
+
+  @@index([stockId])
+  @@map("institutional_report_mentions")
 }
 
 /// 台指期 Decision OS 最終立場（見 docs/taifex-decision-os-prd.html 第6節）
