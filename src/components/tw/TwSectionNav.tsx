@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ListFilter, Workflow, Presentation, Landmark } from "lucide-react";
+import { ListFilter, Workflow, Presentation, Landmark, Newspaper } from "lucide-react";
 
 const TABS = [
   { href: "/tw", icon: ListFilter, label: "選股-TW" },
   { href: "/tw/chains", icon: Workflow, label: "產業鏈" },
   { href: "/tw/fundamentals", icon: Presentation, label: "基本面" },
   { href: "/tw/institutional-reports", icon: Landmark, label: "法人報告" },
+  { href: "/tw/report", icon: Newspaper, label: "每日異動" },
 ];
 
 /**
@@ -18,6 +19,7 @@ const TABS = [
  * 2026-08-19：基本面（原本MarketNav的頂層tab /fundamentals）搬進來當第三個分頁——內容
  * 本來就是TW限定（龍頭+二軍法說會），放在TW section底下比放在頂層更合理。
  * 2026-08-19再加第四個分頁「法人報告」（券商/投顧產業趨勢文章，見esunsecClient.ts）。
+ * 2026-08-20再加第五個分頁「每日異動」（每日異動報告v1，見dailyMarketDiff.ts）。
  */
 export function TwSectionNav() {
   const pathname = usePathname();

@@ -874,3 +874,30 @@ model TradeLogEntry {
   @@index([status])
   @@map("trade_log_entries")
 }
+
+/// 台股每日異動報告 v1（2026-08-20新增）：把「今天 vs 上一個交易日」的客觀狀態變化存下來
+/// （戰術分類轉換/支撐壓力突破/法人成本翻轉），不存生成好的文案——渲染成中文句子是UI層的事
+/// （見 describeDailyDiff.ts），這裡只存「事實」，之後想換文案措辭、或加 v3 的 LLM 潤飾層，
+/// 都不用動這張表或重新掃描資料。
+/// 刻意不做「建議買賣」用語，只描述客觀狀態變化——沒有投顧牌照，這是法規風險的關鍵防線
+/// （見 docs/progress-status.md「每日異動報告」章節的設計討論）。
+model TwDailyMarketReport {
+  id            Int      @id @default(autoincrement())
+  reportDate    DateTime @map("report_date") @db.Date
+  prevTradeDate DateTime @map("prev_trade_date") @db.Date
+
+  taiexClose     Decimal? @map("taiex_close") @db.Decimal(12, 2)
+  taiexChangePct Decimal? @map("taiex_change_pct") @db.Decimal(6, 2)
+
+  /// CategoryTransition[]（見dailyMarketDiff.ts）：戰術分類今天新增/移出/轉換的個股
+  categoryTransitions Json @map("category_transitions")
+  /// BreakoutEvent[]：今天才剛站上壓力價/跌破支撐價的個股（昨天還在區間內）
+  breakouts Json
+  /// CostBasisCrossoverEvent[]：股價今天穿越外資或投信60日加權平均成本價的個股
+  costBasisCrossovers Json @map("cost_basis_crossovers")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([reportDate])
+  @@map("tw_daily_market_report")
+}

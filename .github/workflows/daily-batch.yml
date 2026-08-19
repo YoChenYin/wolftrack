@@ -12,6 +12,9 @@ on:
     # tw-daily/taifex-daily 都是fire-and-forget（打了就回202，背景才真的在寫DB），Decision OS
     # 需要當天的TAIEX收盤價跟最新PCR都已經寫完，直接掛在同一個「0 9」觸發點會有讀到舊資料的風險
     - cron: "15 9 * * 1-5"
+    # 台股每日異動報告v1（dailyMarketDiff.ts）：再晚5分鐘（台北時間17:20），需要tw-daily
+    # 把當天的daily_trend_signals/tw_daily_price都寫完才有東西可以比對「今天vs昨天」
+    - cron: "20 9 * * 1-5"
     # 台股月營收：官方每月10日左右公布上月營收，抓 10-12 號三天當緩衝（免費 GitHub Actions
     # 排程本身就不保證準時，公司申報也可能延遲，重跑同一天資料是安全的 upsert，不會壞掉）
     - cron: "0 9 10-12 * *"
@@ -68,6 +71,15 @@ jobs:
       - name: Trigger Decision OS daily run（台股環境/法人籌碼/技術分析評分 + Gate/風控引擎）
         run: |
           curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/decision-os-daily" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+  tw-daily-report:
+    if: github.event.schedule == '20 9 * * 1-5' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger TW daily market diff report v1（戰術分類轉換/支撐壓力突破/法人成本翻轉）
+        run: |
+          curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/tw-daily-report" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
 
   global-macro-sync:
