@@ -52,6 +52,7 @@ model Stock {
   dailyPrices           TwDailyPrice[]
   fundamentals          TwStockFundamentals[]
   monthlyRevenues       TwMonthlyRevenue[]
+  quarterlyEps          TwQuarterlyEps[]
   youtubeMentions       YoutubeStockMention[]
   historyBackfillStatus TwHistoryBackfillStatus[]
   earningsCallAnalyses  EarningsCallAnalysis[]
@@ -284,6 +285,31 @@ model TwMonthlyRevenue {
   @@unique([stockId, revenueMonth])
   @@index([revenueMonth])
   @@map("tw_monthly_revenue")
+}
+
+/// 季度EPS（2026-08-19新增，給產業鏈頁面「年度累積EPS」欄位用）：TWSE/TPEx官方季報彙總表
+/// （t187ap14系列）的「基本每股盈餘」欄位，依台灣財報慣例是「自年初累計至本季底」的數字
+/// （第2季填報＝上半年累計、第3季＝前三季累計、第4季/年報＝全年累計），不是單季數字，剛好
+/// 就是「年度累積EPS」本身，不用再自己加總多季。端點只回傳「最新一期」快照，沿用
+/// TwMonthlyRevenue的做法：每次抓到就upsert覆蓋，多季歷史靠排程隨時間自然累積。
+model TwQuarterlyEps {
+  id      BigInt @id @default(autoincrement())
+  stockId Int    @map("stock_id")
+
+  fiscalYear    Int      @map("fiscal_year")
+  /// 1-4，對應公告的「季別」欄位——注意這是累計到第N季底，不是第N季單季
+  fiscalQuarter Int      @map("fiscal_quarter")
+  reportDate    DateTime @map("report_date") @db.Date
+
+  epsCumulative Decimal @map("eps_cumulative") @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  stock Stock @relation(fields: [stockId], references: [id])
+
+  @@unique([stockId, fiscalYear, fiscalQuarter])
+  @@index([fiscalYear, fiscalQuarter])
+  @@map("tw_quarterly_eps")
 }
 
 /// 券商分點進出（docs/wolftrack-tw-spec.md 3.4），台股獨有

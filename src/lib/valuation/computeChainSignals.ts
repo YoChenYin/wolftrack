@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getChain, getChainStagesWithThemes } from "./groupConfig";
 
-/** 點開階段燈號後要看的個別成員股票明細 */
+/** 表格裡每一列的個股資料 */
 export interface ChainStageMember {
   ticker: string;
   companyName: string;
@@ -14,35 +14,29 @@ export interface ChainStageMember {
   /** 最新交易日對前一交易日的漲跌金額/幅度(%)，null=資料不足（少於2個交易日） */
   todayChangeAmount: number | null;
   todayChangePct: number | null;
+  /** 今年最新一期申報的累積EPS（見TwQuarterlyEps schema說明：季報數字本身就是自年初累計，
+   * 不是單季），null=還沒查到今年任何一期申報資料 */
+  epsCumulative: number | null;
   /** 是不是這個階段任一個theme標記的龍頭股（group_config.json的leader欄位） */
   isLeader: boolean;
 }
 
-/** 表格要顯示「這檔股票的上/下游關聯」——目前資料只到「哪些股票屬於哪個階段」的粒度，
- * 沒有個股對個股的實際供應鏈配對，所以這裡是階段級的關聯（同一階段全部股票共用同一份
- * 上游/下游名單），不是每檔股票各自不同的供應商/客戶清單 */
-export interface ChainAdjacentStock {
-  ticker: string;
-  companyName: string;
-}
-
 /** 2026-08-19：一個階段常常橫跨好幾個原始theme（例如「上游：IP與IC設計」＝「IC設計：
  * 高階運算與邊緣AI」43檔＋「矽智財：IP與ASIC設計服務」7檔），全部攤成一張大表格會讓使用者
- * 分不清哪些股票其實是同類別、可以互相比較——依原始theme分組後，同一組才是真正的同儕比較對象。
- * members依龍頭優先、其餘依近5日報酬排序（跟階段層級members的純報酬排序不同，這裡是給
+ * 分不清哪些股票其實是同類別、可以互相比較——依原始theme分組後，同一組才是真正的同儕比較對象，
+ * 「5日漲跌%」「領漲/領跌個股」這些族群統計也改成在這個粒度算，比階段層級的聚合更有意義
+ * （原本階段層級的龍頭/二軍燈號判斷已移除，見ChainStageSignal說明）。
+ * members依龍頭優先、其餘依近5日報酬排序（跟topGainer/topLoser的純報酬排序不同，這裡是給
  * UI預設收合用：龍頭不該因為報酬不是前幾名就被摺起來看不到）。 */
 export interface ChainThemeGroup {
   themeName: string;
   memberCount: number;
-  members: ChainStageMember[];
-}
-
-/** 龍頭/二軍分開統計用的小結構，避免ChainStageSignal裡龍頭跟二軍各四個同名欄位重複宣告 */
-export interface ChainTierStats {
-  count: number;
+  /** 這組的5日平均報酬(%)，null=沒有任何成員有足夠股價資料 */
   avgReturn5d: number | null;
-  risingCount: number;
-  fallingCount: number;
+  /** 這組裡近5日報酬最高/最低的個股（領漲/領跌），null=沒有任何成員有報酬資料 */
+  topGainer: ChainStageMember | null;
+  topLoser: ChainStageMember | null;
+  members: ChainStageMember[];
 }
 
 export interface ChainStageSignal {
@@ -50,34 +44,8 @@ export interface ChainStageSignal {
   label: string;
   /** 這個階段涵蓋的不重複股票數（跨底下所有 theme 聯集） */
   memberCount: number;
-  /** 有訊號（daily_trend_signals裡任何status，"none"永遠不會寫入DB）的股票數 / memberCount */
-  signalRate: number;
-  /** 有訊號的股票裡，各狀態各幾檔 */
-  statusBreakdown: Record<string, number>;
-  /** 近5日族群平均報酬(%)，null=沒有足夠股價資料 */
-  avgReturn5d: number | null;
-  /** 有股價資料的成員裡，近5日上漲/下跌的檔數——直接反映族群漲跌分布，不像avgReturn5d
-   * 被少數幾檔大漲/大跌拉走平均，也不像signalRate只看技術面設定、不看實際漲跌方向 */
-  risingCount: number;
-  fallingCount: number;
-  /** 燈號：green=活躍上漲、yellow=初動/多空不明、gray=平靜無資料、declining=族群明顯走弱。
-   * declining一定優先於其他判斷——不會因為signalRate高就蓋掉「族群其實在跌」這件事
-   * （2026-07-17修正：被動元件全部個股下跌但因為signalRate夠高被判成綠燈的bug）。 */
-  light: "green" | "yellow" | "gray" | "declining";
-  /** 2026-07-25新增：龍頭 vs 二軍各自的近5日表現，用來判斷噴的是「誰」不是只有「有沒有噴」 */
-  leaders: ChainTierStats;
-  followers: ChainTierStats;
-  /** 分階段訊號：leadersOnly=只有龍頭噴、二軍還沒動；broadRally=龍頭二軍一起漲，最強的狀態；
-   * followersCatchingUp=二軍補漲、龍頭已經緩下來；mixed=多空不明或資料不足，看不出階段。
-   * 判斷邏輯見 decidePhase()。 */
-  phase: "leadersOnly" | "broadRally" | "followersCatchingUp" | "mixed";
-  /** 點開燈號要看的個別成員股票，依報酬率由高到低排序（跨底下所有theme的扁平清單，
-   * 給adjacentMembers等不需要分組的用途用；UI表格顯示請用themeGroups） */
-  members: ChainStageMember[];
   /** 依原始theme分組後的成員股票，見ChainThemeGroup說明 */
   themeGroups: ChainThemeGroup[];
-  /** 上一階段/下一階段的成員股票（鏈的頭尾階段其中一邊會是空陣列），見ChainAdjacentStock說明 */
-  adjacentMembers: { upstream: ChainAdjacentStock[]; downstream: ChainAdjacentStock[] };
 }
 
 export interface ChainSignalResult {
@@ -90,54 +58,12 @@ const RECENCY_WINDOW_DAYS = 7;
 const RETURN_LOOKBACK_TRADING_DAYS = 6; // 算5日報酬要6筆
 const RETURN_LOOKBACK_CALENDAR_DAYS = 14;
 
-/** declining永遠優先判斷：族群平均報酬明顯是負的，不管signalRate多高都不該是green/活躍
- * （舊版bug：技術面訊號本身就常伴隨近期價格走弱，signalRate高不代表現在在漲，兩者混在一起
- * 用OR判斷會讓「全部下跌」的族群顯示成綠燈）。 */
-function decideLight(signalRate: number, avgReturn5d: number | null): "green" | "yellow" | "gray" | "declining" {
-  if (avgReturn5d !== null && avgReturn5d < -1) return "declining";
-  if (avgReturn5d !== null && avgReturn5d >= 3) return "green";
-  if (signalRate >= 0.3 && (avgReturn5d === null || avgReturn5d >= 0)) return "green";
-  if (signalRate > 0 || (avgReturn5d !== null && avgReturn5d > 0)) return "yellow";
-  return "gray";
-}
-
 /**
- * 2026-07-25新增：龍頭 vs 二軍分開看誰在漲，門檻刻意跟decideLight的+3%/-1%不同——這裡要
- * 分辨「動了沒」，2%已經算有意義的動能，不用等到decideLight的3%活躍門檻那麼高。
- * 順序：declining優先（族群整體走弱時，分不出階段沒有意義）> leadersOnly > broadRally >
- * followersCatchingUp > mixed（其餘情況，包含資料不足或多空不明）。
- */
-function decidePhase(leaders: ChainTierStats, followers: ChainTierStats): ChainStageSignal["phase"] {
-  const leaderUp = leaders.avgReturn5d !== null && leaders.avgReturn5d >= 2;
-  const followerUp = followers.avgReturn5d !== null && followers.avgReturn5d >= 2;
-  const leaderFlatOrDown = leaders.avgReturn5d === null || leaders.avgReturn5d < 1;
-  const followerFlatOrDown = followers.avgReturn5d === null || followers.avgReturn5d < 1;
-
-  if (leaderUp && followerFlatOrDown) return "leadersOnly";
-  if (leaderUp && followerUp) return "broadRally";
-  if (followerUp && leaderFlatOrDown) return "followersCatchingUp";
-  return "mixed";
-}
-
-function computeTierStats(returns: number[]): ChainTierStats {
-  const avgReturn5d = returns.length > 0 ? Math.round((returns.reduce((a, b) => a + b, 0) / returns.length) * 100) / 100 : null;
-  return {
-    count: returns.length,
-    avgReturn5d,
-    risingCount: returns.filter((r) => r > 0).length,
-    fallingCount: returns.filter((r) => r < 0).length,
-  };
-}
-
-/**
- * 產業鏈訊號燈號（2026-07-12，2026-07-25加上龍頭/二軍分階）：每個階段（上游/中游/下游/支援層）
- * 目前「有多少比例的成員股票觸發戰術訊號」+「近5日族群平均報酬」，用紅黃綠燈號呈現「這條鏈
- * 現在誰噴誰還沒動」；額外把龍頭股（group_config.json的leader欄位）跟其餘成員（二軍）分開算，
- * 判斷現在是「只有龍頭噴」「龍頭二軍一起噴」還是「二軍補漲、龍頭已經緩下來」——同樣都是
- * signalRate 30%，「龍頭剛啟動」跟「連二軍都補漲完」代表的產業鏈階段完全不同，只看聚合平均
- * 看不出這個差異。
- * 跟板塊熱圖（computeThemeHeatmap.ts）不同：熱圖是純報酬率，這裡疊加了戰術分類訊號比例，
- * 更貼近「訊號」這個詞本身的意思，不是只看價格。
+ * 產業鏈個股資料（2026-07-12，2026-08-19改版拆成依theme分組、拿掉階段層級的龍頭/二軍
+ * 燈號判斷）：每個階段（上游/中游/下游/支援層）依原始theme分組列出成員股票的收盤價、
+ * 今日漲跌、近5日報酬、戰術訊號、年度累積EPS，並在每個theme分組層級算5日平均報酬跟
+ * 領漲/領跌個股——2026-08-19之前這些統計是算在整個階段（可能橫跨好幾個theme、40+檔股票）
+ * 上，太粗會讓使用者看不出真正同類股票之間的差異，改成theme分組層級才有意義。
  */
 export async function computeChainSignals(chainName: string): Promise<ChainSignalResult | null> {
   const chain = getChain(chainName);
@@ -151,23 +77,7 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
     const leaderTickers = new Set(stage.themes.flatMap((t) => t.leader));
 
     if (tickers.length === 0) {
-      stages.push({
-        stageKey: stage.stageKey,
-        label: stage.label,
-        memberCount: 0,
-        signalRate: 0,
-        statusBreakdown: {},
-        avgReturn5d: null,
-        risingCount: 0,
-        fallingCount: 0,
-        light: "gray",
-        leaders: { count: 0, avgReturn5d: null, risingCount: 0, fallingCount: 0 },
-        followers: { count: 0, avgReturn5d: null, risingCount: 0, fallingCount: 0 },
-        phase: "mixed",
-        members: [],
-        themeGroups: [],
-        adjacentMembers: { upstream: [], downstream: [] },
-      });
+      stages.push({ stageKey: stage.stageKey, label: stage.label, memberCount: 0, themeGroups: [] });
       continue;
     }
 
@@ -177,8 +87,7 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
     });
     const stockIds = stocks.map((s) => s.id);
 
-    // 訊號比例：每檔股票取最新一筆（7天內），統計非 none 的比例；順便建stockId->status
-    // 對照表，點開燈號時每檔股票要顯示自己目前的狀態
+    // 訊號：每檔股票取最新一筆（7天內）status，點開表格時每檔股票要顯示自己目前的狀態
     const latestSignals = await prisma.dailyTrendSignal.findMany({
       where: {
         stockId: { in: stockIds },
@@ -189,11 +98,6 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
       select: { stockId: true, status: true },
     });
     const statusByStockId = new Map(latestSignals.map((row) => [row.stockId, row.status as string]));
-    const statusBreakdown: Record<string, number> = {};
-    for (const row of latestSignals) {
-      statusBreakdown[row.status] = (statusBreakdown[row.status] ?? 0) + 1;
-    }
-    const signalRate = tickers.length > 0 ? latestSignals.length / tickers.length : 0;
 
     // 近5日報酬：先算每檔股票自己的，再平均成族群數字
     const cutoff = new Date(Date.now() - RETURN_LOOKBACK_CALENDAR_DAYS * 86_400_000);
@@ -223,20 +127,16 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
       if (closes.length <= 5 || closes[5] === 0) continue;
       return5dByStockId.set(stockId, Math.round(((closes[0] - closes[5]) / closes[5]) * 10000) / 100);
     }
-    const returns = [...return5dByStockId.values()];
-    const avgReturn5d = returns.length > 0 ? Math.round((returns.reduce((a, b) => a + b, 0) / returns.length) * 100) / 100 : null;
-    const risingCount = returns.filter((r) => r > 0).length;
-    const fallingCount = returns.filter((r) => r < 0).length;
 
-    const leaderReturns: number[] = [];
-    const followerReturns: number[] = [];
-    for (const s of stocks) {
-      const r = return5dByStockId.get(s.id);
-      if (r === undefined) continue;
-      (leaderTickers.has(s.ticker) ? leaderReturns : followerReturns).push(r);
-    }
-    const leaders = computeTierStats(leaderReturns);
-    const followers = computeTierStats(followerReturns);
+    // 年度累積EPS：取每檔股票最新一期申報（fiscalYear/fiscalQuarter最大的一筆），
+    // 見TwQuarterlyEps schema說明——季報數字本身就是自年初累計，不用自己再加總多季
+    const epsRows = await prisma.twQuarterlyEps.findMany({
+      where: { stockId: { in: stockIds } },
+      orderBy: [{ stockId: "asc" }, { fiscalYear: "desc" }, { fiscalQuarter: "desc" }],
+      distinct: ["stockId"],
+      select: { stockId: true, epsCumulative: true },
+    });
+    const epsByStockId = new Map(epsRows.map((r) => [r.stockId, Number(r.epsCumulative)]));
 
     const memberByTicker = new Map<string, ChainStageMember>(
       stocks.map((s) => [
@@ -249,13 +149,10 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
           closePrice: closePriceByStockId.get(s.id) ?? null,
           todayChangeAmount: todayChangeAmountByStockId.get(s.id) ?? null,
           todayChangePct: todayChangePctByStockId.get(s.id) ?? null,
+          epsCumulative: epsByStockId.get(s.id) ?? null,
           isLeader: leaderTickers.has(s.ticker),
         },
       ])
-    );
-
-    const members: ChainStageMember[] = [...memberByTicker.values()].sort(
-      (a, b) => (b.return5d ?? -Infinity) - (a.return5d ?? -Infinity)
     );
 
     // 依原始theme分組（見ChainThemeGroup說明）：龍頭優先、其餘依近5日報酬排序，同一檔股票
@@ -270,44 +167,25 @@ export async function computeChainSignals(chainName: string): Promise<ChainSigna
             if (a.isLeader !== b.isLeader) return a.isLeader ? -1 : 1;
             return (b.return5d ?? -Infinity) - (a.return5d ?? -Infinity);
           });
-        return { themeName: theme.theme_name, memberCount: groupMembers.length, members: groupMembers };
+
+        const withReturn = groupMembers.filter((m): m is ChainStageMember & { return5d: number } => m.return5d !== null);
+        const avgReturn5d =
+          withReturn.length > 0
+            ? Math.round((withReturn.reduce((sum, m) => sum + m.return5d, 0) / withReturn.length) * 100) / 100
+            : null;
+        const topGainer = withReturn.length > 0 ? withReturn.reduce((a, b) => (a.return5d >= b.return5d ? a : b)) : null;
+        const topLoser = withReturn.length > 0 ? withReturn.reduce((a, b) => (a.return5d <= b.return5d ? a : b)) : null;
+
+        return { themeName: theme.theme_name, memberCount: groupMembers.length, avgReturn5d, topGainer, topLoser, members: groupMembers };
       })
       .filter((g) => g.memberCount > 0);
-
-    const light = decideLight(signalRate, avgReturn5d);
 
     stages.push({
       stageKey: stage.stageKey,
       label: stage.label,
       memberCount: tickers.length,
-      signalRate: Math.round(signalRate * 1000) / 1000,
-      statusBreakdown,
-      avgReturn5d,
-      risingCount,
-      fallingCount,
-      light,
-      leaders,
-      followers,
-      phase: light === "declining" ? "mixed" : decidePhase(leaders, followers),
-      members,
       themeGroups,
-      adjacentMembers: { upstream: [], downstream: [] }, // 下面second pass再補
     });
-  }
-
-  // group_config.json裡每條鏈的階段本來就是照upstream→midstream→downstream→support寫的，
-  // 不用再額外排序；這裡才知道「上一階段」「下一階段」是誰，所以要等整條鏈的stages都算完
-  // 才能回填每個階段的adjacentMembers
-  for (let i = 0; i < stages.length; i++) {
-    const toAdjacent = (s: ChainStageSignal): ChainAdjacentStock[] =>
-      s.members.map((m) => ({ ticker: m.ticker, companyName: m.companyName }));
-    stages[i] = {
-      ...stages[i],
-      adjacentMembers: {
-        upstream: i > 0 ? toAdjacent(stages[i - 1]) : [],
-        downstream: i < stages.length - 1 ? toAdjacent(stages[i + 1]) : [],
-      },
-    };
   }
 
   return { chainName, chainNameFull: chain.chainNameFull, stages };
