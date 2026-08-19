@@ -25,10 +25,20 @@ const SIGNAL_STYLE: Record<string, { label: string; className: string }> = {
 /**
  * 2026-07-25新增：法說會基本面訊號（見 runEarningsCallAnalysis.ts）。2026-08-19起涵蓋範圍
  * 擴大到所有有分類到板塊的股票（不限龍頭），且支援「待解析」狀態——LLM額度還沒排到時
- * 只有PDF簡報連結、沒有摘要。完全沒有法說會資料的股票這個區塊不會渲染（見呼叫端判斷）。
+ * 只有PDF簡報連結、沒有摘要。
+ * 2026-08-19：個股頁改成tab分頁後，沒有資料時不能再直接return null（原本邏輯是「長頁面
+ * 直向堆疊時，沒資料就整塊不渲染，讓下一個區塊自然接上」；改成分頁後，使用者點開這個
+ * tab預期至少看到「沒有資料」的訊息，不是一片空白，跟其他區塊的沒資料狀態一致）。
  */
 export function EarningsCallPanel({ analyses }: { analyses: EarningsCallAnalysisItem[] }) {
-  if (analyses.length === 0) return null;
+  if (analyses.length === 0) {
+    return (
+      <Card>
+        <SectionHeader icon={Presentation} iconColor="violet" title="法說會基本面訊號" />
+        <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">這檔股票目前沒有法說會分析資料。</p>
+      </Card>
+    );
+  }
 
   return (
     <Card>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Landmark } from "lucide-react";
 import { Card } from "../ui/Card";
 import { SectionHeader } from "../ui/SectionHeader";
@@ -17,14 +17,29 @@ const CHART_WIDTH = 720;
 const CHART_HEIGHT = 200;
 const PADDING = { top: 10, right: 12, bottom: 24, left: 48 };
 
+const RANGES = [
+  { key: "1m", label: "1個月", tradingDays: 20 },
+  { key: "3m", label: "3個月", tradingDays: 60 },
+  { key: "6m", label: "6個月", tradingDays: 120 },
+  { key: "1y", label: "1年", tradingDays: 250 },
+  { key: "all", label: "全部", tradingDays: Infinity },
+] as const;
+type RangeKey = (typeof RANGES)[number]["key"];
+
 function formatLots(value: number): string {
   const sign = value > 0 ? "+" : "";
   return `${sign}${Math.round(value).toLocaleString()}張`;
 }
 
-/** 三大法人（外資/投信/自營）買賣超歷史圖：每日合計淨買賣超張數，hover看個別法人拆分 */
-export function InstitutionalFlowChart({ days }: { days: InstitutionalFlowDay[] }) {
+/** 三大法人（外資/投信/自營）買賣超歷史圖：每日合計淨買賣超張數，hover看個別法人拆分。
+ * 2026-08-19新增區間切換（比照PriceTrendChart）——原本外層固定只傳60天進來，改成外層
+ * 傳全部歷史、這裡自己依選取區間裁切，跟股價走勢圖同一套模式 */
+export function InstitutionalFlowChart({ days: allDays }: { days: InstitutionalFlowDay[] }) {
+  const [range, setRange] = useState<RangeKey>("3m");
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
+  const rangeConfig = RANGES.find((r) => r.key === range)!;
+  const days = useMemo(() => allDays.slice(-rangeConfig.tradingDays), [allDays, rangeConfig.tradingDays]);
 
   if (days.length < 2) {
     return (
@@ -55,7 +70,25 @@ export function InstitutionalFlowChart({ days }: { days: InstitutionalFlowDay[] 
 
   return (
     <Card>
-      <SectionHeader icon={Landmark} iconColor="blue" title="三大法人買賣超" />
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <SectionHeader icon={Landmark} iconColor="blue" title="三大法人買賣超" />
+        <div className="flex gap-1">
+          {RANGES.map((r) => (
+            <button
+              key={r.key}
+              type="button"
+              onClick={() => setRange(r.key)}
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                range === r.key
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-white/10 dark:text-zinc-400 dark:hover:bg-white/15"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-500">
         近{days.length}個交易日外資+投信+自營合計淨買賣超（張），紅=合計買超、綠=合計賣超。滑過長條看個別法人拆分。
       </p>

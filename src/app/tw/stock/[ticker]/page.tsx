@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Gauge, TrendingUp, Landmark, Layers, BarChart3, Presentation, PlaySquare, Link2 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { findIndustryThemesForTicker } from "@/lib/valuation/groupConfig";
 import { computeGroupValuation } from "@/lib/valuation/computeGroupValuation";
@@ -10,6 +10,7 @@ import { MonthlyRevenuePanel } from "@/components/tw/MonthlyRevenuePanel";
 import { PriceTrendChart } from "@/components/tw/PriceTrendChart";
 import { InstitutionalFlowChart } from "@/components/tw/InstitutionalFlowChart";
 import { ChipConcentrationChart } from "@/components/tw/ChipConcentrationChart";
+import { StockDetailTabs } from "@/components/tw/StockDetailTabs";
 import { calculateChipConcentration } from "@/lib/trend/tw/chipConcentration";
 import type { InstitutionalDay } from "@/lib/trend/tw/chipScore";
 import { StockMentionsPanel } from "@/components/youtube/StockMentionsPanel";
@@ -19,6 +20,11 @@ import { buildMopsPdfUrl } from "@/lib/marketData/mopsClient";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 
 export const dynamic = "force-dynamic";
+
+const TAB_ICON_CLASS = "h-3.5 w-3.5";
+/** 媒體提及沒有像價格/籌碼那樣天然有限的資料量（頻道持續發片就會一直累積），給一個
+ * 夠大的上限當「全部歷史」，避免真的unbounded query */
+const STOCK_MENTIONS_DISPLAY_LIMIT = 100;
 
 export default async function TwStockDetailPage({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker } = await params;
@@ -34,12 +40,12 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
     orderBy: { tradeDate: "desc" },
   });
 
-  // 1Y股價走勢：直接用 tw_daily_price 原始收盤價——這張表是每日排程持續補的完整歷史，
-  // 不像 daily_trend_signals 只在有跑分類批次的日子才有一筆（本地開發環境常常是斷斷續續的）
+  // 股價走勢：直接用 tw_daily_price 原始收盤價——這張表是每日排程持續補的完整歷史，
+  // 不像 daily_trend_signals 只在有跑分類批次的日子才有一筆（本地開發環境常常是斷斷續續的）。
+  // 2026-08-19：不再限制筆數，改抓全部歷史，圖表內部自己切6M/1Y/全部等區間（比照券商APP）
   const priceHistoryDesc = await prisma.twDailyPrice.findMany({
     where: { stockId: stock.id },
     orderBy: { tradeDate: "desc" },
-    take: 260,
     select: { tradeDate: true, close: true },
   });
   const priceBars = [...priceHistoryDesc].reverse().map((row) => ({
@@ -49,12 +55,11 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
 
   // 三大法人買賣超歷史 + 5/10/20日籌碼集中度都從 tw_institutional_trading 這張完整歷史表算，
   // 不用 daily_trend_signals 存的 chipConcentration 欄位（同樣是批次才算一次，資料點稀疏）。
-  // 多抓20天當滾動窗口的緩衝，讓顯示範圍第一天也能算出完整的20日集中度。
-  const INSTITUTIONAL_DISPLAY_DAYS = 90;
+  // 2026-08-19：不再限制筆數，兩個圖表現在都各自有內部區間切換，籌碼集中度也對全部歷史
+  // 逐日計算滾動窗口（原本只算最近90天，改成每一天都算，用截至當天的完整歷史當context）
   const institutionalHistoryDesc = await prisma.twInstitutionalTrading.findMany({
     where: { stockId: stock.id },
     orderBy: { tradeDate: "desc" },
-    take: INSTITUTIONAL_DISPLAY_DAYS + 20,
     select: {
       tradeDate: true,
       foreignNetBuyShares: true,
@@ -70,9 +75,8 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
     dealerNetBuyShares: Number(row.dealerNetBuyShares),
     totalVolumeShares: Number(row.totalVolumeShares),
   }));
-  const institutionalDays = institutionalHistory.slice(-60);
-  const chipConcentrationDays = institutionalHistory.slice(-INSTITUTIONAL_DISPLAY_DAYS).map((day, i, arr) => {
-    const upToToday = institutionalHistory.slice(0, institutionalHistory.length - arr.length + i + 1);
+  const chipConcentrationDays = institutionalHistory.map((day, i) => {
+    const upToToday = institutionalHistory.slice(0, i + 1);
     const result = calculateChipConcentration(upToToday);
     return {
       date: day.date,
@@ -88,18 +92,17 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
   const themesWithoutData = themes.filter((t) => t.members.length === 0);
   const valuations = await Promise.all(themesWithData.map((theme) => computeGroupValuation(theme)));
 
+  // 2026-08-19：月營收/法說會/媒體提及也都不再限制少少幾筆，改抓全部（或夠大的上限）歷史
   const revenueRows = await prisma.twMonthlyRevenue.findMany({
     where: { stockId: stock.id },
     orderBy: { revenueMonth: "desc" },
-    take: 6,
   });
 
-  const stockMentions = await fetchStockMentions(stock.id);
+  const stockMentions = await fetchStockMentions(stock.id, STOCK_MENTIONS_DISPLAY_LIMIT);
 
   const earningsCallAnalyses = await prisma.earningsCallAnalysis.findMany({
     where: { stockId: stock.id },
     orderBy: { conferenceDate: "desc" },
-    take: 4,
   });
 
   return (
@@ -135,67 +138,102 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
           <div className="mt-2 h-px w-24 bg-gradient-to-r from-amber-700/50 to-transparent dark:from-amber-400/40" />
         </header>
 
-        {latestSignal ? (
-          <>
-            <p className="-mb-3 text-xs text-zinc-400 dark:text-zinc-500">
-              資料日期（as of）：{latestSignal.tradeDate.toISOString().slice(0, 10)}
-            </p>
-            <div className="tw-reveal" style={{ animationDelay: "60ms" }}>
-              <CoreScoreBreakdown
-                coreScore={Number(latestSignal.coreScore)}
-                technicalScore={latestSignal.technicalScore !== null ? Number(latestSignal.technicalScore) : null}
-                chipScore={latestSignal.chipScore !== null ? Number(latestSignal.chipScore) : null}
-                chipBadge={latestSignal.chipBadge}
-              />
-            </div>
-          </>
-        ) : (
-          <p className="text-sm text-zinc-400 dark:text-zinc-500">這檔股票目前沒有任何戰術分類歷史資料。</p>
+        {latestSignal && (
+          <p className="-mb-3 text-xs text-zinc-400 dark:text-zinc-500">
+            資料日期（as of）：{latestSignal.tradeDate.toISOString().slice(0, 10)}
+          </p>
         )}
 
-        <div className="tw-reveal" style={{ animationDelay: "100ms" }}>
-          <PriceTrendChart bars={priceBars} />
-        </div>
-
-        <div className="tw-reveal" style={{ animationDelay: "140ms" }}>
-          <InstitutionalFlowChart days={institutionalDays} />
-        </div>
-
-        <div className="tw-reveal" style={{ animationDelay: "180ms" }}>
-          <ChipConcentrationChart days={chipConcentrationDays} />
-        </div>
-
-        <div className="tw-reveal" style={{ animationDelay: "220ms" }}>
-          <MonthlyRevenuePanel
-            rows={revenueRows.map((r) => ({
-              revenueMonth: r.revenueMonth.toISOString().slice(0, 7),
-              revenue: r.revenue.toString(),
-              yoyGrowthPct: r.yoyGrowthPct !== null ? Number(r.yoyGrowthPct) : null,
-              momGrowthPct: r.momGrowthPct !== null ? Number(r.momGrowthPct) : null,
-              cumulativeYoyGrowthPct: r.cumulativeYoyGrowthPct !== null ? Number(r.cumulativeYoyGrowthPct) : null,
-            }))}
+        <div className="tw-reveal" style={{ animationDelay: "60ms" }}>
+          <StockDetailTabs
+            tabs={[
+              {
+                key: "overview",
+                label: "總覽",
+                icon: <Gauge key="overview-icon" className={TAB_ICON_CLASS} strokeWidth={2.25} />,
+                content: latestSignal ? (
+                  <CoreScoreBreakdown
+                    key="overview-content"
+                    coreScore={Number(latestSignal.coreScore)}
+                    technicalScore={latestSignal.technicalScore !== null ? Number(latestSignal.technicalScore) : null}
+                    chipScore={latestSignal.chipScore !== null ? Number(latestSignal.chipScore) : null}
+                    chipBadge={latestSignal.chipBadge}
+                  />
+                ) : (
+                  <p key="overview-content" className="text-sm text-zinc-400 dark:text-zinc-500">
+                    這檔股票目前沒有任何戰術分類歷史資料。
+                  </p>
+                ),
+              },
+              {
+                key: "price",
+                label: "股價走勢",
+                icon: <TrendingUp key="price-icon" className={TAB_ICON_CLASS} strokeWidth={2.25} />,
+                content: <PriceTrendChart key="price-content" bars={priceBars} />,
+              },
+              {
+                key: "institutional",
+                label: "三大法人",
+                icon: <Landmark key="institutional-icon" className={TAB_ICON_CLASS} strokeWidth={2.25} />,
+                content: <InstitutionalFlowChart key="institutional-content" days={institutionalHistory} />,
+              },
+              {
+                key: "chip",
+                label: "籌碼集中度",
+                icon: <Layers key="chip-icon" className={TAB_ICON_CLASS} strokeWidth={2.25} />,
+                content: <ChipConcentrationChart key="chip-content" days={chipConcentrationDays} />,
+              },
+              {
+                key: "revenue",
+                label: "月營收",
+                icon: <BarChart3 key="revenue-icon" className={TAB_ICON_CLASS} strokeWidth={2.25} />,
+                content: (
+                  <MonthlyRevenuePanel
+                    key="revenue-content"
+                    rows={revenueRows.map((r) => ({
+                      revenueMonth: r.revenueMonth.toISOString().slice(0, 7),
+                      revenue: r.revenue.toString(),
+                      yoyGrowthPct: r.yoyGrowthPct !== null ? Number(r.yoyGrowthPct) : null,
+                      momGrowthPct: r.momGrowthPct !== null ? Number(r.momGrowthPct) : null,
+                      cumulativeYoyGrowthPct: r.cumulativeYoyGrowthPct !== null ? Number(r.cumulativeYoyGrowthPct) : null,
+                    }))}
+                  />
+                ),
+              },
+              {
+                key: "earningsCall",
+                label: "法說會",
+                icon: <Presentation key="earningsCall-icon" className={TAB_ICON_CLASS} strokeWidth={2.25} />,
+                content: (
+                  <EarningsCallPanel
+                    key="earningsCall-content"
+                    analyses={earningsCallAnalyses.map((a) => ({
+                      conferenceDate: a.conferenceDate.toISOString().slice(0, 10),
+                      pdfUrl: buildMopsPdfUrl(a.pdfFileName),
+                      profitGrowthSummary: a.profitGrowthSummary,
+                      outlookSummary: a.outlookSummary,
+                      riskSummary: a.riskSummary,
+                      signal: a.signal,
+                    }))}
+                  />
+                ),
+              },
+              {
+                key: "mentions",
+                label: "媒體提及",
+                icon: <PlaySquare key="mentions-icon" className={TAB_ICON_CLASS} strokeWidth={2.25} />,
+                content: <StockMentionsPanel key="mentions-content" mentions={stockMentions} />,
+              },
+              {
+                key: "valuation",
+                label: "同業比較",
+                icon: <Link2 key="valuation-icon" className={TAB_ICON_CLASS} strokeWidth={2.25} />,
+                content: (
+                  <ValuationSidePanel key="valuation-content" themesWithoutData={themesWithoutData} valuations={valuations} />
+                ),
+              },
+            ]}
           />
-        </div>
-
-        <div className="tw-reveal" style={{ animationDelay: "260ms" }}>
-          <EarningsCallPanel
-            analyses={earningsCallAnalyses.map((a) => ({
-              conferenceDate: a.conferenceDate.toISOString().slice(0, 10),
-              pdfUrl: buildMopsPdfUrl(a.pdfFileName),
-              profitGrowthSummary: a.profitGrowthSummary,
-              outlookSummary: a.outlookSummary,
-              riskSummary: a.riskSummary,
-              signal: a.signal,
-            }))}
-          />
-        </div>
-
-        <div className="tw-reveal" style={{ animationDelay: "300ms" }}>
-          <StockMentionsPanel mentions={stockMentions} />
-        </div>
-
-        <div className="tw-reveal" style={{ animationDelay: "340ms" }}>
-          <ValuationSidePanel themesWithoutData={themesWithoutData} valuations={valuations} />
         </div>
       </main>
     </div>

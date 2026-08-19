@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Layers, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Card } from "../ui/Card";
 import { SectionHeader } from "../ui/SectionHeader";
@@ -17,6 +17,15 @@ const CHART_WIDTH = 720;
 const CHART_HEIGHT = 200;
 const PADDING = { top: 12, right: 12, bottom: 24, left: 40 };
 
+const RANGES = [
+  { key: "1m", label: "1個月", tradingDays: 20 },
+  { key: "3m", label: "3個月", tradingDays: 60 },
+  { key: "6m", label: "6個月", tradingDays: 120 },
+  { key: "1y", label: "1年", tradingDays: 250 },
+  { key: "all", label: "全部", tradingDays: Infinity },
+] as const;
+type RangeKey = (typeof RANGES)[number]["key"];
+
 const SERIES: { key: "concentration5" | "concentration10" | "concentration20"; label: string; color: string }[] = [
   { key: "concentration5", label: "5日", color: "light-dark(#dc2626, #f87171)" },
   { key: "concentration10", label: "10日", color: "light-dark(#d97706, #fbbf24)" },
@@ -29,9 +38,15 @@ const MOMENTUM_META = {
   weakening: { label: "轉弱", icon: TrendingDown, className: "text-emerald-600 dark:text-emerald-400" },
 } as const;
 
-/** 5/10/20日籌碼集中度排列圖：三條線的相對位置看轉強/轉弱（5>10>20=轉強，5<10=轉弱） */
-export function ChipConcentrationChart({ days }: { days: ChipConcentrationDay[] }) {
+/** 5/10/20日籌碼集中度排列圖：三條線的相對位置看轉強/轉弱（5>10>20=轉強，5<10=轉弱）。
+ * 2026-08-19新增區間切換（比照PriceTrendChart）——外層改傳全部歷史，這裡自己依選取
+ * 區間裁切 */
+export function ChipConcentrationChart({ days: allDays }: { days: ChipConcentrationDay[] }) {
+  const [range, setRange] = useState<RangeKey>("3m");
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
+  const rangeConfig = RANGES.find((r) => r.key === range)!;
+  const days = useMemo(() => allDays.slice(-rangeConfig.tradingDays), [allDays, rangeConfig.tradingDays]);
 
   if (days.length < 2) {
     return (
@@ -84,12 +99,30 @@ export function ChipConcentrationChart({ days }: { days: ChipConcentrationDay[] 
     <Card>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <SectionHeader icon={Layers} iconColor="amber" title="籌碼集中度" />
-        {latestMomentum && MomentumIcon && (
-          <span className={`flex items-center gap-1 text-xs font-semibold ${latestMomentum.className}`}>
-            <MomentumIcon className="h-3.5 w-3.5" strokeWidth={2.25} />
-            {latestMomentum.label}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {latestMomentum && MomentumIcon && (
+            <span className={`flex items-center gap-1 text-xs font-semibold ${latestMomentum.className}`}>
+              <MomentumIcon className="h-3.5 w-3.5" strokeWidth={2.25} />
+              {latestMomentum.label}
+            </span>
+          )}
+          <div className="flex gap-1">
+            {RANGES.map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => setRange(r.key)}
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                  range === r.key
+                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                    : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-white/10 dark:text-zinc-400 dark:hover:bg-white/15"
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
       <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-500">
         (外資+投信買超張數) ÷ 總成交量，5/10/20日排列：5日 &gt; 10日 &gt; 20日 且 5日 &gt; 0 = 轉強；5日 &lt; 10日 = 轉弱。

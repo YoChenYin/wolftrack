@@ -16,8 +16,11 @@ const CHART_HEIGHT = 220;
 const PADDING = { top: 12, right: 12, bottom: 24, left: 48 };
 
 const RANGES = [
+  { key: "1m", label: "1個月", tradingDays: 20 },
+  { key: "3m", label: "3個月", tradingDays: 60 },
   { key: "6m", label: "6個月", tradingDays: 120 },
   { key: "1y", label: "1年", tradingDays: 250 },
+  { key: "all", label: "全部", tradingDays: Infinity },
 ] as const;
 type RangeKey = (typeof RANGES)[number]["key"];
 
