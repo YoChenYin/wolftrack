@@ -11,6 +11,7 @@ import { Card } from "./ui/Card";
 import { SectionHeader } from "./ui/SectionHeader";
 import type { SectorTrendsGrouped, TacticalStatus } from "@/lib/trend/sectorTrendsQuery";
 import type { GroupValuationResult } from "@/lib/valuation/computeGroupValuation";
+import type { BadgeStats } from "@/lib/trend/tw/backtestSummary";
 import type { Market } from "@/generated/prisma/enums";
 
 /** 台股五段式依多空分組，給下面的tab切換用。刻意定義在這個client component裡而不是
@@ -37,11 +38,15 @@ export function SectorTrendsBoard({
   sectors,
   themes,
   initialData,
+  backtestStats,
 }: {
   market: Market;
   sectors: SectorOption[];
   themes: ThemeOption[];
   initialData: SectorTrendsGrouped;
+  /** 2026-08-21新增：戰術訊號回測結果（見backtestSummary.ts），key是分類名稱，跟sector/theme
+   * 篩選無關的靜態資料，只在首次載入查一次，不用像data那樣切換篩選時重查 */
+  backtestStats?: Record<string, BadgeStats>;
 }) {
   const [selectedSector, setSelectedSector] = useState<string>(initialData.sector);
   const [selectedTheme, setSelectedTheme] = useState<string>(initialData.theme);
@@ -173,7 +178,12 @@ export function SectorTrendsBoard({
               selected={selectedCategory}
               onSelect={setSelectedCategory}
             />
-            <TrendTable status={selectedCategory} items={data.groups[selectedCategory]} loading={isPending} />
+            <TrendTable
+              status={selectedCategory}
+              items={data.groups[selectedCategory]}
+              loading={isPending}
+              backtestStats={backtestStats?.[selectedCategory]}
+            />
           </>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

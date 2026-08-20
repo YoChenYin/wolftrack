@@ -111,3 +111,52 @@ export async function computeBacktestSummary(excludeEtf = true): Promise<Categor
 
   return summaries;
 }
+
+/** 樣本數低於這個門檻，不當作「已經有統計意義」——實測headShoulders只有243筆（vs其他
+ * 分類動輒2萬~9萬筆），數字噪音太大，UI上寧可繼續顯示「效果未驗證」也不要秀出不穩定的數字 */
+const MIN_SAMPLE_SIZE_FOR_UI = 500;
+
+export interface BadgeStats {
+  category: BacktestCategory;
+  sampleSize: number;
+  winRatePct: number;
+  excessReturnPct: number;
+}
+
+/**
+ * 給選股清單tab標題的badge用（取代靜態的「效果未驗證」）——只查20日這個單一horizon、
+ * 用SQL直接GROUP BY算好聚合值，不像computeBacktestSummary()那樣把全部事件（實測23萬+筆）
+ * 撈進Node.js記憶體逐筆處理，這個查詢每次頁面載入都會跑，要控制成本。
+ * 樣本數<MIN_SAMPLE_SIZE_FOR_UI的分類不會出現在回傳結果裡，呼叫端fallback回靜態「效果未驗證」。
+ */
+export async function getBacktestBadgeStats(): Promise<Map<BacktestCategory, BadgeStats>> {
+  const rows = await prisma.$queryRaw<
+    { category: BacktestCategory; sample_size: bigint; win_rate_pct: number | null; avg_return_pct: number | null; avg_taiex_return_pct: number | null }[]
+  >`
+    SELECT
+      e.category,
+      COUNT(*) FILTER (WHERE e.return_20d IS NOT NULL) AS sample_size,
+      (COUNT(*) FILTER (WHERE e.return_20d > 0))::float * 100.0 / NULLIF(COUNT(*) FILTER (WHERE e.return_20d IS NOT NULL), 0) AS win_rate_pct,
+      AVG(e.return_20d) AS avg_return_pct,
+      AVG(e.taiex_return_20d) AS avg_taiex_return_pct
+    FROM tw_signal_backtest_events e
+    JOIN stocks s ON s.id = e.stock_id
+    WHERE s.industry IS DISTINCT FROM 'ETF'
+    GROUP BY e.category
+  `;
+
+  const result = new Map<BacktestCategory, BadgeStats>();
+  for (const row of rows) {
+    const sampleSize = Number(row.sample_size);
+    if (sampleSize < MIN_SAMPLE_SIZE_FOR_UI || row.avg_return_pct === null || row.avg_taiex_return_pct === null || row.win_rate_pct === null) {
+      continue;
+    }
+    result.set(row.category, {
+      category: row.category,
+      sampleSize,
+      winRatePct: round2(row.win_rate_pct),
+      excessReturnPct: round2(row.avg_return_pct - row.avg_taiex_return_pct),
+    });
+  }
+  return result;
+}

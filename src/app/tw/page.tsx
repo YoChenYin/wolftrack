@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { fetchSectorTrendsGrouped } from "@/lib/trend/sectorTrendsQuery";
+import { getBacktestBadgeStats } from "@/lib/trend/tw/backtestSummary";
 import { SectorTrendsBoard } from "@/components/SectorTrendsBoard";
 import { TwSectionNav } from "@/components/tw/TwSectionNav";
 import {
@@ -46,6 +47,11 @@ export default async function HomeTw({ searchParams }: { searchParams: Promise<{
 
   const initialData = await fetchSectorTrendsGrouped({ market: "TW", sectorCode: sectorParam ?? "all", themeCode: "all" });
 
+  // 2026-08-21新增：戰術訊號回測結果（見backtestSummary.ts），拿真實勝率/超額報酬取代原本
+  // 靜態的「效果未驗證」badge——跟sector/theme篩選無關，只查一次當靜態prop往下傳，不用像
+  // initialData那樣每次切換篩選都重新查
+  const backtestStats = Object.fromEntries(await getBacktestBadgeStats());
+
   return (
     <div
       className="relative flex flex-1 flex-col overflow-hidden font-[family:var(--font-tw-sans)] dark:bg-zinc-950"
@@ -83,7 +89,7 @@ export default async function HomeTw({ searchParams }: { searchParams: Promise<{
         </header>
 
         <div className="tw-reveal" style={{ animationDelay: "80ms" }}>
-          <SectorTrendsBoard market="TW" sectors={themeOptions} themes={[]} initialData={initialData} />
+          <SectorTrendsBoard market="TW" sectors={themeOptions} themes={[]} initialData={initialData} backtestStats={backtestStats} />
         </div>
 
         {/* 2026-08-16：「網紅視角」/「網紅視角總覽」先從首頁隱藏（使用者要求）。元件跟

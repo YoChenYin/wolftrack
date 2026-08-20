@@ -14,6 +14,7 @@ import {
   Waves,
 } from "lucide-react";
 import type { SectorTrendItem, TacticalStatus } from "@/lib/trend/sectorTrendsQuery";
+import type { BadgeStats } from "@/lib/trend/tw/backtestSummary";
 import { TACTICAL_STATUS_META } from "@/lib/trend/tacticalStatusMeta";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 import { InfoTooltip } from "./InfoTooltip";
@@ -200,6 +201,38 @@ function UnprovenBadge() {
   );
 }
 
+/** 空方分類的「有效」定義跟多方相反——賣訊號後續跑輸大盤才是訊號本身有抓到東西，
+ * 不是「報酬變成正的」才算過關 */
+const SELL_SIDE_CATEGORIES = new Set(["trustTurnSell", "combinedSell"]);
+
+/** 2026-08-21新增：拿walk-forward回測（backtestWalkForward.ts）算出的真實20日勝率/超額報酬
+ * 取代靜態的「效果未驗證」——樣本數不足（見backtestSummary.ts的MIN_SAMPLE_SIZE_FOR_UI）的
+ * 分類（目前是頭肩底，只有243筆事件）不會有這個badge，繼續顯示原本的UnprovenBadge。 */
+function BacktestStatsBadge({ status, stats }: { status: TacticalStatus; stats: BadgeStats }) {
+  const isSellSide = SELL_SIDE_CATEGORIES.has(status);
+  const confirms = isSellSide ? stats.excessReturnPct <= 0 : stats.excessReturnPct >= 0;
+  const excessLabel = isSellSide
+    ? `落後大盤${Math.abs(stats.excessReturnPct).toFixed(1)}%`
+    : `超額${stats.excessReturnPct >= 0 ? "+" : ""}${stats.excessReturnPct.toFixed(1)}%`;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+        confirms
+          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-400"
+          : "bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-400"
+      }`}
+      title={`用真實production資料回溯回測（樣本數N=${stats.sampleSize}）：訊號出現後20個交易日，${
+        stats.winRatePct
+      }%的機率${isSellSide ? "股價比大盤同期表現差" : "報酬是正的"}，平均${
+        isSellSide ? "跑輸" : "跑贏"
+      }大盤(TAIEX)同期${Math.abs(stats.excessReturnPct).toFixed(1)}%。這是統計出來的歷史邊際效益，幅度不代表保證獲利，也不是投資建議。`}
+    >
+      <CircleAlert className="h-3 w-3" strokeWidth={2.25} />
+      20日勝率{stats.winRatePct.toFixed(0)}%・{excessLabel}
+    </span>
+  );
+}
+
 /**
  * 2026-08-18：台股版戰術面板改成表格（取代卡片版TrendColumn，美股不受影響）。
  *
@@ -208,7 +241,17 @@ function UnprovenBadge() {
  * 卡片差。桌面版維持表格是因為欄位多、資訊密度高，適合掃描比較很多檔股票；手機螢幕窄，
  * 換成每檔股票一張卡、資訊用2欄grid排列，不用捲動就看得到全部欄位。
  */
-export function TrendTable({ status, items, loading }: { status: TacticalStatus; items: SectorTrendItem[]; loading?: boolean }) {
+export function TrendTable({
+  status,
+  items,
+  loading,
+  backtestStats,
+}: {
+  status: TacticalStatus;
+  items: SectorTrendItem[];
+  loading?: boolean;
+  backtestStats?: BadgeStats;
+}) {
   const meta = TACTICAL_STATUS_META[status];
 
   return (
@@ -222,7 +265,11 @@ export function TrendTable({ status, items, loading }: { status: TacticalStatus;
         />
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <p className="text-xs text-zinc-500 dark:text-zinc-400">{meta.subtitle}</p>
-          {meta.unproven && <UnprovenBadge />}
+          {backtestStats ? (
+            <BacktestStatsBadge status={status} stats={backtestStats} />
+          ) : (
+            meta.unproven && <UnprovenBadge />
+          )}
         </div>
       </div>
 
