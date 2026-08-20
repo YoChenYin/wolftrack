@@ -1,0 +1,113 @@
+import { prisma } from "@/lib/prisma";
+import { BACKTEST_HORIZONS, type BacktestCategory, type BacktestHorizon } from "./backtestWalkForward";
+
+export interface HorizonStats {
+  horizon: BacktestHorizon;
+  sampleSize: number;
+  winRatePct: number | null;
+  avgReturnPct: number | null;
+  medianReturnPct: number | null;
+  /** 同一組事件日期，大盤本身同期的平均報酬——拿來跟avgReturnPct比，判斷訊號是不是
+   * 只是「反正股票長期會漲/大盤同期也在漲」，不是訊號本身的邊際效益 */
+  avgTaiexReturnPct: number | null;
+  /** avgReturnPct - avgTaiexReturnPct，只在兩者都有值時才算 */
+  excessReturnPct: number | null;
+}
+
+export interface CategoryBacktestSummary {
+  category: BacktestCategory;
+  totalEvents: number;
+  horizons: HorizonStats[];
+}
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+const HORIZON_FIELD: Record<BacktestHorizon, { own: string; taiex: string }> = {
+  5: { own: "return5d", taiex: "taiexReturn5d" },
+  10: { own: "return10d", taiex: "taiexReturn10d" },
+  20: { own: "return20d", taiex: "taiexReturn20d" },
+  40: { own: "return40d", taiex: "taiexReturn40d" },
+  60: { own: "return60d", taiex: "taiexReturn60d" },
+};
+
+/**
+ * 彙總戰術訊號回測結果（見backtestWalkForward.ts/runTwSignalBacktest.ts）：每個分類、每個
+ * 持有期間的勝率/平均報酬/中位數報酬/樣本數，加上同期大盤報酬當比較基準。
+ *
+ * excludeEtf：預設排除ETF（industry="ETF"，例如0050元大台灣50）——ETF的法人籌碼流動態
+ * （造市商/授權參與人的日常申贖套利）跟個股籌碼流訊號代表的意義完全不同，混進來會嚴重
+ * 扭曲統計結果（實測0050單檔就貢獻了749筆事件，遠高於任何個股，會把整體樣本稀釋成主要在
+ * 反映ETF套利行為而不是個股籌碼訊號）。
+ */
+export async function computeBacktestSummary(excludeEtf = true): Promise<CategoryBacktestSummary[]> {
+  const events = await prisma.twSignalBacktestEvent.findMany({
+    where: excludeEtf ? { stock: { industry: { not: "ETF" } } } : {},
+    select: {
+      category: true,
+      return5d: true,
+      return10d: true,
+      return20d: true,
+      return40d: true,
+      return60d: true,
+      taiexReturn5d: true,
+      taiexReturn10d: true,
+      taiexReturn20d: true,
+      taiexReturn40d: true,
+      taiexReturn60d: true,
+    },
+  });
+
+  const byCategory = new Map<BacktestCategory, typeof events>();
+  for (const e of events) {
+    const list = byCategory.get(e.category) ?? [];
+    list.push(e);
+    byCategory.set(e.category, list);
+  }
+
+  const summaries: CategoryBacktestSummary[] = [];
+  for (const [category, categoryEvents] of byCategory) {
+    const horizons: HorizonStats[] = BACKTEST_HORIZONS.map((h) => {
+      const field = HORIZON_FIELD[h];
+      const ownValues = categoryEvents
+        .map((e) => e[field.own as keyof typeof e])
+        .filter((v): v is NonNullable<typeof v> => v !== null)
+        .map((v) => Number(v));
+      const taiexValues = categoryEvents
+        .map((e) => e[field.taiex as keyof typeof e])
+        .filter((v): v is NonNullable<typeof v> => v !== null)
+        .map((v) => Number(v));
+
+      const sampleSize = ownValues.length;
+      const winRatePct = sampleSize > 0 ? round2((ownValues.filter((v) => v > 0).length / sampleSize) * 100) : null;
+      const avgReturnPct = sampleSize > 0 ? round2(ownValues.reduce((a, b) => a + b, 0) / sampleSize) : null;
+      const medianReturnPct = median(ownValues);
+      const avgTaiexReturnPct =
+        taiexValues.length > 0 ? round2(taiexValues.reduce((a, b) => a + b, 0) / taiexValues.length) : null;
+      const excessReturnPct =
+        avgReturnPct !== null && avgTaiexReturnPct !== null ? round2(avgReturnPct - avgTaiexReturnPct) : null;
+
+      return {
+        horizon: h,
+        sampleSize,
+        winRatePct,
+        avgReturnPct,
+        medianReturnPct: medianReturnPct !== null ? round2(medianReturnPct) : null,
+        avgTaiexReturnPct,
+        excessReturnPct,
+      };
+    });
+
+    summaries.push({ category, totalEvents: categoryEvents.length, horizons });
+  }
+
+  return summaries;
+}

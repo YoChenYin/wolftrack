@@ -57,6 +57,7 @@ model Stock {
   historyBackfillStatus       TwHistoryBackfillStatus[]
   earningsCallAnalyses        EarningsCallAnalysis[]
   institutionalReportMentions InstitutionalReportMention[]
+  signalBacktestEvents        TwSignalBacktestEvent[]
 
   @@unique([market, ticker])
   @@index([sectorId])
@@ -935,4 +936,58 @@ model TwDailyMarketReport {
 
   @@unique([reportDate])
   @@map("tw_daily_market_report")
+}
+
+/// 戰術訊號回測涵蓋的6個分類（2026-08-21新增，見docs/progress-status.md「台股戰術訊號回測」
+/// 設計討論）——buyDip已經在2026-07-23版backtest驗證過（見classifyChipFlow.ts），不在這次
+/// 回測範圍內，這6個是走勢預測模型之前先驗證的「其他未驗證策略」：籌碼流4個(trustTurnBuy/
+/// combinedBuy/trustTurnSell/combinedSell)+底部型態2個(headShoulders/nShape)
+enum BacktestSignalCategory {
+  trustTurnBuy
+  combinedBuy
+  trustTurnSell
+  combinedSell
+  headShoulders
+  nShape
+}
+
+/// 戰術訊號回測事件（2026-08-21新增）：把classifyChipFlow()/detectBottomPattern()的分類邏輯
+/// 「回溯重跑」到歷史上每一個交易日（只用當天以前的資料，不能看到未來），記錄下「如果這個
+/// 規則過去每天都在跑，哪一天會觸發訊號」，然後往後量5/10/20/40/60個交易日的報酬率。
+/// 一個(stockId, category)只會在「訊號連續成立區間的第一天」記一筆（見backtestWalkForward.ts
+/// 的anchor day邏輯），不是每天都記，避免同一個連續訊號被當成好幾個獨立樣本灌水勝率。
+///
+/// 已知限制（跟docs/progress-status.md記錄的原始設計一致）：沒有處理下市股票的存活者偏差
+/// （只有目前追蹤中的股票有歷史）；這是回測「現在的分類規則」套用到歷史，不是驗證「過去真的
+/// 即時跑出這些訊號」；不含交易成本/滑價；沒有依龍頭/二軍、產業別切分（原始設計列為「額外」
+/// 的加值分析，v1先驗證訊號本身有沒有效）。
+model TwSignalBacktestEvent {
+  id            BigInt                 @id @default(autoincrement())
+  stockId       Int                    @map("stock_id")
+  category      BacktestSignalCategory
+  signalDate    DateTime               @map("signal_date") @db.Date
+  priceAtSignal Decimal                @map("price_at_signal") @db.Decimal(12, 4)
+
+  /// 往後N個交易日的報酬率(%)＝(N日後收盤-訊號日收盤)/訊號日收盤×100，null=資料不夠長無法算到這個horizon
+  return5d  Decimal? @map("return_5d") @db.Decimal(8, 2)
+  return10d Decimal? @map("return_10d") @db.Decimal(8, 2)
+  return20d Decimal? @map("return_20d") @db.Decimal(8, 2)
+  return40d Decimal? @map("return_40d") @db.Decimal(8, 2)
+  return60d Decimal? @map("return_60d") @db.Decimal(8, 2)
+
+  /// 同一個horizon、同一天，大盤(TAIEX)本身的報酬率——跟股票自己的報酬率一起存，
+  /// 算「超額報酬」時不用另外再查一次TAIEX歷史，也保證比較基準是同一組事件日期
+  taiexReturn5d  Decimal? @map("taiex_return_5d") @db.Decimal(8, 2)
+  taiexReturn10d Decimal? @map("taiex_return_10d") @db.Decimal(8, 2)
+  taiexReturn20d Decimal? @map("taiex_return_20d") @db.Decimal(8, 2)
+  taiexReturn40d Decimal? @map("taiex_return_40d") @db.Decimal(8, 2)
+  taiexReturn60d Decimal? @map("taiex_return_60d") @db.Decimal(8, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  stock Stock @relation(fields: [stockId], references: [id])
+
+  @@unique([stockId, category, signalDate])
+  @@index([category])
+  @@map("tw_signal_backtest_events")
 }
