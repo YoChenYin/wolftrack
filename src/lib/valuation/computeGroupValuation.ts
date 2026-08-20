@@ -15,6 +15,15 @@ export interface GroupValuationMember {
   return20d: number | null;
   /** 是否為「供應鏈落後股」 */
   isLagging: boolean;
+  /** 2026-08-21新增：最新收盤價，見tw_daily_price */
+  stockPrice: number | null;
+  /** 今年累計EPS（見TwQuarterlyEps.epsCumulative），只取fiscalYear=今年的最新一筆——
+   * 去年的累計EPS不算「今年累計」，寧可顯示N/A（今年還沒公告）也不要混淆年份 */
+  epsCumulative: number | null;
+  /** 今年累計EPS所屬季別，UI標「Q幾累計」用，epsCumulative為null時這欄也是null */
+  epsFiscalQuarter: number | null;
+  /** 近20日籌碼集中度(%)，見daily_trend_signals.chip_concentration_20，null=沒有籌碼流資料 */
+  chipConcentration: number | null;
 }
 
 export interface GroupValuationResult {
@@ -57,23 +66,50 @@ export async function computeGroupValuation(theme: GroupTheme): Promise<GroupVal
   const taiex = await prisma.stock.findUnique({ where: { market_ticker: { market: "TW", ticker: "TAIEX" } } });
   const marketAvgReturn20d = taiex ? await calculateReturn20d(taiex.id) : null;
 
+  const currentFiscalYear = new Date().getFullYear();
+
   const rawMembers = await Promise.all(
     theme.members.map(async (ticker) => {
       const stock = stockByTicker.get(ticker);
       if (!stock) {
-        return { ticker, companyName: null, pe: null, pb: null, return20d: null };
+        return {
+          ticker,
+          companyName: null,
+          pe: null,
+          pb: null,
+          return20d: null,
+          stockPrice: null,
+          epsCumulative: null,
+          epsFiscalQuarter: null,
+          chipConcentration: null,
+        };
       }
-      const fundamentals = await prisma.twStockFundamentals.findFirst({
-        where: { stockId: stock.id },
-        orderBy: { tradeDate: "desc" },
-      });
-      const return20d = await calculateReturn20d(stock.id);
+      const [fundamentals, return20d, latestPrice, latestEps, latestSignal] = await Promise.all([
+        prisma.twStockFundamentals.findFirst({ where: { stockId: stock.id }, orderBy: { tradeDate: "desc" } }),
+        calculateReturn20d(stock.id),
+        prisma.twDailyPrice.findFirst({ where: { stockId: stock.id }, orderBy: { tradeDate: "desc" }, select: { close: true } }),
+        prisma.twQuarterlyEps.findFirst({
+          where: { stockId: stock.id, fiscalYear: currentFiscalYear },
+          orderBy: { fiscalQuarter: "desc" },
+        }),
+        prisma.dailyTrendSignal.findFirst({
+          where: { stockId: stock.id },
+          orderBy: { tradeDate: "desc" },
+          select: { chipConcentration20: true },
+        }),
+      ]);
       return {
         ticker,
         companyName: stock.companyName,
         pe: fundamentals?.pe !== undefined && fundamentals?.pe !== null ? Number(fundamentals.pe) : null,
         pb: fundamentals?.pb !== undefined && fundamentals?.pb !== null ? Number(fundamentals.pb) : null,
         return20d,
+        stockPrice: latestPrice ? Number(latestPrice.close) : null,
+        epsCumulative: latestEps ? Number(latestEps.epsCumulative) : null,
+        epsFiscalQuarter: latestEps?.fiscalQuarter ?? null,
+        chipConcentration: latestSignal?.chipConcentration20 !== undefined && latestSignal?.chipConcentration20 !== null
+          ? Number(latestSignal.chipConcentration20)
+          : null,
       };
     })
   );
@@ -114,6 +150,10 @@ export async function computeGroupValuation(theme: GroupTheme): Promise<GroupVal
       pbPercentile: p?.pbPercentile ?? null,
       return20d: m.return20d,
       isLagging: laggingTickers.has(m.ticker),
+      stockPrice: m.stockPrice,
+      epsCumulative: m.epsCumulative,
+      epsFiscalQuarter: m.epsFiscalQuarter,
+      chipConcentration: m.chipConcentration,
     };
   });
 

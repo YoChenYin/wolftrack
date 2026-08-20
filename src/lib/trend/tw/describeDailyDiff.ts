@@ -17,13 +17,14 @@ function categoryLabel(category: string): string {
 }
 
 export function describeCategoryTransition(t: CategoryTransition): string {
+  const priceText = `今天收盤價${t.price.toFixed(2)}元`;
   if (t.fromCategory === null && t.toCategory !== null) {
-    return `${t.ticker} ${t.name} 今天新增至「${categoryLabel(t.toCategory)}」${t.triggerReason ? `（${t.triggerReason}）` : ""}`;
+    return `${t.ticker} ${t.name} ${priceText}，新增至「${categoryLabel(t.toCategory)}」${t.triggerReason ? `（${t.triggerReason}）` : ""}`;
   }
   if (t.fromCategory !== null && t.toCategory === null) {
-    return `${t.ticker} ${t.name} 今天移出「${categoryLabel(t.fromCategory)}」`;
+    return `${t.ticker} ${t.name} ${priceText}，移出「${categoryLabel(t.fromCategory)}」`;
   }
-  return `${t.ticker} ${t.name} 今天從「${categoryLabel(t.fromCategory!)}」轉為「${categoryLabel(t.toCategory!)}」${t.triggerReason ? `（${t.triggerReason}）` : ""}`;
+  return `${t.ticker} ${t.name} ${priceText}，從「${categoryLabel(t.fromCategory!)}」轉為「${categoryLabel(t.toCategory!)}」${t.triggerReason ? `（${t.triggerReason}）` : ""}`;
 }
 
 export function describeBreakout(b: BreakoutEvent): string {

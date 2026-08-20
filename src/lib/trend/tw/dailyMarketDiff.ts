@@ -19,6 +19,9 @@ export interface CategoryTransition {
   toCategory: TacticalStatus | null;
   /** 今天分類器算出的觸發原因（見classifyChipFlow.ts），toCategory為null時沒有值 */
   triggerReason: string | null;
+  /** 2026-08-21新增：今天收盤價——之前只有支撐壓力突破/法人成本翻轉兩類事件會顯示價格，
+   * 戰術分類轉換（投信轉買/投信外資合買等）的描述完全沒有價格，使用者反映看不到收盤價 */
+  price: number;
 }
 
 export interface BreakoutEvent {
@@ -88,7 +91,13 @@ async function computeTaiex(reportDate: Date, prevTradeDate: Date): Promise<Dail
 }
 
 function computeCategoryTransitions(
-  todaySignals: { stockId: number; status: string; triggerReason: string | null; stock: { ticker: string; companyName: string } }[],
+  todaySignals: {
+    stockId: number;
+    status: string;
+    triggerReason: string | null;
+    closePrice: unknown;
+    stock: { ticker: string; companyName: string };
+  }[],
   yesterdayStatusByStock: Map<number, string>
 ): CategoryTransition[] {
   const transitions: CategoryTransition[] = [];
@@ -104,6 +113,7 @@ function computeCategoryTransitions(
       fromCategory: isTacticalYesterday ? prevStatus : null,
       toCategory: isTacticalToday ? (row.status as TacticalStatus) : null,
       triggerReason: isTacticalToday ? row.triggerReason : null,
+      price: Number(row.closePrice),
     });
   }
   return transitions;
@@ -125,7 +135,13 @@ export async function computeDailyMarketDiff(explicitDates?: {
     computeTaiex(reportDate, prevTradeDate),
     prisma.dailyTrendSignal.findMany({
       where: { tradeDate: reportDate, stock: { market: "TW" } },
-      select: { stockId: true, status: true, triggerReason: true, stock: { select: { ticker: true, companyName: true } } },
+      select: {
+        stockId: true,
+        status: true,
+        triggerReason: true,
+        closePrice: true,
+        stock: { select: { ticker: true, companyName: true } },
+      },
     }),
     prisma.dailyTrendSignal.findMany({
       where: { tradeDate: prevTradeDate, stock: { market: "TW" } },

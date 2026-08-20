@@ -269,7 +269,7 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
                 key: "price",
                 label: "股價走勢",
                 icon: <TrendingUp key="price-icon" className={TAB_ICON_CLASS} strokeWidth={2.25} />,
-                content: <PriceTrendChart key="price-content" bars={priceBars} />,
+                content: <PriceTrendChart key="price-content" bars={priceBars} institutionalDays={institutionalHistory} />,
               },
               {
                 key: "institutional",
@@ -285,7 +285,7 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
               },
               {
                 key: "revenue",
-                label: "月營收",
+                label: "營收",
                 icon: <BarChart3 key="revenue-icon" className={TAB_ICON_CLASS} strokeWidth={2.25} />,
                 content: (
                   <MonthlyRevenuePanel

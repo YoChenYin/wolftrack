@@ -57,10 +57,11 @@ export function GroupValuationTable({ group }: { group: GroupValuationResult }) 
       </div>
 
       <div className="mt-2 overflow-x-auto">
-        <table className="w-full min-w-[560px] text-xs">
+        <table className="w-full min-w-[760px] text-xs">
           <thead>
             <tr className="text-left text-zinc-400 dark:text-zinc-500">
               <th className="pr-2 font-normal">代號</th>
+              <th className="pr-2 text-right font-normal">股價</th>
               <th className="pr-2 font-normal">
                 PE
                 <InfoTooltip>
@@ -79,6 +80,14 @@ export function GroupValuationTable({ group }: { group: GroupValuationResult }) 
                 <InfoTooltip>
                   股價淨值比（股價 ÷ 每股淨值/帳面價值）。PE看獲利、PB看資產面，兩者搭配比較不會被短期獲利波動誤導。
                 </InfoTooltip>
+              </th>
+              <th className="pr-2 text-right font-normal">
+                EPS累計
+                <InfoTooltip>今年累計每股盈餘（自年初累計到最新一期公告的季別），null=今年還沒有任何一季公告。</InfoTooltip>
+              </th>
+              <th className="pr-2 text-right font-normal">
+                籌碼集中度
+                <InfoTooltip>近20個交易日，外資+投信合計買超佔市場總成交量能的比例，數字越高代表法人籌碼越集中在買方。</InfoTooltip>
               </th>
               <th className="pr-2 font-normal">
                 近20日
@@ -115,11 +124,18 @@ export function GroupValuationTable({ group }: { group: GroupValuationResult }) 
                     </span>
                   )}
                 </td>
+                <td className="pr-2 text-right text-zinc-600 dark:text-zinc-400">{formatNum(m.stockPrice, 2)}</td>
                 <td className="pr-2 text-zinc-600 dark:text-zinc-400">{formatNum(m.pe)}</td>
                 <td className="pr-2 text-zinc-600 dark:text-zinc-400">
                   {m.pePercentile !== null ? `${m.pePercentile.toFixed(0)}%` : "N/A"}
                 </td>
                 <td className="pr-2 text-zinc-600 dark:text-zinc-400">{formatNum(m.pb, 2)}</td>
+                <td className="pr-2 text-right text-zinc-600 dark:text-zinc-400">
+                  {m.epsCumulative !== null ? `${formatNum(m.epsCumulative, 2)}（Q${m.epsFiscalQuarter}累計）` : "N/A"}
+                </td>
+                <td className="pr-2 text-right text-zinc-600 dark:text-zinc-400">
+                  {m.chipConcentration !== null ? `${m.chipConcentration.toFixed(1)}%` : "N/A"}
+                </td>
                 <td className="pr-2 text-zinc-600 dark:text-zinc-400">{formatPct(m.return20d)}</td>
                 <td>
                   {m.isLagging && (
