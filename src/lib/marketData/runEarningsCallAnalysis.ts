@@ -22,7 +22,10 @@ import { parseEarningsCall } from "./parseEarningsCall";
  * 排程呼叫時兩階段都跑（見runEarningsCallAnalysisBatch）；本機沒有LLM金鑰時可以只呼叫
  * discoverNewFilings() 補齊「待解析」清單，解析留給有金鑰的正式環境排程處理。
  */
-const PROCESS_BUDGET_PER_INVOCATION = 8;
+/** 2026-08-21：8→12。discovery不再每輪重跑（見cron route的?discover=false），省下來的時間
+ * 讓每輪能多處理幾篇，另外排程頻率也從每週改成每天（見earnings-call-analysis.yml），
+ * 兩個改動一起：556篇積壓（2026-08-21量測）預期能在1-2週內清完，不是原本的3.5個月 */
+export const PROCESS_BUDGET_PER_INVOCATION = 12;
 /** 內容太短的PDF擷取結果視為異常（可能是掃描圖檔或下載失敗），跳過不送LLM */
 const MIN_TEXT_LENGTH = 200;
 /** 「投信外資開始佈局」訊號的時效窗口，跟computeChainSignals.ts的RECENCY_WINDOW_DAYS同一套邏輯 */

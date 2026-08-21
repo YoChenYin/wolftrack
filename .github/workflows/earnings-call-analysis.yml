@@ -3,17 +3,25 @@ name: Leader stock earnings call analysis
 # 2026-07-25：抓有分類到板塊的股票（2026-08-16擴大到龍頭+二軍約155檔，2026-08-19再擴大到
 # getAllThemedTickers()涵蓋的全部板塊成員，目前約290檔）法說會簡報PDF，LLM解析出獲利成長/
 # 展望/風險，給出基本面訊號（src/lib/marketData/runEarningsCallAnalysis.ts）。法說會一季一次，
-# 但同一波財報季常常很多公司擠在同一兩週公布，單次呼叫限制在8篇（PROCESS_BUDGET_PER_INVOCATION），
+# 但同一波財報季常常很多公司擠在同一兩週公布，單次呼叫限制在小批次（PROCESS_BUDGET_PER_INVOCATION），
 # 這裡在同一次排程內連續呼叫幾次把當週新出現的法說會盡量處理完。
 # 2026-08-19：290檔規模下5輪×8篇=40篇/週的額度在財報季高峰不一定夠用——這是預期內的，
 # runEarningsCallAnalysis.ts已經把「發現PDF」跟「LLM解析」拆開，額度不夠時當週會先留下
 # 「待解析」紀錄（UI上看得到簡報連結），LLM解析則排到後續週次額度恢復後繼續補，不會遺漏。
 # 2026-08-19再加一個範圍來源：近7天出現「投信轉買/投信外資合買」訊號的股票，不限於有
 # 分類到板塊——跟板塊股票合併成同一份清單，同一張表、同一個/tw/fundamentals區塊。
+#
+# 2026-08-21：實測發現待解析積壓到556篇（564篇裡只有8篇解析完），照原本「每週一次、
+# 5輪×8篇=40篇/週」的速度要3.5個月才清得完，財報季一過又是新一批，永遠追不上。兩個改動：
+# ①原本5輪每一輪都重新掃一次全市場（純HTML查詢，沒有LLM，但290+檔跑下來單輪也要1分半
+# 左右）再解析，5輪重複掃描浪費掉的時間換算下來每週少掉2-3輪真正在解析PDF的額度——改成
+# 只有第一輪discover+parse，後面幾輪用`?discover=false`只parse不重新掃描（見cron route）。
+# ②排程頻率從「每週一次」改成「每天一次」，跟另外兩個LLM解析pipeline（法人報告/YouTube）
+# 的每日節奏一致，也讓積壓可以更快被攤平處理，不用等到下週一才有新額度。
 on:
   schedule:
-    # 每週一台北時間 06:00
-    - cron: "0 22 * * 1"
+    # 每天台北時間 06:00
+    - cron: "0 22 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -26,9 +34,13 @@ jobs:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          for i in $(seq 1 5); do
-            RESPONSE=$(curl -sf -X POST "$APP_URL/api/cron/earnings-call-analysis" \
-              -H "Authorization: Bearer $CRON_SECRET")
+          for i in $(seq 1 8); do
+            if [ "$i" = "1" ]; then
+              URL="$APP_URL/api/cron/earnings-call-analysis"
+            else
+              URL="$APP_URL/api/cron/earnings-call-analysis?discover=false"
+            fi
+            RESPONSE=$(curl -sf -X POST "$URL" -H "Authorization: Bearer $CRON_SECRET")
             echo "round $i: $RESPONSE"
 
             PROCESSED=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('totalProcessed', -1))")
