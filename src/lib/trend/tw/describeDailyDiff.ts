@@ -16,15 +16,19 @@ function categoryLabel(category: string): string {
   return TACTICAL_STATUS_META[category as keyof typeof TACTICAL_STATUS_META]?.title ?? category;
 }
 
+/** category_transitions是Json欄位，資料庫裡的舊資料列可能是price欄位還沒存在時寫入的
+ * （見docs/progress-status.md每日異動報告章節）——欄位本身沒有schema強制，缺price時
+ * 退化成不顯示價格，而不是讓.toFixed()炸掉整頁 */
 export function describeCategoryTransition(t: CategoryTransition): string {
-  const priceText = `今天收盤價${t.price.toFixed(2)}元`;
+  const hasPrice = typeof t.price === "number" && Number.isFinite(t.price);
+  const prefix = hasPrice ? `${t.ticker} ${t.name} 今天收盤價${t.price.toFixed(2)}元` : `${t.ticker} ${t.name}`;
   if (t.fromCategory === null && t.toCategory !== null) {
-    return `${t.ticker} ${t.name} ${priceText}，新增至「${categoryLabel(t.toCategory)}」${t.triggerReason ? `（${t.triggerReason}）` : ""}`;
+    return `${prefix}，新增至「${categoryLabel(t.toCategory)}」${t.triggerReason ? `（${t.triggerReason}）` : ""}`;
   }
   if (t.fromCategory !== null && t.toCategory === null) {
-    return `${t.ticker} ${t.name} ${priceText}，移出「${categoryLabel(t.fromCategory)}」`;
+    return `${prefix}，移出「${categoryLabel(t.fromCategory)}」`;
   }
-  return `${t.ticker} ${t.name} ${priceText}，從「${categoryLabel(t.fromCategory!)}」轉為「${categoryLabel(t.toCategory!)}」${t.triggerReason ? `（${t.triggerReason}）` : ""}`;
+  return `${prefix}，從「${categoryLabel(t.fromCategory!)}」轉為「${categoryLabel(t.toCategory!)}」${t.triggerReason ? `（${t.triggerReason}）` : ""}`;
 }
 
 export function describeBreakout(b: BreakoutEvent): string {
