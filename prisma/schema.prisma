@@ -619,12 +619,38 @@ model InstitutionalReportArticle {
   /// 整體偏多/中性/偏空判斷，null=還沒解析
   signal        FundamentalSignal?
 
+  /// 2026-08-21新增（Trend Core風格結構化解析，見parseInstitutionalReport.ts）：文章裡明確
+  /// 點出的關鍵數據變數，KeyMetric[]（{label, value}），例如[{"label":"CoWoS月產能",
+  /// "value":"45k/月→60k/月"}]。只收文章有明確數字佐證的，LLM不會為了湊數硬掰，
+  /// 可能是空陣列。null=還沒用新版prompt解析過（舊資料，只有summary沒有這些欄位）
+  keyMetrics Json? @map("key_metrics")
+
+  /// 看多核心邏輯，一句話；bullTrigger是驗證/觸發條件（null=文章沒有明確講）
+  bullCoreLogic String? @map("bull_core_logic") @db.Text
+  bullTrigger   String? @map("bull_trigger") @db.Text
+  /// 看空/風險核心邏輯，一句話；bearBottleneck是目前最大瓶頸或限制（null=文章沒有明確講）
+  bearCoreLogic String? @map("bear_core_logic") @db.Text
+  bearBottleneck String? @map("bear_bottleneck") @db.Text
+
+  /// 產業關鍵字標籤，string[]，例如["水冷散熱","CPO","CoWoS"]
+  tags Json?
+
   createdAt DateTime @default(now()) @map("created_at")
 
   mentions InstitutionalReportMention[]
 
   @@index([publishDate])
   @@map("institutional_report_articles")
+}
+
+/// 供應鏈層級，沿用group_config.json裡ThemeChainStage的stageKey慣例（upstream/midstream/
+/// downstream/support），但那邊是純JSON設定檔的字串、這裡是LLM產生的分類結果，用Prisma enum
+/// 多一層資料庫層級的驗證
+enum SupplyChainLayer {
+  upstream
+  midstream
+  downstream
+  support
 }
 
 /// 一篇產業報告常常同時提到好幾檔個股（例如矽晶圓報告列出環球晶/合晶/台勝科），
@@ -637,6 +663,13 @@ model InstitutionalReportMention {
   rawNameOrTicker String  @map("raw_name_or_ticker")
   isNewStock      Boolean @default(false) @map("is_new_stock")
   resolutionNote  String? @map("resolution_note")
+
+  /// 2026-08-21新增（Trend Core風格結構化解析）：這檔股票在文章論述裡的多空立場/供應鏈層級/
+  /// 扮演角色，null=舊資料（用舊版prompt解析，沒有這些欄位）
+  sentiment  MentionSentiment?
+  chainLayer SupplyChainLayer? @map("chain_layer")
+  /// 這檔股票在這個趨勢裡的角色，10字以內，例如"CoWoS產能供應商"
+  role       String?
 
   createdAt DateTime @default(now()) @map("created_at")
 

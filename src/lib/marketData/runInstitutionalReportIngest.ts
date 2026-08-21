@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 import { resolveStockMention } from "@/lib/youtube/resolveStockMention";
 import { backfillSingleTwStock } from "./backfillSingleTwStock";
 import { ESUNSEC_CATEGORIES, fetchCategoryArticles, fetchArticleFullText } from "./esunsecClient";
-import { parseInstitutionalReport } from "./parseInstitutionalReport";
+import { parseInstitutionalReport, type InstitutionalReportMentionRaw } from "./parseInstitutionalReport";
 
 /**
  * 法人報告批次處理，跟runEarningsCallAnalysis.ts同一套「發現/解析拆分」設計：先把
@@ -63,7 +64,7 @@ async function discoverNewArticles(): Promise<{ discovered: number; errorMessage
 /** 跟runYoutubeParseAndResolve.ts同一套：解析出的個股逐一比對成內部stockId（必要時
  * 自動新增），新股觸發一次性回補，沒有任何價格歷史的話直接標記isActive=false避免弄髒
  * 追蹤清單 */
-async function resolveMentions(articleId: number, mentions: { rawNameOrTicker: string; market: "TW" | "US" | "unknown" }[]): Promise<void> {
+async function resolveMentions(articleId: number, mentions: InstitutionalReportMentionRaw[]): Promise<void> {
   // 這篇文章可能因為上次呼叫中途失敗被重複解析，先清掉舊的mentions才能安全重跑
   await prisma.institutionalReportMention.deleteMany({ where: { articleId } });
 
@@ -77,6 +78,9 @@ async function resolveMentions(articleId: number, mentions: { rawNameOrTicker: s
         rawNameOrTicker: mention.rawNameOrTicker,
         isNewStock: resolved.isNewStock,
         resolutionNote: resolved.resolutionNote,
+        sentiment: mention.sentiment,
+        chainLayer: mention.chainLayer,
+        role: mention.role,
       },
     });
 
@@ -121,7 +125,17 @@ async function parsePendingArticles(budget: number): Promise<{ processed: number
 
       await prisma.institutionalReportArticle.update({
         where: { id: article.id },
-        data: { industryTheme: analysis.industryTheme, summary: analysis.summary, signal: analysis.signal },
+        data: {
+          industryTheme: analysis.industryTheme,
+          summary: analysis.summary,
+          signal: analysis.signal,
+          keyMetrics: analysis.keyMetrics as unknown as Prisma.InputJsonValue,
+          bullCoreLogic: analysis.bullCase.coreLogic,
+          bullTrigger: analysis.bullCase.trigger,
+          bearCoreLogic: analysis.bearCase.coreLogic,
+          bearBottleneck: analysis.bearCase.bottleneck,
+          tags: analysis.tags as unknown as Prisma.InputJsonValue,
+        },
       });
       processed++;
     } catch (err) {

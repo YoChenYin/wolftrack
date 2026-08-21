@@ -439,6 +439,27 @@ v1（2026-08-20已完成）：純樣板組字，掃「戰術狀態轉換」+「�
 
 ---
 
+### 2.17 法人報告解析升級：Trend Core風格結構化解析（2026-08-21，使用者睡前交代、自行完成待審閱）
+
+使用者參考美股研究網站Trend Core（gooptions.cc）的呈現方式，要求把`parseInstitutionalReport.ts`原本的「一段長摘要+偏多中性偏空」升級成「聚焦產業瓶頸、關鍵數據變數、牛熊對抗」的結構化解析。這個任務是使用者交代完就去睡覺、要求「你繼續工作」的情況下自主完成，重大決策點都記錄在這裡供醒來後審閱。
+
+**設計決策**：
+- 沿用既有`Anthropic` SDK + forced tool-use的既有模式（跟`parseEarningsCall.ts`/`parseInstitutionalReport.ts`原本的做法一致），沒有改用使用者原本詢問裡提到的OpenAI——避免在同一個專案裡混用兩套LLM SDK/API金鑰，跟既有慣例更一致。
+- 使用者提供的TS介面草稿裡`title`/`publishDate`/`source`/`category`刻意沒有讓LLM重新萃取——這幾個欄位在`discoverNewArticles()`階段就已經從esunsec文章列表API拿到，是可靠的原始metadata，讓LLM從內文重新猜一次只會多一個「LLM猜的跟discovery階段記錄的對不上」的風險，沒有任何好處。
+- `signal`（偏多/中性/偏空）保留，沒有被bullCase/bearCase取代——既有UI的`pendingCount`篩選邏輯依賴`signal !== null`判斷「這篇文章解析完成了沒」，拿掉會牽動既有邏輯；bullCase/bearCase是額外的結構化elaboration，不是取代品。
+- 個股`chainLayer`欄位（upstream/midstream/downstream/support）沿用`group_config.json`裡`ThemeChainStage.stageKey`既有的英文詞彙+`GroupValuationTable.tsx`既有的顏色（上游藍/中游紫/下游橘/支援層灰），沒有引入使用者原本提議的中文3類詞彙——避免同一個「供應鏈位置」概念在app裡出現兩套不同的分類詞彙。多加了原本3類之外的`support`（既有詞彙本來就有這一類）。
+- `MentionSentiment` enum（bullish/bearish/neutral）直接複用YouTube提及功能既有的同名enum，沒有重複定義。
+
+**Schema**：`InstitutionalReportArticle`新增`keyMetrics`(Json)、`bullCoreLogic`/`bullTrigger`/`bearCoreLogic`/`bearBottleneck`(Text)、`tags`(Json)；`InstitutionalReportMention`新增`sentiment`/`chainLayer`/`role`。全部nullable——舊資料（用舊版prompt解析過的文章）這些欄位是null，UI要能優雅降級（見下）。
+
+**Prompt設計重點**：延續`parseEarningsCall.ts`確立的「不要為了填滿欄位自己推論」原則——`keyMetrics`只收文章有明確數字佐證的（最多5個，沒有就空陣列）；`bullCase.trigger`/`bearCase.bottleneck`文章沒有明確講就是null；`chainLayer`文章沒有明確講清楚供應鏈位置就是null，不用「產業慣例」自己硬猜。刻意要求「即使文章整體signal是positive，也要整理文章裡提到的任何風險/瓶頸因素進bearCase」（反之亦然）——避免bullCase/bearCase變成signal的同義重複，兩者要能呈現真正的「牛熊對抗」張力。
+
+**UI**：`InstitutionalReportList.tsx`的`ReportCard`升級——關鍵數據用小chip橫排、bullCase/bearCase用左右兩欄（紅=看多/綠=看空，跟台股紅漲綠跌慣例一致）、個股mention chip加上立場色點+供應鏈層級badge+角色文字、底部加標籤列。用`hasStructuredAnalysis`（`bullCoreLogic`/`bearCoreLogic`都不是null）判斷要不要顯示新版結構化區塊，沒有的話（舊資料/待解析）繼續顯示原本的簡易摘要或「尚未解析」提示，三種狀態（新版完整解析/舊版解析/待解析）都截圖驗證過（亮/暗/手機）。
+
+**已知限制**：本機沒有設定`ANTHROPIC_API_KEY`，沒辦法實際呼叫LLM驗證prompt在真實文章上的效果，只用手動插入的合成資料驗證UI渲染邏輯正確。使用者醒來後建議先手動觸發`/api/cron/institutional-reports`（或本機補上API金鑰跑`runInstitutionalReportIngestBatch()`）用真實文章測一次，確認LLM實際輸出的品質（尤其keyMetrics/chainLayer這種需要LLM從自由格式內文正確判斷的欄位）。這批改動**只commit沒有push**——LLM prompt改動會影響之後每次解析新文章的行為+消耗LLM額度，留給使用者醒來後review再決定要不要deploy。
+
+---
+
 ## 四、環境/操作備忘
 
 - 本地 DB：既有 Homebrew Postgres 17（非 Docker），資料庫名稱 `wolftrack`

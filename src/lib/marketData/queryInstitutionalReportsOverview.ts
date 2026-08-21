@@ -1,6 +1,15 @@
 import { prisma } from "@/lib/prisma";
+import type { KeyMetric, MentionSentiment, SupplyChainLayer } from "./parseInstitutionalReport";
 
 const LOOKBACK_DAYS = 30;
+
+export interface InstitutionalReportMentionOverview {
+  ticker: string;
+  companyName: string;
+  sentiment: MentionSentiment | null;
+  chainLayer: SupplyChainLayer | null;
+  role: string | null;
+}
 
 export interface InstitutionalReportOverviewItem {
   postId: string;
@@ -13,7 +22,15 @@ export interface InstitutionalReportOverviewItem {
   industryTheme: string | null;
   summary: string | null;
   signal: "positive" | "neutral" | "negative" | null;
-  mentionedStocks: { ticker: string; companyName: string }[];
+  /** 2026-08-21新增（Trend Core風格結構化解析）：null=舊資料（用舊版prompt解析過，
+   * 或還沒解析），空陣列=新版prompt解析過但文章沒有明確數字可以萃取 */
+  keyMetrics: KeyMetric[] | null;
+  bullCoreLogic: string | null;
+  bullTrigger: string | null;
+  bearCoreLogic: string | null;
+  bearBottleneck: string | null;
+  tags: string[] | null;
+  mentionedStocks: InstitutionalReportMentionOverview[];
 }
 
 export interface InstitutionalReportsOverview {
@@ -45,9 +62,21 @@ export async function queryInstitutionalReportsOverview(): Promise<Institutional
     industryTheme: r.industryTheme,
     summary: r.summary,
     signal: r.signal,
+    keyMetrics: r.keyMetrics as unknown as KeyMetric[] | null,
+    bullCoreLogic: r.bullCoreLogic,
+    bullTrigger: r.bullTrigger,
+    bearCoreLogic: r.bearCoreLogic,
+    bearBottleneck: r.bearBottleneck,
+    tags: r.tags as unknown as string[] | null,
     mentionedStocks: r.mentions
       .filter((m) => m.stock !== null)
-      .map((m) => ({ ticker: m.stock!.ticker, companyName: m.stock!.companyName })),
+      .map((m) => ({
+        ticker: m.stock!.ticker,
+        companyName: m.stock!.companyName,
+        sentiment: m.sentiment,
+        chainLayer: m.chainLayer,
+        role: m.role,
+      })),
   }));
 
   const pendingCount = items.filter((item) => item.signal === null).length;
