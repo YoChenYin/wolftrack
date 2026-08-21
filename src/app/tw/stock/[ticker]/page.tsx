@@ -24,6 +24,7 @@ import { fetchStockMentions } from "@/lib/youtube/queries";
 import { EarningsCallPanel } from "@/components/tw/EarningsCallPanel";
 import { buildMopsPdfUrl } from "@/lib/marketData/mopsClient";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
+import { WatchlistButton } from "@/components/watchlist/WatchlistButton";
 
 export const dynamic = "force-dynamic";
 
@@ -182,7 +183,7 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
             <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" strokeWidth={2.25} />
             返回台股總覽
           </Link>
-          <div className="mt-3 flex items-baseline gap-3">
+          <div className="mt-3 flex flex-wrap items-baseline gap-3">
             <h1
               className="font-[family:var(--font-tw-display)] text-3xl font-semibold tracking-tight text-zinc-900"
               style={{
@@ -197,6 +198,7 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
             <span className="font-[family:var(--font-tw-mono)] text-xs font-medium tracking-wide text-amber-800/60 dark:text-amber-400/70">
               {stock.sector.sectorNameZh ?? stock.sector.sectorName}
             </span>
+            <WatchlistButton stockId={stock.id} currentPath={`/tw/stock/${stock.ticker}`} />
           </div>
           <div className="mt-2 h-px w-24 bg-gradient-to-r from-amber-700/50 to-transparent dark:from-amber-400/40" />
         </header>

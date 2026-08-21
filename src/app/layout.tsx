@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Bricolage_Grotesque, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { MarketNav } from "@/components/MarketNav";
+import { AuthNavSlot } from "@/components/AuthNavSlot";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -24,7 +25,7 @@ export const metadata: Metadata = {
   description: "美股趨勢追蹤：反轉雷達 / 蓄勢待發 / 趨勢穩健",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -35,7 +36,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${displayFont.variable} ${twSans.variable} ${twMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <MarketNav />
+        <MarketNav authSlot={<AuthNavSlot />} />
         {children}
       </body>
     </html>

@@ -19,13 +19,13 @@ const TABS: { href: string; icon: LucideIcon; label: string; underConstruction: 
   { href: "/expectation-gap", icon: FileSearch, label: "預期差", underConstruction: false, hidden: true },
 ];
 
-export function MarketNav() {
+export function MarketNav({ authSlot }: { authSlot?: React.ReactNode }) {
   const pathname = usePathname();
   const visibleTabs = TABS.filter((tab) => !tab.hidden);
 
   return (
     <nav className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="mx-auto flex w-full max-w-6xl gap-1 overflow-x-auto px-3 sm:px-6">
+      <div className="mx-auto flex w-full max-w-6xl items-center gap-1 overflow-x-auto px-3 sm:px-6">
         {visibleTabs.map((tab) => {
           const active = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
           const Icon = tab.icon;
@@ -49,6 +49,7 @@ export function MarketNav() {
             </Link>
           );
         })}
+        <div className="ml-auto pl-3">{authSlot}</div>
       </div>
     </nav>
   );

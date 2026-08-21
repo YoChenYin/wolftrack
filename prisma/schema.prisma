@@ -58,6 +58,7 @@ model Stock {
   earningsCallAnalyses        EarningsCallAnalysis[]
   institutionalReportMentions InstitutionalReportMention[]
   signalBacktestEvents        TwSignalBacktestEvent[]
+  watchlistItems              UserWatchlistItem[]
 
   @@unique([market, ticker])
   @@index([sectorId])
@@ -1023,4 +1024,45 @@ model TwSignalBacktestEvent {
   @@unique([stockId, category, signalDate])
   @@index([category])
   @@map("tw_signal_backtest_events")
+}
+
+/// 會員等級，目前免費/付費都還沒接金流，欄位先卡位（見帳號系統設計討論）
+enum MembershipTier {
+  free
+  pro
+}
+
+/// 2026-08-21 帳號系統第一階段：登入/註冊 + 觀察選股。密碼用bcrypt雜湊存passwordHash，
+/// session是jose簽發的JWT存在httpOnly cookie（見src/lib/auth/session.ts），沒有另外存
+/// session表——之後要做「登出所有裝置」等進階功能才需要換成資料庫session。
+model User {
+  id           Int            @id @default(autoincrement())
+  email        String         @unique
+  passwordHash String         @map("password_hash")
+  name         String?
+  tier         MembershipTier @default(free)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  watchlistItems UserWatchlistItem[]
+
+  @@map("users")
+}
+
+/// 個人觀察選股清單，一個使用者對同一檔股票只能有一筆（unique userId+stockId）
+model UserWatchlistItem {
+  id      Int @id @default(autoincrement())
+  userId  Int @map("user_id")
+  stockId Int @map("stock_id")
+
+  note      String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, stockId])
+  @@index([userId])
+  @@map("user_watchlist_items")
 }

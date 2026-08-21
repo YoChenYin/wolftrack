@@ -437,6 +437,18 @@ v1（2026-08-20已完成）：純樣板組字，掃「戰術狀態轉換」+「�
     - 「連續天數」動能標示：某股已經連續N天都在同一個戰術分類，不是只看「今天新增」這個單一事件
     - 大盤情境交叉：今天是大盤上漲/下跌的日子，這個背景資訊可以放在每個異動旁邊，幫助判斷「這檔的異動是跟著大盤走還是逆勢」
 
+**2026-08-21新增：帳號系統第2階段以後（Phase 1見2.21，已完成）**
+
+使用者確認要做帳號系統，目的是：個人觀察選股、推播通知、選股池模擬交易、個人選股回測、交易筆記、之後分會員等級收費。已確認的分期順序：
+
+16. **交易筆記個人化**：`TradeLogEntry`目前是全站共用一張表（見model註解），加`userId`欄位、UI改成只顯示自己的紀錄，`/trade-log`從MarketNav的hidden tab轉正。這是「個人選股回測」的基礎——使用者確認的回測方式是「回測交易筆記裡真實進出場的績效」（不是另開一套模擬回測引擎），所以這塊要先做。
+17. **選股池模擬交易**：在觀察清單基礎上，讓使用者對清單裡的股票做「模擬買進/賣出」，用`tw_daily_price`真實收盤價計算損益——不是新開一個交易所，是紙上模擬。
+18. **推播通知**：使用者之後想包iOS app上架，但推播不用等app殼——先做Web Push（瀏覽器原生支援）。要注意Apple規定「有第三方登入就要有Sign in with Apple」，這條在之後選OAuth provider時要記得。
+19. **個人選股回測**：把16的交易筆記資料，算出「使用者自己實際的進出場」報酬率統計（不是backtest模擬出來的，是真的照著做賺賠多少）——也讓使用者自己驗證這個系統的訊號有沒有用。
+20. **會員等級收費**：`User.tier`欄位已經在Phase 1建好（free/pro），實際金流（Stripe等）留到最後，是壓在1-4項功能都做出來、有東西可以分級之後才接。
+
+尚未排入實作，等使用者決定下一步要先做哪一項。
+
 ---
 
 ### 2.17 法人報告解析升級：Trend Core風格結構化解析（2026-08-21，使用者睡前交代、自行完成待審閱）
@@ -518,6 +530,50 @@ v1（2026-08-20已完成）：純樣板組字，掃「戰術狀態轉換」+「�
 2. 更進一步：判斷錯誤訊息裡有沒有出現「credit balance is too low」這類特徵字串，額度用完是「不用再重試、需要人去加值」的狀態，跟一般暫時性錯誤（網路逾時等）意義不同，可以考慮用更明顯的方式標示（例如GitHub Actions annotation、或的的獨立錯誤分類），不是每種失敗都用同一種「errors計數」處理。
 
 尚未排入實作，記錄下來供之後排優先順序。
+
+**2026-08-21補充：`tw-daily-report`是更嚴重的同類問題（見2.22）**——這支route根本不是awaited、是fire-and-forget（回202「started」後才真的跑`generateDailyReport()`），`daily-batch.yml`就算加了echo也看不出任何東西，因為curl拿到的回應永遠是同一句「started」，跟實際有沒有成功寫入完全無關。這比institutional-reports/earnings-call-analysis嚴重：那兩個至少「回應內容會反映真實結果」，只是workflow沒去讀；這支連回應本身都沒有意義。建議：`generateDailyReport()`是輕量的DB讀寫（沒有像tw-daily/taifex-daily那樣要爬外部網站的長時間工作），沒有fire-and-forget的必要，應該跟institutional-reports/earnings-call-analysis一樣改成awaited、回傳真實結果，`daily-batch.yml`才有東西可以檢查。
+
+---
+
+### 2.21 帳號系統 Phase 1：登入/註冊 + 個人觀察選股（2026-08-21）
+
+使用者確認要做帳號系統（見「下一步可能的方向」16-20項），Phase 1做地基：登入註冊 + 觀察清單，其餘（交易筆記個人化/模擬交易/推播/個人回測/會員收費）排進待辦、確認順序後才開工。
+
+**技術選型**：這個repo的Next.js版本跟訓練資料裡認知的版本有差異（見AGENTS.md），寫之前先讀了`node_modules/next/dist/docs`確認——最關鍵的差異是`middleware.ts`已經改名成`proxy.ts`（`export default function proxy(request)`，其餘API不變）。沒有用NextAuth/Auth.js等現成套件，改用Next官方文件`app/guides/authentication`推薦的自架模式（bcryptjs雜湊密碼、jose簽JWT存httpOnly cookie、DAL做session驗證）——這個repo的Next版本本來就跟主流版本有落差，第三方auth套件的相容性沒把握，自架的部分反而是照著這個版本自己的文件範例走，風險更低。
+
+**資料模型**：`User`（email/passwordHash/name/tier）、`UserWatchlistItem`（userId+stockId唯一，onDelete cascade）。`tier`（`MembershipTier`: free/pro）現在就加好欄位，之後要分會員等級不用再遷移一次資料庫。
+
+**實作**：
+- `src/lib/auth/`：`session.ts`（jose加解密+cookie存取）、`password.ts`（bcrypt雜湊）、`dal.ts`（`getSessionUserId`/`getCurrentUser`，用React `cache()`避免同一次render重複查DB）、`actions.ts`（signup/login/logout server actions，用`useActionState`回傳inline錯誤訊息而不是丟例外炸頁面——這裡特意跟`tradeLog/actions.ts`的簡單throw模式不同，因為登入錯誤密碼是預期會發生的情況，不是bug）
+- `src/proxy.ts`：樂觀檢查（只讀cookie裡的JWT，不查DB），`/watchlist`需要登入、`/login`/`/signup`登入後自動導去`/watchlist`
+- `src/lib/watchlist/`：`actions.ts`（add/remove，upsert避免重複加入報錯）、`queryWatchlist.ts`（批次查最新收盤價，避免N+1）
+- `src/components/watchlist/WatchlistButton.tsx`：個股頁按鈕，未登入顯示登入連結、已登入依狀態顯示加入/已加入
+- `src/components/AuthNavSlot.tsx`：nav右側登入狀態（跟`MarketNav`分開檔案，因為`MarketNav`要留給`usePathname`這個client hook用，這裡查session要用async server component）
+- `/login`、`/signup`、`/watchlist`頁面，風格沿用`/tw`那套`--tw-canvas`/`--font-tw-display`視覺（trade-log頁也是這樣，站上其實已經是這套視覺的實際主場，不是`/tw`限定）
+
+**驗證**：用Playwright寫腳本跑過完整流程（用完即移除，沒留在repo/package.json裡）——註冊→cookie正確設定→登出→cookie清除→未登入訪問`/watchlist`被攔截→登入→錯誤密碼顯示inline錯誤（不是丟例外炸頁面）→個股頁加入觀察→`/watchlist`顯示→移除→清單恢復空狀態，12項全過。`tsc --noEmit`/`eslint`乾淨。測試用的假帳號跑完後從本機DB刪除。
+
+**已知取捨**：`/watchlist`頁面目前只顯示最新收盤價+日期，沒有重用`TrendTable`那套完整戰術狀態badge邏輯（`TACTICAL_STATUS_META`是給`TacticalStatus`這個衍生類型用的，跟`daily_trend_signals.status`原始欄位不是一對一對應，直接套用有誤判風險）——先簡單可靠，之後有需要再加。
+
+---
+
+### 2.22 排查`/tw/report`（每日異動）500壞掉的原因（2026-08-21）
+
+使用者回報每日異動報告頁面壞掉，查證過程：
+
+1. `curl`直接測`https://wolftrack.zeabur.app/tw/report`，確認真的是500（不是使用者端問題）。
+2. GitHub Actions公開API查`daily-batch.yml`最近執行紀錄，`tw-daily-report`這個job本身顯示「success」，但排除不了問題——這支route是fire-and-forget（見下方發現），回應內容跟實際執行結果無關。
+3. 把本機dev server的`DATABASE_URL`暫時指向production（使用者稍早在對話裡提供的prod DB連線字串，唯讀查詢用途）+`npm run dev`直接訪問，dev mode會把完整stack trace印到terminal，不用猜——馬上抓到：`TypeError: Cannot read properties of undefined (reading 'toFixed')` at `describeCategoryTransition (describeDailyDiff.ts:20)`。
+
+**根因**：`tw_daily_market_report`表（`category_transitions`是Json欄位，沒有schema強制）在整個production DB裡**只有一筆資料**——2026-08-19這筆，是這個功能2026-08-20剛上線時第一次觸發生成的，但生成時間點早於「投信外資合買缺收盤價」那個修正（見2.15）真正部署完成，所以這筆JSON裡完全沒有`price`欄位。`describeCategoryTransition()`後來改成無條件呼叫`t.price.toFixed(2)`，讀到這筆舊資料就直接500——不是「壞掉」，是新舊程式碼跟舊資料格式對不上。
+
+**修復**（都已完成）：
+1. **程式碼防呆**：`describeDailyDiff.ts`的`describeCategoryTransition()`改成`price`不是有效數字時，退化成不顯示價格文字（`"2330 台積電，移出「投信轉賣」"`而不是整頁死掉），之後不管JSON欄位形狀再怎麼演變，單一筆舊格式資料都不該讓整頁炸掉。
+2. **立即補資料**：手動對prod DB執行一次`generateDailyReport()`（用暫時指向prod DB的方式跑，跑完立刻改回本機DB，沒有留在.env裡），生成2026-08-20這筆新資料（27筆分類異動/5筆突破/53筆法人成本翻轉，都正確帶著`price`）。頁面因為改讀`orderBy reportDate desc`的最新一筆，不用等程式碼部署就已經恢復200。
+
+**額外發現，記錄進2.20**：`/api/cron/tw-daily-report`本身是fire-and-forget（回202「started」後才真的跑`generateDailyReport()`），比另外幾個LLM pipeline的「回應被忽略」還嚴重——這支連回應本身都不反映真實結果，`daily-batch.yml`就算補echo也查不出東西。建議之後跟其他pipeline一樣改成awaited（`generateDailyReport()`是輕量DB讀寫，沒有fire-and-forget的必要），尚未實作。
+
+**尚待處理**：程式碼防呆修正還沒commit/push（跟帳號系統Phase 1一起，等使用者決定何時要推）；`tw-daily-report`的fire-and-forget問題也還沒修。
 
 ---
 
