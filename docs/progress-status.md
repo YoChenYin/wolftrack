@@ -502,6 +502,23 @@ v1（2026-08-20已完成）：純樣板組字，掃「戰術狀態轉換」+「�
 
 **待使用者確認**：建議直接去Zeabur後台確認`ANTHROPIC_API_KEY`環境變數有沒有設定/是否有效——這是最快能排除或坐實這個假設的方法，比等下次排程或手動觸發後翻log更直接。
 
+**真正原因（2026-08-21找到）**：使用者提供金鑰後直接測試——不是金鑰無效，是**Anthropic帳戶額度歸零**（`Your credit balance is too low to access the Anthropic API`）。這解釋了三個LLM pipeline（法人報告0/40、法說會556篇積壓、YouTube 69篇待解析）全部卡住的根本原因：discovery（純HTML抓取，不用LLM）都正常運作，但每次LLM呼叫都被額度擋下、在try/catch裡被吞成`errors`，不會讓整個排程crash——這也是為什麼GitHub Actions一直顯示「success」。已請使用者去Anthropic Console加值，加值後三個pipeline應該會在下次排程自動繼續處理積壓，不需要額外動作。
+
+---
+
+### 2.20 待辦：額度不足時的靜默失敗警示（2026-08-21新增）
+
+這次排查法人報告卡住花了不少功夫才找到「帳戶額度歸零」這個根因，過程中發現三個LLM pipeline都有同一類設計缺口：**LLM呼叫失敗時，cron route/workflow大多還是回傳2xx，GitHub Actions顯示「success」，實際上完全沒有處理任何東西**。目前只修了`institutional-reports`（`daily-batch.yml`裡`errors>0`時讓step明確fail），另外兩個還沒處理：
+
+- `earnings-call-analysis.yml`：迴圈用`totalProcessed==0`判斷要不要提早跳出，但沒有讓step本身fail（exit code還是0），額度用完時只會提早結束、不會顯示紅X。
+- `youtube-parse`（`/api/youtube/parse-pending`）：不管`results`裡失敗幾支都回傳200，GitHub Actions step一律「success」。
+
+**建議做法**：
+1. 比照這次對`institutional-reports`的修法，讓這兩個workflow也在「這輪的processed=0但有嘗試處理」或「errors比例過高」時明確fail，讓GitHub原生的「workflow執行失敗」email通知能真的觸發（不用額外接Slack/Discord webhook，github repo本身的watcher通知就夠用了）。
+2. 更進一步：判斷錯誤訊息裡有沒有出現「credit balance is too low」這類特徵字串，額度用完是「不用再重試、需要人去加值」的狀態，跟一般暫時性錯誤（網路逾時等）意義不同，可以考慮用更明顯的方式標示（例如GitHub Actions annotation、或的的獨立錯誤分類），不是每種失敗都用同一種「errors計數」處理。
+
+尚未排入實作，記錄下來供之後排優先順序。
+
 ---
 
 ## 四、環境/操作備忘
