@@ -487,6 +487,23 @@ v1（2026-08-20已完成）：純樣板組字，掃「戰術狀態轉換」+「�
 
 ---
 
+### 2.19 法人報告0/40排查：找到「看得見成功、看不到失敗」的排程盲點（2026-08-21）
+
+查`institutional-reports`0/40卡住的原因，過程：
+
+1. 直接測`esunsecClient.ts`的`fetchArticleFullText()`/`fetchCategoryArticles()`——都正常（真實抓到1787字文章內文、兩個分類各20篇清單），排除文章擷取失敗的可能。
+2. `institutional-reports`的cron route（`/api/cron/institutional-reports`）本身是**awaited**（不是fire-and-forget，跟tw-daily/tw-quarterly-eps不同），回傳的JSON裡有`discovered`/`processed`/`errors`/`errorMessages`——理論上錯誤是看得到的。
+3. 用GitHub公開Actions API（repo是public，不用認證就查得到）翻`daily-batch.yml`最近幾天的執行紀錄，找到`30 9 * * *`這個排程確實有觸發、且job顯示`conclusion: success`。
+4. **但`daily-batch.yml`裡這個job的shell script只有裸`curl -sf ...`，response直接丟掉，沒有像`earnings-call-analysis.yml`那樣`echo`出來**——GitHub Actions只要curl拿到2xx就判定這個step成功，完全不管JSON body裡`processed`到底是不是0、`errorMessages`寫了什麼。這解釋了「排程明明有跑、但完全看不出出了什麼事」的现象。
+
+**目前結論**：discovery（純HTML抓取）確認沒問題，awaited的route理論上有回傳診斷資訊，但因為GH Actions沒有記錄response body，過去幾天的真實錯誤內容已經無法回溯（Zeabur本身的server log我沒有存取權限）。最可能的剩餘原因是production環境的`ANTHROPIC_API_KEY`沒設定或已失效（這是LLM呼叫這一步唯一還沒排除的環節），但無法在本機確認（本機沒有金鑰，測不出prod的金鑰狀態）。
+
+**修復**：`daily-batch.yml`的`institutional-reports` job補上`echo "$RESPONSE"`+檢查`errors`欄位，非0就讓這個step明確fail（紅X），不再是「curl拿到2xx就算過」的靜默假成功。下次排程觸發（或使用者手動`workflow_dispatch`）之後，就能在GitHub Actions log裡直接看到真正的錯誤訊息。
+
+**待使用者確認**：建議直接去Zeabur後台確認`ANTHROPIC_API_KEY`環境變數有沒有設定/是否有效——這是最快能排除或坐實這個假設的方法，比等下次排程或手動觸發後翻log更直接。
+
+---
+
 ## 四、環境/操作備忘
 
 - 本地 DB：既有 Homebrew Postgres 17（非 Docker），資料庫名稱 `wolftrack`

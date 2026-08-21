@@ -122,10 +122,22 @@ jobs:
     if: github.event.schedule == '30 9 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
+      # 2026-08-21：這支endpoint是awaited（不是fire-and-forget），回傳的JSON body裡有
+      # discovered/processed/errors/errorMessages，但原本這裡只是裸curl、response直接丟掉——
+      # 排查「積壓40篇、0篇解析成功」時發現GitHub Actions這幾天全部顯示success（curl拿到
+      # 2xx就算過），完全看不出實際是discovered幾篇、processed幾篇、報什麼錯，跟
+      # earnings-call-analysis.yml比起來少了echo這一步。這裡補上，processed=0且errors>0時
+      # 讓這個step直接fail（红X比靜默的「success」更容易被注意到）
       - name: Trigger institutional report ingest (玉山證券台股熱點/總經盤勢)
         run: |
-          curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/institutional-reports" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          RESPONSE=$(curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/institutional-reports" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "$RESPONSE"
+          ERRORS=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('errors', 0))")
+          if [ "$ERRORS" != "0" ]; then
+            echo "::warning::institutional-reports 這輪有 $ERRORS 篇解析失敗，看上面的errorMessages"
+            exit 1
+          fi
 
   youtube-discovery:
     if: github.event.schedule == '30 15 * * *' || github.event_name == 'workflow_dispatch'
