@@ -29,6 +29,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      # 2026-08-26：原本只用totalProcessed==0判斷要不要提早結束，但這個訊號沒辦法區分
+      # 「真的沒有待解析的了」跟「額度用完/API出狀況，嘗試解析但全部失敗」——兩者都會讓
+      # processed=0，前者是正常結束、後者是需要被看到的系統性故障，但這個step過去兩種
+      # 情況exit code都是0，GitHub Actions一律顯示success。這裡補上：processed=0同時
+      # errors>0（代表這輪有嘗試但全部失敗）才讓step明確fail；如果只是單篇PDF偶發失敗
+      # （processed>0但errors也>0，多數篇正常只有少數失敗），這是正常運作中會出現的雜訊，
+      # 不會讓CI整個變紅，只印警告方便肉眼查。
       - name: Run batched earnings call analysis
         env:
           APP_URL: ${{ secrets.APP_URL }}
@@ -44,9 +51,18 @@ jobs:
             echo "round $i: $RESPONSE"
 
             PROCESSED=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('totalProcessed', -1))")
+            ERRORS=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('totalErrors', 0))")
+
             if [ "$PROCESSED" = "0" ]; then
+              if [ "$ERRORS" != "0" ]; then
+                echo "::warning::這輪嘗試處理但全部失敗（processed=0, errors=$ERRORS），可能是額度用完或API出狀況"
+                exit 1
+              fi
               echo "這輪沒有新的法說會可以處理，提早結束"
               break
+            fi
+            if [ "$ERRORS" != "0" ]; then
+              echo "::warning::這輪有 $ERRORS 篇解析失敗（部分成功，非系統性故障，看上面的errorMessages）"
             fi
             sleep 15
           done

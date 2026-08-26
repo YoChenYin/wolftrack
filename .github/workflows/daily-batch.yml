@@ -77,10 +77,15 @@ jobs:
     if: github.event.schedule == '20 9 * * 1-5' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
+      # 2026-08-26：這支endpoint之前是fire-and-forget（回202「started」，回應內容完全不
+      # 反映實際結果），curl -sf再怎麼檢查都查不出東西——已經把route改成awaited、失敗回500，
+      # 這裡補上echo（跟institutional-reports/earnings-call-analysis一致），curl -sf碰到
+      # 500會自然讓這個step失敗，echo是留一份「這輪實際寫了什麼」的紀錄方便除錯
       - name: Trigger TW daily market diff report v1（戰術分類轉換/支撐壓力突破/法人成本翻轉）
         run: |
-          curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/tw-daily-report" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          RESPONSE=$(curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/tw-daily-report" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "$RESPONSE"
 
   global-macro-sync:
     if: github.event.schedule == '0 9 * * 1-5' || github.event_name == 'workflow_dispatch'
@@ -152,7 +157,25 @@ jobs:
     if: github.event.schedule == '0 19 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
+      # 2026-08-26：這支route本身一律回200，不管results裡失敗幾支——跟另外兩個LLM pipeline
+      # 同一類靜默失敗缺口，之前只有curl -sf、response直接丟掉。補上跟institutional-reports/
+      # earnings-call-analysis一致的判斷：attempted>0但parsed=0（全部失敗，額度用完/API
+      # 出狀況的訊號）才讓這個step明確fail；部分成功部分失敗是單支影片內容本身的問題，
+      # 不是系統性故障，只印警告不讓CI變紅
       - name: Trigger pending LLM parse for already-transcribed videos
         run: |
-          curl -sf -X POST "${{ secrets.APP_URL }}/api/youtube/parse-pending" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          RESPONSE=$(curl -sf -X POST "${{ secrets.APP_URL }}/api/youtube/parse-pending" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "$RESPONSE"
+
+          ATTEMPTED=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('attempted', 0))")
+          PARSED=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('parsed', 0))")
+          FAILED=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin).get('failed', 0))")
+
+          if [ "$ATTEMPTED" != "0" ] && [ "$PARSED" = "0" ]; then
+            echo "::warning::這輪嘗試解析$ATTEMPTED支影片但全部失敗，可能是額度用完或API出狀況，看上面的errorMessages"
+            exit 1
+          fi
+          if [ "$FAILED" != "0" ]; then
+            echo "::warning::這輪有 $FAILED 支影片解析失敗（部分成功，非系統性故障）"
+          fi

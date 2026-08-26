@@ -425,7 +425,7 @@ v1（2026-08-20已完成）：純樣板組字，掃「戰術狀態轉換」+「�
 10. `/tw`首頁板塊dropdown版面容易誤導：它只控制PE/PB表格和三個戰術欄位，但視覺上位置讓人以為也控制上面的產業鏈訊號燈號、板塊資金流動折線圖（這兩個區塊其實不受篩選影響）——需要調整版面分組，讓篩選範圍更清楚
 11. 產業鏈訊號燈號（`ChainSignalLights.tsx`）：每個階段（上游/中游/下游/支援層）要能點擊展開，顯示該階段實際包含哪些個股、目前個別表現
 12. 板塊資金流動折線圖（`computeThemeFlow.ts`/`ThemeFlowChart.tsx`）：(a) 目前固定算最近20個交易日，改成顯示資料庫實際能撐到的最長時間；(b) hover時要能明顯標示走強/走弱的族群，不是每條線一樣顯眼
-13. 台股個股漲跌顏色：改成台灣市場慣例（漲=紅、跌=綠），現在應該是共用美股的紅跌綠漲邏輯，需要找出所有共用的漲跌顏色判斷（例如`pctColor`類的function）分market處理
+13. ~~台股個股漲跌顏色：改成台灣市場慣例~~ **2026-08-26排查後確認已經是正確的**——全面搜尋`src/`後，所有`/tw`系列頁面（含總經、台指期）用到的漲跌顏色都已經正確走紅漲綠跌（`twReturnColor`/`twReturnHex`或本地正確版本），共用元件（`TrendColumn`/`ExpectationGapTable`/`TradeLogTable`）也都已經有`market`參數分流。這個backlog項目是舊資訊，沒有實際bug。找到兩個優先度低的小問題：`TradeLogSummary.tsx`的`pctColor()`沒有分market（但交易紀錄目前只有台股，美股交易功能還沒啟用，暫不影響）；`StockMentionBadge.tsx`顏色邏輯是反的，但這是沒有被任何頁面引用的死代碼。
 
 **2026-08-21新增：**
 
@@ -518,7 +518,7 @@ v1（2026-08-20已完成）：純樣板組字，掃「戰術狀態轉換」+「�
 
 ---
 
-### 2.20 待辦：額度不足時的靜默失敗警示（2026-08-21新增）
+### 2.20 額度不足時的靜默失敗警示（2026-08-21新增，2026-08-26完成）
 
 這次排查法人報告卡住花了不少功夫才找到「帳戶額度歸零」這個根因，過程中發現三個LLM pipeline都有同一類設計缺口：**LLM呼叫失敗時，cron route/workflow大多還是回傳2xx，GitHub Actions顯示「success」，實際上完全沒有處理任何東西**。目前只修了`institutional-reports`（`daily-batch.yml`裡`errors>0`時讓step明確fail），另外兩個還沒處理：
 
@@ -529,9 +529,14 @@ v1（2026-08-20已完成）：純樣板組字，掃「戰術狀態轉換」+「�
 1. 比照這次對`institutional-reports`的修法，讓這兩個workflow也在「這輪的processed=0但有嘗試處理」或「errors比例過高」時明確fail，讓GitHub原生的「workflow執行失敗」email通知能真的觸發（不用額外接Slack/Discord webhook，github repo本身的watcher通知就夠用了）。
 2. 更進一步：判斷錯誤訊息裡有沒有出現「credit balance is too low」這類特徵字串，額度用完是「不用再重試、需要人去加值」的狀態，跟一般暫時性錯誤（網路逾時等）意義不同，可以考慮用更明顯的方式標示（例如GitHub Actions annotation、或的的獨立錯誤分類），不是每種失敗都用同一種「errors計數」處理。
 
-尚未排入實作，記錄下來供之後排優先順序。
+**2026-08-21補充：`tw-daily-report`是更嚴重的同類問題（見2.22/2.25）**——這支route根本不是awaited、是fire-and-forget（回202「started」後才真的跑`generateDailyReport()`），`daily-batch.yml`就算加了echo也看不出任何東西，因為curl拿到的回應永遠是同一句「started」，跟實際有沒有成功寫入完全無關。這比institutional-reports/earnings-call-analysis嚴重：那兩個至少「回應內容會反映真實結果」，只是workflow沒去讀；這支連回應本身都沒有意義。
 
-**2026-08-21補充：`tw-daily-report`是更嚴重的同類問題（見2.22）**——這支route根本不是awaited、是fire-and-forget（回202「started」後才真的跑`generateDailyReport()`），`daily-batch.yml`就算加了echo也看不出任何東西，因為curl拿到的回應永遠是同一句「started」，跟實際有沒有成功寫入完全無關。這比institutional-reports/earnings-call-analysis嚴重：那兩個至少「回應內容會反映真實結果」，只是workflow沒去讀；這支連回應本身都沒有意義。建議：`generateDailyReport()`是輕量的DB讀寫（沒有像tw-daily/taifex-daily那樣要爬外部網站的長時間工作），沒有fire-and-forget的必要，應該跟institutional-reports/earnings-call-analysis一樣改成awaited、回傳真實結果，`daily-batch.yml`才有東西可以檢查。
+**2026-08-26全部修完**：
+1. `tw-daily-report/route.ts`改成awaited、直接回傳`generateDailyReport()`的真實結果，失敗回500——`generateDailyReport()`是輕量DB讀寫，沒有fire-and-forget的必要，這是三個裡最徹底的修法（route本身變誠實，不用靠workflow猜）。`daily-batch.yml`補上echo。
+2. `earnings-call-analysis.yml`：迴圈裡`processed=0`時額外檢查`errors`——`errors>0`（嘗試但全部失敗，額度用完/API出狀況的訊號）才讓step明確fail；`processed>0`但仍有零星`errors`（單篇PDF偶發問題）只印警告不讓CI變紅，避免把正常運作中的雜訊也當成systemic故障。
+3. `youtube-parse`：`daily-batch.yml`補上echo+同樣邏輯（`attempted>0`且`parsed=0`才fail，部分失敗只警告）。
+
+沒有做「判斷credit balance特徵字串」這個進階版（原本建議2）——目前的「全部失敗才fail」邏輯已經足以區分「系統性故障」跟「單篇偶發失敗」，字串比對是可選的精緻化，不是必要條件，先不做。
 
 ---
 
