@@ -58,6 +58,7 @@ model Stock {
   earningsCallAnalyses        EarningsCallAnalysis[]
   institutionalReportMentions InstitutionalReportMention[]
   signalBacktestEvents        TwSignalBacktestEvent[]
+  scenarioBacktestEvents      TwScenarioBacktestEvent[]
   watchlistItems              UserWatchlistItem[]
 
   @@unique([market, ticker])
@@ -965,6 +966,14 @@ model TwDailyMarketReport {
   breakouts Json
   /// CostBasisCrossoverEvent[]：股價今天穿越外資或投信60日加權平均成本價的個股
   costBasisCrossovers Json @map("cost_basis_crossovers")
+  /// BottomPatternTransitionEvent[]（見dailyMarketDiff.ts）：底部反轉型態今天新出現/進展/確認
+  /// 的個股，2026-08-22 v2新增，獨立於categoryTransitions（不同的分類來源，見detectBottomPattern.ts）。
+  /// 選填是因為2026-08-20~21已經產生過的舊報告列沒有這個欄位，跟describeDailyDiff.ts的
+  /// 防呆同一個考量——JSON欄位沒有schema強制，讀取端要能容忍缺欄位的舊資料。
+  bottomPatternTransitions Json? @map("bottom_pattern_transitions")
+  /// CategoryStreak[]：目前仍在同一個戰術分類已經連續N天的個股（不是「今天新變化」，是
+  /// 「已經持續多久」的動能標示），2026-08-22 v2新增，同樣選填
+  categoryStreaks Json? @map("category_streaks")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -1065,4 +1074,52 @@ model UserWatchlistItem {
   @@unique([userId, stockId])
   @@index([userId])
   @@map("user_watchlist_items")
+}
+
+/// MA5/10/20排列狀態，見backtestScenario.ts的classifyMaArrangement()
+enum MaArrangement {
+  bullish
+  bearish
+  mixed
+}
+
+/// 近20日籌碼集中度分箱，門檻沿用classifyChipFlow.ts裡逢低布局已backtest驗證過的
+/// 15%門檻精神（低於10%/10-20%/20%以上三段），見backtestScenario.ts的classifyChipBucket()
+enum ChipConcentrationBucket {
+  low
+  mid
+  high
+}
+
+/// 「歷史相似情境統計」回測（2026-08-22新增，見docs/progress-status.md「走勢預測模型」章節）：
+/// 不是預測，是把MA排列+籌碼集中度分箱這兩個條件交叉，回溯統計「這個組合過去出現時，
+/// 未來N個交易日的報酬分布」——跟TwSignalBacktestEvent同一套方法論（anchor day去重、
+/// 5組horizon、TAIEX同期報酬對照），只是分類維度從「戰術訊號」換成「MA+籌碼狀態組合」。
+model TwScenarioBacktestEvent {
+  id            BigInt                   @id @default(autoincrement())
+  stockId       Int                      @map("stock_id")
+  maArrangement MaArrangement            @map("ma_arrangement")
+  chipBucket    ChipConcentrationBucket  @map("chip_bucket")
+  signalDate    DateTime                 @map("signal_date") @db.Date
+  priceAtSignal Decimal                  @map("price_at_signal") @db.Decimal(12, 4)
+
+  return5d  Decimal? @map("return_5d") @db.Decimal(8, 2)
+  return10d Decimal? @map("return_10d") @db.Decimal(8, 2)
+  return20d Decimal? @map("return_20d") @db.Decimal(8, 2)
+  return40d Decimal? @map("return_40d") @db.Decimal(8, 2)
+  return60d Decimal? @map("return_60d") @db.Decimal(8, 2)
+
+  taiexReturn5d  Decimal? @map("taiex_return_5d") @db.Decimal(8, 2)
+  taiexReturn10d Decimal? @map("taiex_return_10d") @db.Decimal(8, 2)
+  taiexReturn20d Decimal? @map("taiex_return_20d") @db.Decimal(8, 2)
+  taiexReturn40d Decimal? @map("taiex_return_40d") @db.Decimal(8, 2)
+  taiexReturn60d Decimal? @map("taiex_return_60d") @db.Decimal(8, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  stock Stock @relation(fields: [stockId], references: [id])
+
+  @@unique([stockId, maArrangement, chipBucket, signalDate])
+  @@index([maArrangement, chipBucket])
+  @@map("tw_scenario_backtest_events")
 }

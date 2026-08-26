@@ -19,11 +19,11 @@ import type { InstitutionalDay } from "./chipScore";
 
 export const BACKTEST_HORIZONS = [5, 10, 20, 40, 60] as const;
 export type BacktestHorizon = (typeof BACKTEST_HORIZONS)[number];
-const MAX_HORIZON = 60;
+export const MAX_HORIZON = 60;
 
 /** 跟runTwDailyBatch.ts的MIN_BARS_REQUIRED一致——籌碼流分類（MA60）+底部型態（120天pivot
  * lookback）都需要足夠的暖身期，統一從第210根bar開始走訪 */
-const WARMUP_DAYS = 210;
+export const WARMUP_DAYS = 210;
 /** 傳給detectBottomPattern的窗口只需要略大於它內部LOOKBACK_TRADING_DAYS(120)的緩衝，
  * 不用每次都把從頭到今天的整段歷史slice+map一次（那會是O(i)，隨著i增大越算越慢） */
 const BOTTOM_PATTERN_WINDOW = 130;
@@ -46,7 +46,7 @@ function forwardReturn(bars: OhlcvBar[], eventIndex: number, horizon: number): n
   return Math.round(((bars[idx].close - base) / base) * 10000) / 100;
 }
 
-function computeReturns(bars: OhlcvBar[], eventIndex: number): Record<BacktestHorizon, number | null> {
+export function computeReturns(bars: OhlcvBar[], eventIndex: number): Record<BacktestHorizon, number | null> {
   return Object.fromEntries(BACKTEST_HORIZONS.map((h) => [h, forwardReturn(bars, eventIndex, h)])) as Record<
     BacktestHorizon,
     number | null

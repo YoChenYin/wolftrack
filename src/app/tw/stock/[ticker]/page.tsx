@@ -25,6 +25,8 @@ import { EarningsCallPanel } from "@/components/tw/EarningsCallPanel";
 import { buildMopsPdfUrl } from "@/lib/marketData/mopsClient";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 import { WatchlistButton } from "@/components/watchlist/WatchlistButton";
+import { HistoricalAnalogCard } from "@/components/tw/HistoricalAnalogCard";
+import { classifyCurrentScenario, getScenarioStats } from "@/lib/trend/tw/scenarioBacktestSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -169,6 +171,13 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
     (a) => a.signal !== null && (a.moatSummary || a.marketShareSummary || a.customerSummary || a.catalystSummary)
   );
 
+  // 總覽分頁「歷史相似情境統計」用：先算出這檔股票現在的MA排列+籌碼分箱組合，
+  // 再查這個組合過去在全市場歷史上的報酬分布（見scenarioBacktestSummary.ts）
+  const currentScenario = await classifyCurrentScenario(stock.id);
+  const historicalAnalogData = currentScenario
+    ? await getScenarioStats(currentScenario.maArrangement, currentScenario.chipBucket)
+    : null;
+
   return (
     <div
       className="relative flex flex-1 flex-col overflow-hidden font-[family:var(--font-tw-sans)] dark:bg-zinc-950"
@@ -264,6 +273,7 @@ export default async function TwStockDetailPage({ params }: { params: Promise<{ 
                           : null
                       }
                     />
+                    <HistoricalAnalogCard data={currentScenario ? { ...currentScenario, horizons: historicalAnalogData!.horizons } : null} />
                   </div>
                 ),
               },
