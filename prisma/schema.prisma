@@ -919,6 +919,7 @@ enum TradeSignalSource {
 /// 要對照的「真實有沒有照著做、做了有沒有賺錢」基準線，見專業經理人角度review第3點。
 model TradeLogEntry {
   id     BigInt @id @default(autoincrement())
+  userId Int    @map("user_id")
   market Market
   ticker String
 
@@ -941,8 +942,10 @@ model TradeLogEntry {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@index([market, ticker])
-  @@index([status])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, market, ticker])
+  @@index([userId, status])
   @@map("trade_log_entries")
 }
 
@@ -1055,6 +1058,7 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   watchlistItems UserWatchlistItem[]
+  tradeLogEntries TradeLogEntry[]
 
   @@map("users")
 }

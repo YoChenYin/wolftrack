@@ -27,8 +27,8 @@ function computePnl(side: "long" | "short", entryPrice: number, exitPrice: numbe
   return { pnl: diff * quantity, pnlPct: (diff / entryPrice) * 100 };
 }
 
-export async function queryTradeLogEntries(): Promise<TradeLogEntryView[]> {
-  const rows = await prisma.tradeLogEntry.findMany({ orderBy: { entryDate: "desc" } });
+export async function queryTradeLogEntries(userId: number): Promise<TradeLogEntryView[]> {
+  const rows = await prisma.tradeLogEntry.findMany({ where: { userId }, orderBy: { entryDate: "desc" } });
   return rows.map((r) => {
     const entryPrice = Number(r.entryPrice);
     const exitPrice = r.exitPrice !== null ? Number(r.exitPrice) : null;

@@ -636,6 +636,25 @@ v1（2026-08-20已完成）：純樣板組字，掃「戰術狀態轉換」+「�
 
 ---
 
+### 2.26 交易筆記個人化：`TradeLogEntry`加`userId`（2026-08-26）
+
+PM優先順序排序後的P1第一項——交易筆記個人化是「個人選股回測」的前提（使用者確認的回測方式是回測交易筆記真實績效，不是另開模擬引擎），照排序先做這個。
+
+**實作**：
+- `prisma/schema.prisma`：`TradeLogEntry`加`userId`（必填，`onDelete: Cascade`），索引從全域的`[market, ticker]`/`[status]`改成`[userId, market, ticker]`/`[userId, status]`——之後查詢一律先篩userId，複合索引才有意義。遷移當下local/prod的`trade_log_entries`都是0筆（這個功能上線以來還沒有人真的用過），不用處理backfill既有資料的問題。
+- `src/lib/tradeLog/actions.ts`：四個action（新增/平倉/取消/刪除）都先呼叫`getSessionUserId()`，沒登入就丟錯；平倉/取消/刪除都用`{id, userId}`當where條件（不是只用`id`），避免使用者猜到別人的交易紀錄id就能操作。
+- `src/lib/tradeLog/queryTradeLog.ts`：`queryTradeLogEntries(userId)`改成必填參數，查詢加`where: {userId}`。
+- `/trade-log`頁面：跟`/watchlist`一樣需要登入，`src/proxy.ts`的`PROTECTED_ROUTES`加上這個路徑；頁面本身呼叫`getCurrentUser()`取得userId傳給查詢函式。
+- `MarketNav.tsx`：`/trade-log`從`hidden: true`轉正，正式出現在主導覽列。
+
+**驗證**：用Playwright測兩個獨立帳號——使用者A登入後新增一筆2330交易紀錄，確認A自己看得到；使用者B登入（不同session）確認**看不到**A的紀錄（資料隔離正確）。過程中一度測試失敗，原因是測試腳本本身選到nav列的登出按鈕而不是表單的新增按鈕（Playwright舊版`page.click(selector)` API碰到多個符合的元素會直接點第一個，不像locator API會擋下來）——修正選取器後全部通過，不是app的bug。`tsc --noEmit`/`eslint`乾淨。
+
+**副作用發現**：檢查prod DB時發現已經有2個真實使用者帳號（`chenyin.yo@gmail.com`——即本人；`shelly7526@gmail.com`——不確定是誰，網站是公開的，任何人理論上都能自行註冊）。跟這次功能無關，單純記錄一下帳號系統已經有真實流量在用。
+
+**下一步**：P1剩下推播通知、個人選股回測（承接這次的userId基礎）。
+
+---
+
 ## 四、環境/操作備忘
 
 - 本地 DB：既有 Homebrew Postgres 17（非 Docker），資料庫名稱 `wolftrack`

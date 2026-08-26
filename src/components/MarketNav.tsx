@@ -15,7 +15,7 @@ const TABS: { href: string; icon: LucideIcon; label: string; underConstruction: 
   { href: "/tw", icon: BarChart3, label: "WolfTrack TW", underConstruction: false },
   { href: "/macro", icon: LineChart, label: "總經", underConstruction: false },
   { href: "/futures", icon: CandlestickChart, label: "台指期", underConstruction: false, hidden: true },
-  { href: "/trade-log", icon: NotebookText, label: "交易紀錄", underConstruction: false, hidden: true },
+  { href: "/trade-log", icon: NotebookText, label: "交易紀錄", underConstruction: false },
   { href: "/expectation-gap", icon: FileSearch, label: "預期差", underConstruction: false, hidden: true },
 ];
 

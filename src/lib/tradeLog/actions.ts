@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { getSessionUserId } from "@/lib/auth/dal";
 import type { Market } from "@/generated/prisma/enums";
 
 const VALID_MARKETS: Market[] = ["TW", "US"];
@@ -35,7 +36,15 @@ function requireDecimalString(formData: FormData, key: string): string {
   return raw;
 }
 
+async function requireUserId(): Promise<number> {
+  const userId = await getSessionUserId();
+  if (!userId) throw new Error("請先登入");
+  return userId;
+}
+
 export async function createTradeEntry(formData: FormData): Promise<void> {
+  const userId = await requireUserId();
+
   const market = requireString(formData, "market");
   if (!VALID_MARKETS.includes(market as Market)) throw new Error("market 不合法");
   const side = requireString(formData, "side");
@@ -47,6 +56,7 @@ export async function createTradeEntry(formData: FormData): Promise<void> {
 
   await prisma.tradeLogEntry.create({
     data: {
+      userId,
       market: market as Market,
       ticker: requireString(formData, "ticker").toUpperCase(),
       side: side as (typeof VALID_SIDES)[number],
@@ -64,12 +74,15 @@ export async function createTradeEntry(formData: FormData): Promise<void> {
 }
 
 export async function closeTradeEntry(formData: FormData): Promise<void> {
+  const userId = await requireUserId();
   const id = BigInt(requireString(formData, "id"));
   const exitPrice = requireDecimalString(formData, "exitPrice");
   const exitDate = requireString(formData, "exitDate");
   const exitNotes = optionalString(formData, "exitNotes");
 
-  const existing = await prisma.tradeLogEntry.findUniqueOrThrow({ where: { id } });
+  const existing = await prisma.tradeLogEntry.findFirst({ where: { id, userId } });
+  if (!existing) throw new Error("找不到這筆交易紀錄");
+
   await prisma.tradeLogEntry.update({
     where: { id },
     data: {
@@ -84,13 +97,17 @@ export async function closeTradeEntry(formData: FormData): Promise<void> {
 }
 
 export async function cancelTradeEntry(formData: FormData): Promise<void> {
+  const userId = await requireUserId();
   const id = BigInt(requireString(formData, "id"));
-  await prisma.tradeLogEntry.update({ where: { id }, data: { status: "cancelled" } });
+  const result = await prisma.tradeLogEntry.updateMany({ where: { id, userId }, data: { status: "cancelled" } });
+  if (result.count === 0) throw new Error("找不到這筆交易紀錄");
   revalidatePath("/trade-log");
 }
 
 export async function deleteTradeEntry(formData: FormData): Promise<void> {
+  const userId = await requireUserId();
   const id = BigInt(requireString(formData, "id"));
-  await prisma.tradeLogEntry.delete({ where: { id } });
+  const result = await prisma.tradeLogEntry.deleteMany({ where: { id, userId } });
+  if (result.count === 0) throw new Error("找不到這筆交易紀錄");
   revalidatePath("/trade-log");
 }

@@ -8,7 +8,7 @@ import { readSessionFromToken, SESSION_COOKIE_NAME } from "@/lib/auth/session";
  * 真正需要保護的資料查詢仍然要在DAL（src/lib/auth/dal.ts）裡再驗一次session，這裡只負責
  * 「沒登入就別讓他進/watchlist，導去/login」這種UX層的攔截。
  */
-const PROTECTED_ROUTES = ["/watchlist"];
+const PROTECTED_ROUTES = ["/watchlist", "/trade-log"];
 const AUTH_ROUTES = ["/login", "/signup"];
 
 export default async function proxy(request: NextRequest) {
@@ -34,5 +34,5 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/watchlist/:path*", "/login", "/signup"],
+  matcher: ["/watchlist/:path*", "/trade-log/:path*", "/login", "/signup"],
 };

@@ -2,12 +2,16 @@ import { queryTradeLogEntries, computeAttribution } from "@/lib/tradeLog/queryTr
 import { TradeLogForm } from "@/components/tradeLog/TradeLogForm";
 import { TradeLogTable } from "@/components/tradeLog/TradeLogTable";
 import { TradeLogSummary } from "@/components/tradeLog/TradeLogSummary";
+import { getCurrentUser } from "@/lib/auth/dal";
 
 // 這個頁面直接查資料庫，不能被當成靜態頁面在 build time 凍結一份快照
 export const dynamic = "force-dynamic";
 
 export default async function TradeLogPage() {
-  const entries = await queryTradeLogEntries();
+  const user = await getCurrentUser();
+  if (!user) return null; // proxy.ts已經攔截未登入導去/login，這裡是防禦性寫法
+
+  const entries = await queryTradeLogEntries(user.id);
   const attribution = computeAttribution(entries);
 
   return (
