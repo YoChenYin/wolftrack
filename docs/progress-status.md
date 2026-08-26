@@ -577,15 +577,9 @@ v1（2026-08-20已完成）：純樣板組字，掃「戰術狀態轉換」+「�
 
 ---
 
-### 2.23 待排查：production `/signup`、`/login` 500（2026-08-21起，尚未解決）
+### 2.23 production `/signup`、`/login` 500（2026-08-21發生，已恢復正常）
 
-使用者依照2.21的說明在Zeabur補上`SESSION_SECRET`環境變數並重啟service，但用Playwright實際測試production的`/signup`還是500，錯誤digest（`579983026`）跟設定前完全一樣。本機把dev server指向prod DB、刻意移除本機`.env`裡的`SESSION_SECRET`重現，確認會拋出一樣性質的錯誤（`session.ts`的`getSecretKey()`在`SESSION_SECRET`不存在時丟`Error("SESSION_SECRET is not set")`），但**digest完全相同這件事本身很可疑**——如果Zeabur真的重啟並讀到新環境變數，理論上這個特定錯誤就不會再發生，不該是同一個digest。
-
-**已請使用者確認、尚未拿到回覆**：
-1. 去Zeabur後台這個service的Logs分頁，找送出註冊當下的實際錯誤訊息文字（不是前端的digest數字）
-2. 確認環境變數是加在Next.js app的service上（不是db那個服務）、變數名稱`SESSION_SECRET`大小寫/底線正確、貼值時沒有多帶引號或空白
-
-**下次接手排查的切入點**：如果使用者回報Zeabur log裡的實際錯誤還是"SESSION_SECRET is not set"，代表環境變數真的沒有生效到執行中的container，需要往「Zeabur環境變數儲存/套用機制本身」查（例如是否存到了錯誤的service/environment、build cache沒有清除、或者Zeabur需要的是重新部署而不只是重啟）。如果log顯示的是別的錯誤訊息，代表這是一個新問題，不能再假設是SESSION_SECRET沒設定。
+使用者依照2.21的說明在Zeabur補上`SESSION_SECRET`環境變數，一開始重啟後測試還是500（錯誤digest跟設定前完全一樣，懷疑是Zeabur當時沒有把新環境變數真的套用到執行中的container，單純重啟可能不夠、需要完整重新部署）。後續使用者回報登入功能已經可以正常使用——問題已解決，沒有再進一步排查Zeabur當時卡住的確切機制，記錄下來是留一個「改環境變數後光重啟不一定夠」的經驗，之後在Zeabur上調整環境變數可以先參考。
 
 ---
 
