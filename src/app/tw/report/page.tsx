@@ -1,4 +1,4 @@
-import { Shuffle, Gauge, Landmark, Newspaper } from "lucide-react";
+import { Shuffle, Gauge, Landmark, Newspaper, Waves, Flame } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -9,9 +9,17 @@ import {
   describeCategoryTransition,
   describeBreakout,
   describeCostBasisCrossover,
+  describeBottomPatternTransition,
+  describeCategoryStreak,
   REPORT_DISCLAIMER,
 } from "@/lib/trend/tw/describeDailyDiff";
-import type { CategoryTransition, BreakoutEvent, CostBasisCrossoverEvent } from "@/lib/trend/tw/dailyMarketDiff";
+import type {
+  CategoryTransition,
+  BreakoutEvent,
+  CostBasisCrossoverEvent,
+  BottomPatternTransitionEvent,
+  CategoryStreak,
+} from "@/lib/trend/tw/dailyMarketDiff";
 
 // 每天資料都會變，不能被當成靜態頁面在 build time 凍結一份快照（跟 /tw 首頁同樣理由）
 export const dynamic = "force-dynamic";
@@ -50,6 +58,8 @@ export default async function TwDailyReportPage() {
   const categoryTransitions = (report?.categoryTransitions as unknown as CategoryTransition[] | undefined) ?? [];
   const breakouts = (report?.breakouts as unknown as BreakoutEvent[] | undefined) ?? [];
   const costBasisCrossovers = (report?.costBasisCrossovers as unknown as CostBasisCrossoverEvent[] | undefined) ?? [];
+  const bottomPatternTransitions = (report?.bottomPatternTransitions as unknown as BottomPatternTransitionEvent[] | undefined) ?? [];
+  const categoryStreaks = (report?.categoryStreaks as unknown as CategoryStreak[] | undefined) ?? [];
 
   const taiexClose = report?.taiexClose !== null && report?.taiexClose !== undefined ? Number(report.taiexClose) : null;
   const taiexChangePct =
@@ -181,7 +191,51 @@ export default async function TwDailyReportPage() {
               </Card>
             </div>
 
-            <p className="tw-reveal text-xs leading-relaxed text-zinc-400 dark:text-zinc-500" style={{ animationDelay: "240ms" }}>
+            <div className="tw-reveal" style={{ animationDelay: "240ms" }}>
+              <Card>
+                <SectionHeader icon={Waves} iconColor="blue" title="底部型態進展" />
+                {bottomPatternTransitions.length === 0 ? (
+                  <p className="mt-2 text-sm text-zinc-400 dark:text-zinc-500">今天沒有股票的頭肩底/N字底型態出現階段變化。</p>
+                ) : (
+                  <>
+                    <ul className="mt-3 flex flex-col gap-1.5">
+                      {bottomPatternTransitions.slice(0, MAX_ITEMS_PER_SECTION).map((t) => (
+                        <DiffRow
+                          key={`${t.ticker}-bottompattern`}
+                          text={describeBottomPatternTransition({ ...t, name: stripCompanySuffix(t.name) })}
+                          positive={t.toStage !== null}
+                        />
+                      ))}
+                    </ul>
+                    <MoreNote total={bottomPatternTransitions.length} shown={MAX_ITEMS_PER_SECTION} />
+                  </>
+                )}
+              </Card>
+            </div>
+
+            <div className="tw-reveal" style={{ animationDelay: "280ms" }}>
+              <Card>
+                <SectionHeader icon={Flame} iconColor="amber" title="持續動能" />
+                {categoryStreaks.length === 0 ? (
+                  <p className="mt-2 text-sm text-zinc-400 dark:text-zinc-500">目前沒有股票在同一個戰術分類連續5個交易日以上。</p>
+                ) : (
+                  <>
+                    <ul className="mt-3 flex flex-col gap-1.5">
+                      {categoryStreaks.slice(0, MAX_ITEMS_PER_SECTION).map((s) => (
+                        <DiffRow
+                          key={`${s.ticker}-streak`}
+                          text={describeCategoryStreak({ ...s, name: stripCompanySuffix(s.name) })}
+                          positive={isBullishCategory(s.category)}
+                        />
+                      ))}
+                    </ul>
+                    <MoreNote total={categoryStreaks.length} shown={MAX_ITEMS_PER_SECTION} />
+                  </>
+                )}
+              </Card>
+            </div>
+
+            <p className="tw-reveal text-xs leading-relaxed text-zinc-400 dark:text-zinc-500" style={{ animationDelay: "320ms" }}>
               {REPORT_DISCLAIMER}
             </p>
           </>

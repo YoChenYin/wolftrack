@@ -429,13 +429,13 @@ v1（2026-08-20已完成）：純樣板組字，掃「戰術狀態轉換」+「�
 
 **2026-08-21新增：**
 
-14. **走勢預測模型（使用者提出，改用歷史相似情境統計取代「預測」）**：使用者想要「用MA+股價+籌碼量能的關係做走勢預測」，但直接輸出「預測目標價/明天會漲」會踩到投顧牌照的法規紅線（跟每日異動報告當初的設計顧慮一樣）。建議改法：不做「預測」，做「歷史相似情境統計」——例如「當MA5/10/20多頭排列+籌碼集中度>20%這個組合，過去出現時，未來20個交易日N次裡有M次上漲、平均報酬X%」，呈現歷史統計事實、使用者自己判斷，跟`buyDip`現有的70%勝率標示是同一種呈現邏輯。技術上是本文件已經記錄的「台股戰術訊號回測」的延伸——不只回測5個戰術分類本身，而是把MA排列狀態、籌碼集中度分箱當成額外的條件變數，交叉統計。尚未排入實作，需要先確認方向。
+14. ~~走勢預測模型（使用者提出，改用歷史相似情境統計取代「預測」）~~ **已完成，見2.24**：MA排列+籌碼集中度分箱交叉，回溯統計歷史報酬分布，個股頁新增「歷史相似情境統計」卡片。
 
-15. **每日異動報告優化想法**（使用者要求「思考」，尚未排入實作）：
-    - 把底部反轉型態（`detectBottomPattern.ts`）也納入每日異動的第4類事件（目前只有戰術分類轉換/支撐壓力突破/法人成本翻轉三類）
-    - v2待辦（已記錄在上面）：法說會新解析內容、月營收/毛利率新公告、網紅提及異動
-    - 「連續天數」動能標示：某股已經連續N天都在同一個戰術分類，不是只看「今天新增」這個單一事件
-    - 大盤情境交叉：今天是大盤上漲/下跌的日子，這個背景資訊可以放在每個異動旁邊，幫助判斷「這檔的異動是跟著大盤走還是逆勢」
+15. **每日異動報告優化想法**（使用者要求「思考」）：
+    - ~~把底部反轉型態（`detectBottomPattern.ts`）也納入每日異動的第4類事件~~ **已完成，見2.25**
+    - ~~「連續天數」動能標示：某股已經連續N天都在同一個戰術分類，不是只看「今天新增」這個單一事件~~ **已完成，見2.25**
+    - v2待辦（尚未排入）：法說會新解析內容、月營收/毛利率新公告、網紅提及異動
+    - 大盤情境交叉（尚未排入）：今天是大盤上漲/下跌的日子，這個背景資訊可以放在每個異動旁邊，幫助判斷「這檔的異動是跟著大盤走還是逆勢」——目前只在報告最上方顯示一次，沒有放在每筆異動旁邊
 
 **2026-08-21新增：帳號系統第2階段以後（Phase 1見2.21，已完成）**
 
@@ -573,7 +573,67 @@ v1（2026-08-20已完成）：純樣板組字，掃「戰術狀態轉換」+「�
 
 **額外發現，記錄進2.20**：`/api/cron/tw-daily-report`本身是fire-and-forget（回202「started」後才真的跑`generateDailyReport()`），比另外幾個LLM pipeline的「回應被忽略」還嚴重——這支連回應本身都不反映真實結果，`daily-batch.yml`就算補echo也查不出東西。建議之後跟其他pipeline一樣改成awaited（`generateDailyReport()`是輕量DB讀寫，沒有fire-and-forget的必要），尚未實作。
 
-**尚待處理**：程式碼防呆修正還沒commit/push（跟帳號系統Phase 1一起，等使用者決定何時要推）；`tw-daily-report`的fire-and-forget問題也還沒修。
+**已於2026-08-21推送**：程式碼防呆修正跟帳號系統Phase 1一起commit+push（`ddb5873`/`66e0d80`）；`tw-daily-report`的fire-and-forget問題仍未修，繼續留在2.20待辦。
+
+---
+
+### 2.23 待排查：production `/signup`、`/login` 500（2026-08-21起，尚未解決）
+
+使用者依照2.21的說明在Zeabur補上`SESSION_SECRET`環境變數並重啟service，但用Playwright實際測試production的`/signup`還是500，錯誤digest（`579983026`）跟設定前完全一樣。本機把dev server指向prod DB、刻意移除本機`.env`裡的`SESSION_SECRET`重現，確認會拋出一樣性質的錯誤（`session.ts`的`getSecretKey()`在`SESSION_SECRET`不存在時丟`Error("SESSION_SECRET is not set")`），但**digest完全相同這件事本身很可疑**——如果Zeabur真的重啟並讀到新環境變數，理論上這個特定錯誤就不會再發生，不該是同一個digest。
+
+**已請使用者確認、尚未拿到回覆**：
+1. 去Zeabur後台這個service的Logs分頁，找送出註冊當下的實際錯誤訊息文字（不是前端的digest數字）
+2. 確認環境變數是加在Next.js app的service上（不是db那個服務）、變數名稱`SESSION_SECRET`大小寫/底線正確、貼值時沒有多帶引號或空白
+
+**下次接手排查的切入點**：如果使用者回報Zeabur log裡的實際錯誤還是"SESSION_SECRET is not set"，代表環境變數真的沒有生效到執行中的container，需要往「Zeabur環境變數儲存/套用機制本身」查（例如是否存到了錯誤的service/environment、build cache沒有清除、或者Zeabur需要的是重新部署而不只是重啟）。如果log顯示的是別的錯誤訊息，代表這是一個新問題，不能再假設是SESSION_SECRET沒設定。
+
+---
+
+### 2.24 歷史相似情境統計（2026-08-22~26，取代「走勢預測模型」的「預測」框架）
+
+使用者原本想要「用MA+股價+籌碼量能的關係做走勢預測」，跟每日異動報告一樣有投顧牌照法規風險（見「下一步可能的方向」第14項）。改法：不做「預測」，做「MA排列+籌碼集中度」交叉分箱後的**歷史統計**——呈現「這個狀態組合過去出現時，未來N個交易日的實際報酬分布」，使用者自己判斷，跟`buyDip`現有的70%勝率標示同一套呈現邏輯。方法論完全比照`backtestWalkForward.ts`（anchor day去重、5組horizon、TAIEX同期報酬對照），只是分類維度從「戰術訊號事件」換成「MA+籌碼狀態」。
+
+**分類定義**：
+- MA排列：MA5>MA10>MA20＝多頭排列；MA5<MA10<MA20＝空頭排列；其餘＝糾結盤整
+- 籌碼集中度分箱（近20日）：<10%＝低、10-20%＝中、≥20%＝高（門檻沿用`classifyChipFlow.ts`逢低布局已驗證過的15%門檻精神）
+
+**新增檔案**：
+- `prisma/schema.prisma`：`MaArrangement`/`ChipConcentrationBucket`enum + `TwScenarioBacktestEvent`model（跟`TwSignalBacktestEvent`同構，多了`maArrangement`/`chipBucket`兩個分類欄位）
+- `src/lib/trend/tw/backtestScenario.ts`：`walkForwardScenarioBacktest()`——跟`walkForwardBacktest()`分開寫成獨立檔案而不是塞進同一個迴圈，因為分類維度完全不同（狀態組合 vs 訊號事件），硬併會讓兩邊互相牽扯難以驗證。`computeReturns`/`WARMUP_DAYS`/`MAX_HORIZON`從`backtestWalkForward.ts`改成export供這裡重用。
+- `src/lib/marketData/runTwScenarioBacktest.ts` + `scripts/tw-run-scenario-backtest.ts`：跟訊號回測的runner同構，冪等（重跑前先刪掉指定股票範圍內的舊事件）
+- `src/lib/trend/tw/scenarioBacktestSummary.ts`：`getScenarioStats(maArrangement, chipBucket)`查單一組合的5個horizon統計（SQL直接GROUP BY，不撈全部事件進Node.js）；`classifyCurrentScenario(stockId)`算股票「現在」屬於哪個組合（跟回測用同一組classify函式，只算最新一天不用整段回溯）
+- `src/components/tw/HistoricalAnalogCard.tsx`：個股頁「總覽」分頁新卡片，顯示目前組合+5個horizon的樣本數/勝率/平均報酬/超額報酬表格，樣本數<100不呈現數字（避免噪音）
+
+**跑真實回測遇到的問題（值得記錄，因為之後類似的長跑批次腳本會再踩到）**：
+1. 第一次背景執行時，process因為本機進入系統睡眠被凍結，醒來後連線在網路層已經悄悄斷掉，但`pending await`完全沒有拋錯也沒有resolve——卡了好幾天完全沒進度，跟`docs/progress-status.md`最上面記錄的「fetch()沒設timeout卡了18小時」是同一種問題的變體，只是這次是Prisma/pg而不是fetch()。加了`query_timeout: 30_000`到`src/lib/prisma.ts`的`PrismaPg`設定（pg driver本身的client端計時器，不管伺服器端有沒有回應都會主動判定逾時）解決。
+2. 也把`runTwScenarioBacktest.ts`原本「處理完全部股票才一次印出log」改成每檔股票即時`console.log`，之後這類長跑批次才看得出即時進度、卡住時能立刻發現不用等到最後。
+3. 即使加了`query_timeout`，第二次執行時中途還是遇到本機睡眠一次，這次因為有`query_timeout`保護，個別查詢會乾淨地逾時失敗（不再是無限卡住），但**同一個process裡的connection pool一旦真正斷線，後續所有查詢會持續失敗直到process重啟**——第一輪910檔裡458檔成功、449檔因為連線問題失敗（`ENETUNREACH`/`Query read timeout`/`Transaction already closed`）、3檔資料不足跳過。用`runTwScenarioBacktest(tickerFilter)`原本就有的「只重跑指定股票」能力分兩輪把失敗清單重新餵進去（`deleteMany`只清指定範圍，不影響已經成功的股票），449→33→0，最終**863檔成功、47檔資料不足跳過、0檔失敗**，全市場239,114筆事件。
+
+**跑完整回測後的重要發現（可能需要之後調整）**：9個組合（3種MA排列×3種籌碼分箱）的樣本數嚴重不均——**低籌碼集中度（<10%）佔了238,302筆、約99.7%**，中/高兩個分箱合計只有812筆。原因：`concentration20`是「外資+投信淨買超股數」除以「總成交量」，淨買超（不是總買超）本來就只是市場裡眾多參與者淨額的一小部分，多數時候自然落在10%以下，只有少數行情才會衝到20%以上。這代表目前的分箱門檻（沿用`classifyChipFlow.ts`逢低布局的15%門檻精神訂的<10%/10-20%/≥20%）對「均分樣本」而言不是很有效——實務上「歷史相似情境統計」卡片對大多數股票會落在低籌碼集中度這個分箱（樣本量大、統計穩定），但如果剛好某檔股票目前處於中/高籌碼集中度，很可能會顯示「樣本數不足」（尤其`chipBucket=high`的3個組合都在33-157筆之間，低於`MIN_SAMPLE_SIZE_FOR_UI=100`）。這不是bug——現在的行為（樣本不足就誠實顯示「樣本數不足」而不是硬擠出不可靠的數字）是正確的保守做法，但如果使用者希望9個分箱都有足夠樣本可以比較，之後需要考慮改成用百分位數動態切分箱（例如依全市場歷史分布切三等分)而不是固定絕對門檻。
+
+**已完成的驗證**：本機dev server指向prod DB即時驗證頁面渲染（2330台積電的「歷史相似情境統計」卡片顯示真實數字：+5日樣本數11,693、勝率52.2%、平均報酬+0.67%、超額報酬+0.28%），`tsc --noEmit`/`eslint`乾淨。
+
+**已知限制**：跟`TwSignalBacktestEvent`一樣沒有處理下市股票的存活者偏差；ETF（`0050`等）在`getScenarioStats()`預設排除，但`classifyCurrentScenario()`本身沒有依market/industry過濾——如果之後個股頁對ETF開放這張卡片，要注意ETF的籌碼流動態（造市商申贖套利）意義跟個股不同，不宜直接沿用同一套統計；MIN_SAMPLE_SIZE_FOR_UI=100是暫定門檻，沒有像`backtestSummary.ts`那樣做過完整的樣本量敏感度分析；分箱門檻的樣本不均問題見上一段，尚未處理。
+
+---
+
+### 2.25 每日異動報告v2：底部型態進展 + 持續動能標示（2026-08-22~26）
+
+「下一步可能的方向」第15項提到的兩個優化想法，這次一起做：
+
+1. **底部型態進展**（第4類異動事件）：`daily_trend_signals`的`bottomPatternStage`（見2026-08-20的底部反轉型態偵測功能）今天跟昨天不一樣就記一筆——跟`categoryTransitions`是完全獨立的分類來源（一檔股票可能同時有戰術分類轉換又有底部型態進展，不互相排擠）。文案直接沿用`detectBottomPattern.ts`已經算好的`bottomPatternDescription`（已經包含頸線/反彈高點價位、目標價，不用重新組字），型態消失（`toStage`變成null，例如股價拉回跌破關鍵價位）才需要自己組一句客觀描述。
+2. **持續動能**：不是「今天新變化」，是「已經連續N天處於同一個戰術分類」（門檻5天以上才顯示）——跟異動轉換互補，回答「這檔股票的訊號是剛發生還是已經醞釀一陣子」。用一次批次查詢（`daily_trend_signal`依stockId+tradeDate desc排序，90天窗口）在記憶體裡從今天往回數連續相同status的天數，避免對每檔股票各查一次歷史（N+1）。
+
+**新增/修改**：
+- `prisma/schema.prisma`：`TwDailyMarketReport`加`bottomPatternTransitions`/`categoryStreaks`兩個選填Json欄位（選填是因為2026-08-20~21已經產生過的舊報告列沒有這兩個欄位，跟`describeCategoryTransition()`的防呆同一個考量）
+- `src/lib/trend/tw/dailyMarketDiff.ts`：`computeBottomPatternTransitions()`/`computeCategoryStreaks()`，`todaySignals`/`yesterdaySignals`查詢補上`bottomPatternType`/`bottomPatternStage`/`bottomPatternDescription`欄位
+- `src/lib/trend/tw/describeDailyDiff.ts`：`describeBottomPatternTransition()`/`describeCategoryStreak()`
+- `src/lib/trend/tw/generateDailyReport.ts`：upsert補上兩個新欄位
+- `src/app/tw/report/page.tsx`：新增「底部型態進展」「持續動能」兩個Card區塊，一樣是`slice(0, 30)`+`MoreNote`避免震盪日單日事件太多把頁面拉爆
+
+**驗證**：對prod DB重跑一次`generateDailyReport()`（2026-08-24資料），確認兩個新欄位都有真實內容且不是空陣列——3筆底部型態進展（例：神基3005從「已確認」退回「接近突破」，股價拉回但還在N字底容忍範圍內）、11筆持續動能（最長：富邦美國特別股00717連續13個交易日處於「逢低布局」）。本機dev server指向prod DB確認`/tw/report`頁面渲染正常（HTTP 200，兩個新區塊都有內容）。`tsc --noEmit`/`eslint`乾淨。
+
+**已知限制**：持續動能的90天回溯窗口如果剛好卡到窗口邊界（股票真的連續90天以上處於同一分類），會低估實際天數（顯示「至少90天」而不是真實天數）——目前沒有特別處理，機率極低（這幾個戰術分類本身波動頻繁，之前的回測資料裡最長streak不到90天）；底部型態消失（`toStage`為null）的文案目前很簡略，沒有像確認/接近突破那樣講出「拉回到什麼價位」，之後如果使用者覺得需要可以再補。
 
 ---
 

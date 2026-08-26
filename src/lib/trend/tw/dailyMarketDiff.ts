@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { tacticalStatusesForMarket, type TacticalStatus } from "@/lib/trend/sectorTrendsQuery";
 import { calculateSupportResistance } from "@/lib/trend/tw/supportResistance";
 import { calculateInstitutionalCostBasis } from "@/lib/trend/tw/institutionalCostBasis";
+import type { BottomPatternType, BottomPatternStage } from "@/generated/prisma/enums";
 
 /** 跟supportResistance.ts/institutionalCostBasis.ts共用同一個60個交易日窗口，這裡多留一點
  * 緩衝（90個日曆天，跟sectorTrendsQuery.ts的VOLATILITY_LOOKBACK_DAYS一致）確保兩個窗口
@@ -9,6 +10,11 @@ import { calculateInstitutionalCostBasis } from "@/lib/trend/tw/institutionalCos
 const LOOKBACK_CALENDAR_DAYS = 90;
 
 const TW_TACTICAL_STATUSES = new Set<TacticalStatus>(tacticalStatusesForMarket("TW"));
+
+/** 「已經連續N天都在同一個戰術分類」的動能標示（v2新增），低於這個天數不算「值得標註的動能」，
+ * 跟classifyChipFlow.ts的MAX_STREAK_LOOKBACK_DAYS(90)是同一份90天回溯窗口，只是這裡的門檻
+ * 是「至少要多長才顯示」而不是「最多回溯多遠」 */
+const MIN_STREAK_DAYS_TO_SHOW = 5;
 
 export interface CategoryTransition {
   ticker: string;
@@ -42,6 +48,31 @@ export interface CostBasisCrossoverEvent {
   costBasis: number;
 }
 
+/** 底部反轉型態今天的階段變化（v2新增，見detectBottomPattern.ts），跟categoryTransitions
+ * 是不同的分類來源，一檔股票可能同時有戰術分類轉換又有底部型態進展，兩者互不排擠 */
+export interface BottomPatternTransitionEvent {
+  ticker: string;
+  name: string;
+  patternType: BottomPatternType;
+  /** null＝昨天型態還沒成形 */
+  fromStage: BottomPatternStage | null;
+  /** null＝今天型態已經消失（股價走勢不再符合，多半是拉回太深型態失效） */
+  toStage: BottomPatternStage | null;
+  description: string | null;
+  price: number;
+}
+
+/** 目前仍在同一個戰術分類已經連續N天的個股（v2新增）——跟categoryTransitions互補：
+ * transitions只看「今天有沒有變化」，這裡看「已經持續多久沒變化」，兩者一起才能回答
+ * 「這檔股票的訊號是剛發生的還是已經醞釀一陣子了」 */
+export interface CategoryStreak {
+  ticker: string;
+  name: string;
+  category: TacticalStatus;
+  /** 含今天在內，連續處於同一分類的交易日數 */
+  streakDays: number;
+}
+
 export interface DailyMarketDiff {
   reportDate: string;
   prevTradeDate: string;
@@ -49,6 +80,8 @@ export interface DailyMarketDiff {
   categoryTransitions: CategoryTransition[];
   breakouts: BreakoutEvent[];
   costBasisCrossovers: CostBasisCrossoverEvent[];
+  bottomPatternTransitions: BottomPatternTransitionEvent[];
+  categoryStreaks: CategoryStreak[];
 }
 
 /** 找daily_trend_signals裡最新的兩個不同交易日（TW市場）。資料不足兩天回傳null。
@@ -119,6 +152,58 @@ function computeCategoryTransitions(
   return transitions;
 }
 
+function computeBottomPatternTransitions(
+  todaySignals: {
+    stockId: number;
+    bottomPatternType: BottomPatternType | null;
+    bottomPatternStage: BottomPatternStage | null;
+    bottomPatternDescription: string | null;
+    closePrice: unknown;
+    stock: { ticker: string; companyName: string };
+  }[],
+  yesterdayBottomByStock: Map<number, { type: BottomPatternType | null; stage: BottomPatternStage | null }>
+): BottomPatternTransitionEvent[] {
+  const transitions: BottomPatternTransitionEvent[] = [];
+  for (const row of todaySignals) {
+    const prev = yesterdayBottomByStock.get(row.stockId) ?? { type: null, stage: null };
+    if (row.bottomPatternStage === prev.stage) continue; // 階段沒變化，不是「今天發生的變化」
+    if (row.bottomPatternStage === null && prev.stage === null) continue;
+    transitions.push({
+      ticker: row.stock.ticker,
+      name: row.stock.companyName,
+      patternType: (row.bottomPatternStage !== null ? row.bottomPatternType : prev.type)!,
+      fromStage: prev.stage,
+      toStage: row.bottomPatternStage,
+      description: row.bottomPatternStage !== null ? row.bottomPatternDescription : null,
+      price: Number(row.closePrice),
+    });
+  }
+  return transitions;
+}
+
+/** 目前仍在同一個戰術分類已經連續幾天——historyDescByStock是每檔股票「今天以前」由新到舊
+ * 排序的status歷史（不含今天），今天本身算streak第1天，再從歷史往回數，數到status不同或
+ * 資料用完為止 */
+function computeCategoryStreaks(
+  todaySignals: { stockId: number; status: string; stock: { ticker: string; companyName: string } }[],
+  historyDescByStock: Map<number, string[]>
+): CategoryStreak[] {
+  const streaks: CategoryStreak[] = [];
+  for (const row of todaySignals) {
+    if (!TW_TACTICAL_STATUSES.has(row.status as TacticalStatus)) continue;
+    const history = historyDescByStock.get(row.stockId) ?? [];
+    let streakDays = 1; // 今天本身算第1天
+    for (const status of history) {
+      if (status !== row.status) break;
+      streakDays++;
+    }
+    if (streakDays >= MIN_STREAK_DAYS_TO_SHOW) {
+      streaks.push({ ticker: row.stock.ticker, name: row.stock.companyName, category: row.status as TacticalStatus, streakDays });
+    }
+  }
+  return streaks.sort((a, b) => b.streakDays - a.streakDays);
+}
+
 /**
  * 台股每日異動報告v1的核心：算「今天 vs 上一個交易日」的客觀狀態變化。純資料計算，
  * 不寫DB（見generateDailyReport.ts）、不生成文案（見describeDailyDiff.ts）。
@@ -140,23 +225,31 @@ export async function computeDailyMarketDiff(explicitDates?: {
         status: true,
         triggerReason: true,
         closePrice: true,
+        bottomPatternType: true,
+        bottomPatternStage: true,
+        bottomPatternDescription: true,
         stock: { select: { ticker: true, companyName: true } },
       },
     }),
     prisma.dailyTrendSignal.findMany({
       where: { tradeDate: prevTradeDate, stock: { market: "TW" } },
-      select: { stockId: true, status: true },
+      select: { stockId: true, status: true, bottomPatternType: true, bottomPatternStage: true },
     }),
   ]);
 
   const yesterdayStatusByStock = new Map(yesterdaySignals.map((s) => [s.stockId, s.status]));
   const categoryTransitions = computeCategoryTransitions(todaySignals, yesterdayStatusByStock);
 
+  const yesterdayBottomByStock = new Map(
+    yesterdaySignals.map((s) => [s.stockId, { type: s.bottomPatternType, stage: s.bottomPatternStage }])
+  );
+  const bottomPatternTransitions = computeBottomPatternTransitions(todaySignals, yesterdayBottomByStock);
+
   const stockIds = todaySignals.map((s) => s.stockId);
   const nameByStock = new Map(todaySignals.map((s) => [s.stockId, s.stock]));
   const cutoff = new Date(reportDate.getTime() - LOOKBACK_CALENDAR_DAYS * 86_400_000);
 
-  const [priceHistory, institutionalHistory] = await Promise.all([
+  const [priceHistory, institutionalHistory, statusHistoryDesc] = await Promise.all([
     prisma.twDailyPrice.findMany({
       where: { stockId: { in: stockIds }, tradeDate: { gte: cutoff, lte: reportDate } },
       orderBy: [{ stockId: "asc" }, { tradeDate: "asc" }],
@@ -167,7 +260,20 @@ export async function computeDailyMarketDiff(explicitDates?: {
       orderBy: [{ stockId: "asc" }, { tradeDate: "asc" }],
       select: { stockId: true, tradeDate: true, foreignNetBuyShares: true, investTrustNetBuyShares: true },
     }),
+    prisma.dailyTrendSignal.findMany({
+      where: { stockId: { in: stockIds }, tradeDate: { gte: cutoff, lt: reportDate } },
+      orderBy: [{ stockId: "asc" }, { tradeDate: "desc" }],
+      select: { stockId: true, status: true },
+    }),
   ]);
+
+  const historyDescByStock = new Map<number, string[]>();
+  for (const h of statusHistoryDesc) {
+    const list = historyDescByStock.get(h.stockId) ?? [];
+    list.push(h.status);
+    historyDescByStock.set(h.stockId, list);
+  }
+  const categoryStreaks = computeCategoryStreaks(todaySignals, historyDescByStock);
 
   const priceByStock = new Map<number, { tradeDate: Date; close: number }[]>();
   for (const p of priceHistory) {
@@ -253,5 +359,7 @@ export async function computeDailyMarketDiff(explicitDates?: {
     categoryTransitions,
     breakouts,
     costBasisCrossovers,
+    bottomPatternTransitions,
+    categoryStreaks,
   };
 }

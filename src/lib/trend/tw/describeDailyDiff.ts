@@ -1,5 +1,12 @@
 import { TACTICAL_STATUS_META } from "@/lib/trend/tacticalStatusMeta";
-import type { CategoryTransition, BreakoutEvent, CostBasisCrossoverEvent } from "@/lib/trend/tw/dailyMarketDiff";
+import type {
+  CategoryTransition,
+  BreakoutEvent,
+  CostBasisCrossoverEvent,
+  BottomPatternTransitionEvent,
+  CategoryStreak,
+} from "@/lib/trend/tw/dailyMarketDiff";
+import type { BottomPatternType } from "@/generated/prisma/enums";
 
 /**
  * 每日異動報告v1的文案層：把dailyMarketDiff.ts算出來的「事實」轉成中文句子。
@@ -42,6 +49,33 @@ export function describeCostBasisCrossover(c: CostBasisCrossoverEvent): string {
   return c.direction === "priceBelowCost"
     ? `${c.ticker} ${c.name} 今天收盤價${c.price.toFixed(2)}元，跌破${whoLabel}近60日加權平均成本價${c.costBasis.toFixed(2)}元`
     : `${c.ticker} ${c.name} 今天收盤價${c.price.toFixed(2)}元，站上${whoLabel}近60日加權平均成本價${c.costBasis.toFixed(2)}元`;
+}
+
+const BOTTOM_PATTERN_TYPE_LABEL: Record<BottomPatternType, string> = {
+  headShoulders: "頭肩底",
+  nShape: "N字底",
+};
+
+/** 底部反轉型態階段變化（v2新增，見dailyMarketDiff.ts的computeBottomPatternTransitions）。
+ * toStage有值時直接沿用detectBottomPattern.ts算好的description（已經包含頸線/反彈高點價位、
+ * 目標價等細節，不用重複組字）；toStage是null（型態消失，多半是股價拉回跌破型態關鍵價位）
+ * 才需要自己組一句客觀描述。 */
+export function describeBottomPatternTransition(t: BottomPatternTransitionEvent): string {
+  const hasPrice = typeof t.price === "number" && Number.isFinite(t.price);
+  const prefix = hasPrice ? `${t.ticker} ${t.name} 今天收盤價${t.price.toFixed(2)}元` : `${t.ticker} ${t.name}`;
+  if (t.toStage !== null && t.description) {
+    return `${prefix}，${t.description}`;
+  }
+  if (t.toStage === null) {
+    return `${prefix}，${BOTTOM_PATTERN_TYPE_LABEL[t.patternType]}型態不再符合條件（型態關鍵價位已跌破）`;
+  }
+  return `${prefix}，出現${BOTTOM_PATTERN_TYPE_LABEL[t.patternType]}型態`;
+}
+
+/** 目前仍在同一個戰術分類已經連續N天（v2新增）——跟describeCategoryTransition()互補，
+ * 那邊講「今天變成什麼」，這裡講「已經維持多久」 */
+export function describeCategoryStreak(s: CategoryStreak): string {
+  return `${s.ticker} ${s.name} 已連續${s.streakDays}個交易日處於「${categoryLabel(s.category)}」`;
 }
 
 export const REPORT_DISCLAIMER = "本報告僅呈現資料庫裡可觀察到的客觀狀態變化，不構成投資建議，也不代表任何投顧意見，操作前請自行判斷並留意風險。";

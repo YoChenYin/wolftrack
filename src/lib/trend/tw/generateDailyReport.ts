@@ -30,6 +30,8 @@ export async function generateDailyReport(explicitDates?: {
       categoryTransitions: diff.categoryTransitions as unknown as Prisma.InputJsonValue,
       breakouts: diff.breakouts as unknown as Prisma.InputJsonValue,
       costBasisCrossovers: diff.costBasisCrossovers as unknown as Prisma.InputJsonValue,
+      bottomPatternTransitions: diff.bottomPatternTransitions as unknown as Prisma.InputJsonValue,
+      categoryStreaks: diff.categoryStreaks as unknown as Prisma.InputJsonValue,
     },
     create: {
       reportDate: new Date(diff.reportDate),
@@ -39,6 +41,8 @@ export async function generateDailyReport(explicitDates?: {
       categoryTransitions: diff.categoryTransitions as unknown as Prisma.InputJsonValue,
       breakouts: diff.breakouts as unknown as Prisma.InputJsonValue,
       costBasisCrossovers: diff.costBasisCrossovers as unknown as Prisma.InputJsonValue,
+      bottomPatternTransitions: diff.bottomPatternTransitions as unknown as Prisma.InputJsonValue,
+      categoryStreaks: diff.categoryStreaks as unknown as Prisma.InputJsonValue,
     },
   });
 
