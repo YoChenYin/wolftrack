@@ -1,26 +1,35 @@
-import { PieChart } from "lucide-react";
+import { PieChart, Flame } from "lucide-react";
 import { TwSectionNav } from "@/components/tw/TwSectionNav";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { twReturnColor } from "@/lib/tw/color";
-import { queryEtfOverview, ETF_CATEGORY_LABEL, type EtfCategory, type EtfOverviewItem } from "@/lib/trend/tw/queryEtfOverview";
+import {
+  queryEtfOverview,
+  computeLeadingTypes,
+  STRUCTURE_TYPE_LABEL,
+  STYLE_TAG_LABEL,
+  type EtfStructureType,
+  type EtfOverviewItem,
+} from "@/lib/trend/tw/queryEtfOverview";
 
 // 這個頁面直接查資料庫，不能被當成靜態頁面在 build time 凍結一份快照
 export const dynamic = "force-dynamic";
 
-const CATEGORY_ORDER: EtfCategory[] = ["listed", "otc", "otcBond"];
+const STRUCTURE_TYPE_ORDER: EtfStructureType[] = ["equity", "active", "leveraged", "inverse", "bond", "commodity"];
+/** 平均漲跌幅樣本數低於這個門檻，不放進「今日領漲類型」——避免單一檔ETF的漲跌被誤讀成整個類型的動向 */
+const MIN_SAMPLE_FOR_LEADING_TYPE = 3;
 
 function EtfTable({ items }: { items: EtfOverviewItem[] }) {
-  // 有價格資料的排前面——413檔裡大多數還沒回填歷史，全部照代號排序會讓真正有東西看的
-  // 幾檔被淹沒在一長串「—」裡面
+  // 有資料的按日漲跌幅由高到低排（今天領漲的排最前面），沒有資料的一律排最後
   const sorted = [...items].sort((a, b) => {
-    if ((a.latestClose === null) !== (b.latestClose === null)) return a.latestClose === null ? 1 : -1;
+    if ((a.dayChangePct === null) !== (b.dayChangePct === null)) return a.dayChangePct === null ? 1 : -1;
+    if (a.dayChangePct !== null && b.dayChangePct !== null) return b.dayChangePct - a.dayChangePct;
     return a.ticker.localeCompare(b.ticker);
   });
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[420px] text-left text-sm">
+      <table className="w-full min-w-[460px] text-left text-sm">
         <thead>
           <tr className="text-xs text-zinc-400 dark:text-zinc-500">
             <th className="pb-2 font-medium">代號</th>
@@ -34,7 +43,14 @@ function EtfTable({ items }: { items: EtfOverviewItem[] }) {
           {sorted.map((item) => (
             <tr key={item.ticker}>
               <td className="py-2 font-[family:var(--font-tw-mono)] font-semibold text-zinc-900 dark:text-zinc-100">{item.ticker}</td>
-              <td className="py-2 text-zinc-600 dark:text-zinc-300">{item.name}</td>
+              <td className="py-2 text-zinc-600 dark:text-zinc-300">
+                {item.name}
+                {item.styleTag && (
+                  <span className="ml-1.5 rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-400/10 dark:text-violet-400">
+                    {STYLE_TAG_LABEL[item.styleTag]}
+                  </span>
+                )}
+              </td>
               <td className="py-2 text-right font-[family:var(--font-tw-mono)] tabular-nums text-zinc-900 dark:text-zinc-100">
                 {item.latestClose !== null ? item.latestClose.toFixed(2) : "—"}
               </td>
@@ -53,11 +69,13 @@ function EtfTable({ items }: { items: EtfOverviewItem[] }) {
 export default async function TwEtfPage() {
   const items = await queryEtfOverview();
   const withData = items.filter((i) => i.latestClose !== null).length;
-  const byCategory = new Map<EtfCategory, EtfOverviewItem[]>();
+  const leadingTypes = computeLeadingTypes(items).filter((t) => t.sampleSize >= MIN_SAMPLE_FOR_LEADING_TYPE);
+
+  const byType = new Map<EtfStructureType, EtfOverviewItem[]>();
   for (const item of items) {
-    const list = byCategory.get(item.category) ?? [];
+    const list = byType.get(item.structureType) ?? [];
     list.push(item);
-    byCategory.set(item.category, list);
+    byType.set(item.structureType, list);
   }
 
   return (
@@ -85,22 +103,43 @@ export default async function TwEtfPage() {
           </div>
           <div className="mt-2 h-px w-24 bg-gradient-to-r from-amber-700/50 to-transparent dark:from-amber-400/40" />
           <p className="mt-3 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
-            台股ETF獨立整理——法人買賣超反映造市商申贖套利，不是股票挑選的邏輯，跟選股頁分開顯示。追蹤中{items.length}檔，目前{withData}檔已有近期價格資料。
+            依代號後綴分類（TWSE/TPEx官方編碼慣例，反映槓桿/反向/債券等風險機制，不是行銷話術）。追蹤中{items.length}檔，目前{withData}檔已有近期價格資料。
           </p>
           <div className="mt-4">
             <TwSectionNav />
           </div>
         </header>
 
-        {CATEGORY_ORDER.map((category, i) => {
-          const categoryItems = byCategory.get(category) ?? [];
-          if (categoryItems.length === 0) return null;
+        {leadingTypes.length > 0 && (
+          <div className="tw-reveal" style={{ animationDelay: "60ms" }}>
+            <Card>
+              <SectionHeader icon={Flame} iconColor="rose" title="今日領漲類型" />
+              <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">依結構型分類的平均日漲跌幅排序，樣本數低於{MIN_SAMPLE_FOR_LEADING_TYPE}檔不列入</p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                {leadingTypes.map((t) => (
+                  <div key={t.structureType} className="rounded-xl bg-zinc-50/70 px-3 py-2 ring-1 ring-zinc-900/[0.04] dark:bg-white/[0.04] dark:ring-white/[0.06]">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">{STRUCTURE_TYPE_LABEL[t.structureType]}</p>
+                    <p className={`font-[family:var(--font-tw-mono)] text-lg font-semibold tabular-nums ${twReturnColor(t.avgChangePct)}`}>
+                      {t.avgChangePct > 0 ? "+" : ""}
+                      {t.avgChangePct.toFixed(2)}%
+                    </p>
+                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500">{t.sampleSize}檔平均</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {STRUCTURE_TYPE_ORDER.map((type, i) => {
+          const typeItems = byType.get(type) ?? [];
+          if (typeItems.length === 0) return null;
           return (
-            <div key={category} className="tw-reveal" style={{ animationDelay: `${(i + 1) * 60}ms` }}>
+            <div key={type} className="tw-reveal" style={{ animationDelay: `${(i + 2) * 60}ms` }}>
               <Card>
-                <SectionHeader icon={PieChart} iconColor="violet" title={`${ETF_CATEGORY_LABEL[category]}（${categoryItems.length}檔）`} />
+                <SectionHeader icon={PieChart} iconColor="violet" title={`${STRUCTURE_TYPE_LABEL[type]}（${typeItems.length}檔）`} />
                 <div className="mt-3">
-                  <EtfTable items={categoryItems} />
+                  <EtfTable items={typeItems} />
                 </div>
               </Card>
             </div>
