@@ -59,6 +59,7 @@ model Stock {
   institutionalReportMentions InstitutionalReportMention[]
   signalBacktestEvents        TwSignalBacktestEvent[]
   scenarioBacktestEvents      TwScenarioBacktestEvent[]
+  technicalRuleBacktestEvents TwTechnicalRuleBacktestEvent[]
   watchlistItems              UserWatchlistItem[]
 
   @@unique([market, ticker])
@@ -1126,4 +1127,48 @@ model TwScenarioBacktestEvent {
   @@unique([stockId, maArrangement, chipBucket, signalDate])
   @@index([maArrangement, chipBucket])
   @@map("tw_scenario_backtest_events")
+}
+
+/// 純技術分析規則回測（2026-08-28新增）：美股那邊先用MU/NVDA+20檔半導體同業測過同一套規則
+/// （黃金/死亡交叉、RSI超賣超買、MACD轉正轉負、頭肩底/N字底確認），發現RSI超賣反彈有明顯
+/// 超額報酬，但美股受限Polygon免費方案只有2年歷史（單一多頭regime，樣本只有79筆）——這裡
+/// 用台股9-10年、涵蓋多種市場狀態（2020下跌/2022熊市/近期多頭）的完整歷史重跑同一組規則，
+/// 驗證訊號是不是真的跨市場狀態成立，不是牛市巧合。方法論跟TwScenarioBacktestEvent一致
+/// （anchor day去重、5組horizon、TAIEX同期報酬對照），純規則不用train/test切分。
+enum TechnicalRuleType {
+  goldenCrossMaBullish
+  deathCrossMaBearish
+  rsiOversoldCross
+  rsiOverboughtCross
+  macdBullishCross
+  macdBearishCross
+  bottomPatternConfirmed
+}
+
+model TwTechnicalRuleBacktestEvent {
+  id            BigInt             @id @default(autoincrement())
+  stockId       Int                @map("stock_id")
+  ruleType      TechnicalRuleType  @map("rule_type")
+  signalDate    DateTime           @map("signal_date") @db.Date
+  priceAtSignal Decimal            @map("price_at_signal") @db.Decimal(12, 4)
+
+  return5d  Decimal? @map("return_5d") @db.Decimal(8, 2)
+  return10d Decimal? @map("return_10d") @db.Decimal(8, 2)
+  return20d Decimal? @map("return_20d") @db.Decimal(8, 2)
+  return40d Decimal? @map("return_40d") @db.Decimal(8, 2)
+  return60d Decimal? @map("return_60d") @db.Decimal(8, 2)
+
+  taiexReturn5d  Decimal? @map("taiex_return_5d") @db.Decimal(8, 2)
+  taiexReturn10d Decimal? @map("taiex_return_10d") @db.Decimal(8, 2)
+  taiexReturn20d Decimal? @map("taiex_return_20d") @db.Decimal(8, 2)
+  taiexReturn40d Decimal? @map("taiex_return_40d") @db.Decimal(8, 2)
+  taiexReturn60d Decimal? @map("taiex_return_60d") @db.Decimal(8, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  stock Stock @relation(fields: [stockId], references: [id])
+
+  @@unique([stockId, ruleType, signalDate])
+  @@index([ruleType])
+  @@map("tw_technical_rule_backtest_events")
 }
