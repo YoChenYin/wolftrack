@@ -668,6 +668,21 @@ PM優先順序排序後的P1第一項——交易筆記個人化是「個人選�
 
 ---
 
+### 2.28 ETF從主選股表獨立整理（2026-08-29）
+
+413檔ETF（見2026-07-25的`backfill-tw-etfs.ts`）原本混在主選股表的`buildStockFilter()`裡，沒有排除——目前還沒爆出問題純粹是因為大多數ETF還沒回填價格歷史（413檔裡只有11檔`tw_daily_price`有資料），一旦回填完成，法人買賣超反映的是造市商申贖套利（不是選股邏輯），會用不適合的分類邏輯混進投信轉買/合買等戰術分類表——這是潛在地雷，跟`backtestSummary.ts`/`scenarioBacktestSummary.ts`排除ETF算勝率是同一個理由，只是那兩個是回測層面，這次補在選股顯示層面。
+
+**修復**：
+- `sectorTrendsQuery.ts`的`buildStockFilter()`加上`NOT: { industry: { contains: "ETF" } }`，主選股表（投信轉買/合買/逢低布局等7個戰術分類）不再顯示ETF。
+- 新增`/tw/etf`分頁（`TwSectionNav`第六個分頁）：獨立整理413檔ETF，依FinMind的三種分類（上市ETF264檔/上櫃ETF122檔/上櫃債券ETF27檔）分組顯示代號/名稱/最新收盤/日漲跌，沒有價格資料的排在後面（避免401檔「—」把有資料的11檔淹沒），頁面上方誠實標示「追蹤中413檔，目前X檔已有近期價格資料」。
+- 查詢邏輯（`queryEtfOverview.ts`）的「近期」視窗用「這批ETF實際最新一筆資料日期」為基準，不是`Date.now()`——本機dev DB最新資料停在2026-07-24（batch排程沒每天跑），用wall-clock now()當基準會把全部篩掉，比照`dailyMarketDiff.ts`的`resolveDiffDates`同樣的處理方式，寫的時候第一版真的踩到這個坑（查出0筆才發現）。
+
+**驗證**：本機dev server確認`/tw/etf`正確顯示264/122/27的分類數字（跟直接query DB結果一致），11檔有資料的ETF（例如00400A主動國泰動能高息，最新收盤13.41）正確渲染；`/tw`主選股頁確認仍正常運作。`tsc --noEmit`/`eslint`乾淨。
+
+**已知限制**：413檔裡只有11檔有價格歷史，`/tw/etf`頁面目前對大多數ETF只能顯示「尚無資料」——要讓這個功能真正有用，需要另外跑ETF的歷史回填（`tw-backfill.ts`理論上可以指定ticker清單重跑，但413檔全部回填預估要幾小時，這次沒有執行，只处理了顯示層面的整理）。
+
+---
+
 ## 四、環境/操作備忘
 
 - 本地 DB：既有 Homebrew Postgres 17（非 Docker），資料庫名稱 `wolftrack`

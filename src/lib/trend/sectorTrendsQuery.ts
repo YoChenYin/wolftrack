@@ -477,7 +477,13 @@ async function buildStockFilter(
   // isActive: true 排除掉軟移除的股票（例如 2026-07-09 收斂成科技+金融股後排除的傳統產業）——
   // 只有批次計算（runTwDailyBatch/runUsDailyBatch）會跳過非 active 股票，但這裡如果不篩，
   // 舊的、剛好還沒過期的 daily_trend_signal 歷史紀錄還是會被撈出來顯示，等於軟移除沒生效。
-  const stockWhere: Prisma.StockWhereInput = { market, isActive: true };
+  //
+  // 2026-08-29：排除ETF（industry含"ETF"，見backfill-tw-etfs.ts的三種FinMind分類）——ETF的
+  // 法人買賣超反映造市商申贖套利，不是股票挑選的邏輯，跟backtestSummary.ts/
+  // scenarioBacktestSummary.ts排除ETF算勝率是同一個理由。413檔ETF目前大多數還沒回填價格
+  // 歷史，混在主選股表裡是未爆彈——之後回填完會突然大量冒出來、又用不適合ETF的邏輯分類，
+  // 已經改用/tw/etf獨立整理。
+  const stockWhere: Prisma.StockWhereInput = { market, isActive: true, NOT: { industry: { contains: "ETF" } } };
 
   if (sectorCode && market === "TW") {
     if (sectorCode === UNCATEGORIZED_THEME_CODE) {

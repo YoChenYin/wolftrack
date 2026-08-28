@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ListFilter, Workflow, Presentation, Landmark, Newspaper } from "lucide-react";
+import { ListFilter, Workflow, Presentation, Landmark, Newspaper, PieChart } from "lucide-react";
 
 const TABS = [
   { href: "/tw", icon: ListFilter, label: "選股-TW" },
@@ -10,6 +10,7 @@ const TABS = [
   { href: "/tw/fundamentals", icon: Presentation, label: "基本面" },
   { href: "/tw/institutional-reports", icon: Landmark, label: "法人報告" },
   { href: "/tw/report", icon: Newspaper, label: "每日異動" },
+  { href: "/tw/etf", icon: PieChart, label: "ETF" },
 ];
 
 /**
@@ -20,6 +21,9 @@ const TABS = [
  * 本來就是TW限定（龍頭+二軍法說會），放在TW section底下比放在頂層更合理。
  * 2026-08-19再加第四個分頁「法人報告」（券商/投顧產業趨勢文章，見esunsecClient.ts）。
  * 2026-08-20再加第五個分頁「每日異動」（每日異動報告v1，見dailyMarketDiff.ts）。
+ * 2026-08-29再加第六個分頁「ETF」——原本413檔ETF混在主選股表裡用股票挑選的邏輯分類（法人
+ * 買賣超反映套利不是選股訊號），改成獨立整理，見sectorTrendsQuery.ts的buildStockFilter()
+ * 排除ETF的說明。
  */
 export function TwSectionNav() {
   const pathname = usePathname();
