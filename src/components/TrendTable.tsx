@@ -1,9 +1,6 @@
 import Link from "next/link";
 import {
   CircleAlert,
-  ChevronsUp,
-  ChevronsDown,
-  Minimize2,
   CheckCircle2,
   ArrowUp,
   ArrowDown,
@@ -16,6 +13,7 @@ import {
 import type { SectorTrendItem, TacticalStatus } from "@/lib/trend/sectorTrendsQuery";
 import type { BadgeStats } from "@/lib/trend/tw/backtestSummary";
 import { TACTICAL_STATUS_META } from "@/lib/trend/tacticalStatusMeta";
+import { getBollingerBadgeMeta } from "@/lib/trend/bollingerBadgeMeta";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 import { InfoTooltip } from "./InfoTooltip";
 import { Card } from "./ui/Card";
@@ -160,18 +158,24 @@ function MaAlignedIcon({ aligned }: { aligned: boolean | null }) {
   );
 }
 
-function BollingerBadge({ status, detail }: { status: SectorTrendItem["bollingerStatus"]; detail: string | null }) {
-  if (status === null || status === "normal") return <span className="text-zinc-300 dark:text-zinc-600">—</span>;
-  const config = {
-    high: { label: "偏高", icon: ChevronsUp, className: "text-amber-600 dark:text-amber-400" },
-    low: { label: "偏低", icon: ChevronsDown, className: "text-blue-600 dark:text-blue-400" },
-    squeeze: { label: "收斂", icon: Minimize2, className: "text-violet-600 dark:text-violet-400" },
-  }[status];
-  const Icon = config.icon;
+function BollingerBadge({
+  signal,
+  trend,
+  score,
+  detail,
+}: {
+  signal: SectorTrendItem["bollingerSignal"];
+  trend: SectorTrendItem["bollingerTrend"];
+  score: SectorTrendItem["bollingerScore"];
+  detail: string | null;
+}) {
+  const meta = getBollingerBadgeMeta(signal, trend);
+  if (!meta) return <span className="text-zinc-300 dark:text-zinc-600">—</span>;
+  const Icon = meta.icon;
   return (
-    <span className={`inline-flex items-center gap-0.5 whitespace-nowrap ${config.className}`} title={detail ?? undefined}>
+    <span className={`inline-flex items-center gap-0.5 whitespace-nowrap ${changeColorClass(score)}`} title={detail ?? undefined}>
       <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
-      {config.label}
+      {meta.label}
     </span>
   );
 }
@@ -362,7 +366,7 @@ export function TrendTable({
                       <MaAlignedIcon aligned={item.maAligned} />
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-center">
-                      <BollingerBadge status={item.bollingerStatus} detail={item.bollingerDetail} />
+                      <BollingerBadge signal={item.bollingerSignal} trend={item.bollingerTrend} score={item.bollingerScore} detail={item.bollingerDetail} />
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5">
                       <SupportResistanceCell support={item.support} resistance={item.resistance} priceStatus={item.priceStatus} />
@@ -424,7 +428,7 @@ export function TrendTable({
                     <span className="text-zinc-400 dark:text-zinc-500">MA排列 / 布林</span>
                     <span className="flex items-center gap-1.5">
                       <MaAlignedIcon aligned={item.maAligned} />
-                      <BollingerBadge status={item.bollingerStatus} detail={item.bollingerDetail} />
+                      <BollingerBadge signal={item.bollingerSignal} trend={item.bollingerTrend} score={item.bollingerScore} detail={item.bollingerDetail} />
                     </span>
                   </div>
                   <div className="col-span-2 flex items-center justify-between rounded bg-zinc-50 px-2 py-1 dark:bg-white/[0.04]">

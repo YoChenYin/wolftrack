@@ -2,9 +2,12 @@ import { prisma } from "@/lib/prisma";
 import type { TrendStatus, Market } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { findIndustryThemeByName, getAllThemedTickers, UNCATEGORIZED_THEME_CODE } from "@/lib/valuation/groupConfig";
-import { bollingerBands, sma } from "@/lib/trend/indicators";
+import { sma } from "@/lib/trend/indicators";
 import { calculateSupportResistance } from "@/lib/trend/tw/supportResistance";
 import { calculateInstitutionalCostBasis } from "@/lib/trend/tw/institutionalCostBasis";
+import { analyzeLatestBollingerDay } from "@/lib/trend/bollinger/analyze";
+import type { BollingerSignalType, BollingerTrend } from "@/lib/trend/bollinger/types";
+import type { OhlcvBar } from "@/lib/trend/types";
 
 /**
  * 戰術面板顯示的狀態。刻意用明確列舉（不是 Exclude<TrendStatus, "limitMove"> 這種衍生型別）——
@@ -90,9 +93,16 @@ export interface SectorTrendItem {
   revenueMonth: string | null;
   /** 近20個交易日收盤價，給表格內的迷你走勢圖用；沿用computeVolatilityStats已經抓好的90日歷史，不多打一次查詢 */
   sparkline: number[] | null;
-  /** 布林通道位置判斷：high=貼近上軌(%b≥0.8)、low=貼近下軌(%b≤0.2)、squeeze=帶寬<20日均帶寬的一半(即將起漲/起跌但方向未定)、normal=通道中段。資料不足20+20根K棒時是null。 */
-  bollingerStatus: "high" | "low" | "squeeze" | "normal" | null;
-  /** 布林狀態的實際數值，UI hover顯示用，例如 "%b=0.92，帶寬2.1%（20日均3.4%）" */
+  /**
+   * 2026-09-08改版：布林通道完整訊號分析（見 src/lib/trend/bollinger），取代原本單純比較
+   * %b高低/帶寬的簡化版邏輯——會判斷「突破/跌破的行為」跟「趨勢方向」，不是單純碰到軌道
+   * 就當作訊號。null=近90個交易日資料不足(不到 Bollinger period + 暖身用的歷史)。
+   */
+  bollingerSignal: BollingerSignalType | null;
+  bollingerTrend: BollingerTrend | null;
+  /** Signal Score(-2~+2)，UI用來決定徽章顏色（沿用既有的漲紅跌綠/漲綠跌紅 changeColorClass） */
+  bollingerScore: number | null;
+  /** UI hover顯示用完整說明，例如 "強勢多頭｜站上月線（分數+2）%b=0.92，帶寬2.1%" */
   bollingerDetail: string | null;
   /** 當天(最新交易日)漲跌金額 = 今天收盤 - 前一天收盤，TW表格版要顯示金額不只是% */
   todayChangeAmount: number | null;
@@ -183,7 +193,9 @@ interface VolatilityStats {
   todayChangeAmount: number | null;
   volatilitySinceSignal: number | null;
   sparkline: number[] | null;
-  bollingerStatus: "high" | "low" | "squeeze" | "normal" | null;
+  bollingerSignal: BollingerSignalType | null;
+  bollingerTrend: BollingerTrend | null;
+  bollingerScore: number | null;
   bollingerDetail: string | null;
   maAligned: boolean | null;
   netBuySellAmountMillions: number | null;
@@ -197,30 +209,43 @@ interface VolatilityStats {
   trustCostBasis: number | null;
 }
 
-/** 20期布林通道 + 20日均帶寬（判斷squeeze用），沿用 scoreL6Technical.ts 的 %b/帶寬門檻邏輯，
- * 差別是這裡只需要單一分類結果給列表用，不用回傳完整分數。 */
-function classifyBollinger(closes: number[]): { status: VolatilityStats["bollingerStatus"]; detail: string | null } {
-  if (closes.length < 40) return { status: null, detail: null };
-  const bb = bollingerBands(closes);
-  const last = closes.length - 1;
-  const percentB = bb.percentB[last];
-  const bandwidth = bb.bandwidth[last];
-  if (percentB === null || bandwidth === null) return { status: null, detail: null };
+const BOLLINGER_TREND_LABEL_ZH: Record<BollingerTrend, string> = {
+  strongBullish: "強勢多頭",
+  bullish: "多頭排列",
+  bearish: "空頭排列",
+  rangeBound: "區間盤整",
+  neutral: "中性",
+};
 
-  const recentBandwidths = bb.bandwidth.slice(last - 19, last + 1).filter((b): b is number => b !== null);
-  const bandwidthAvg20 = recentBandwidths.length > 0 ? recentBandwidths.reduce((a, b) => a + b, 0) / recentBandwidths.length : null;
-  const squeeze = bandwidthAvg20 !== null && bandwidth < bandwidthAvg20 * 0.5;
+const BOLLINGER_SIGNAL_LABEL_ZH: Record<BollingerSignalType, string> = {
+  buyOversold: "超跌反彈",
+  buyMa20Breakout: "站上月線",
+  sellOverbought: "過熱拉回",
+  sellMa20Breakdown: "跌破月線",
+  squeezeBullishBreakout: "收斂後向上突破",
+  squeezeBearishBreakout: "收斂後向下跌破",
+  squeezeWatch: "通道收斂待變盤",
+  hold: "無明顯訊號",
+};
 
-  const detail = `%b=${percentB.toFixed(2)}，帶寬${(bandwidth * 100).toFixed(1)}%${bandwidthAvg20 !== null ? `（20日均${(bandwidthAvg20 * 100).toFixed(1)}%）` : ""}`;
+/**
+ * 完整布林通道分析（見 src/lib/trend/bollinger），取代舊版單純比較 %b 高低/帶寬的
+ * classifyBollinger()——會判斷突破/跌破的行為序列跟趨勢方向，不是碰到軌道就當訊號。
+ * bars 需要完整 OHLCV（不能只有收盤價），因為 Signal A/C 的止跌/反轉K線判斷要用到高低點。
+ */
+function classifyBollinger(bars: OhlcvBar[]): {
+  signal: BollingerSignalType | null;
+  trend: BollingerTrend | null;
+  score: number | null;
+  detail: string | null;
+} {
+  const result = analyzeLatestBollingerDay(bars);
+  if (!result.bands) return { signal: null, trend: null, score: null, detail: null };
 
-  const status: VolatilityStats["bollingerStatus"] = squeeze
-    ? "squeeze"
-    : percentB >= 0.8
-      ? "high"
-      : percentB <= 0.2
-        ? "low"
-        : "normal";
-  return { status, detail };
+  const scoreLabel = result.score > 0 ? `+${result.score}` : `${result.score}`;
+  const detail = `${BOLLINGER_TREND_LABEL_ZH[result.trend]}｜${BOLLINGER_SIGNAL_LABEL_ZH[result.signal]}（分數${scoreLabel}）%b=${result.bands.percentB.toFixed(2)}，帶寬${(result.bands.bandwidth * 100).toFixed(1)}%`;
+
+  return { signal: result.signal, trend: result.trend, score: result.score, detail };
 }
 
 function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
@@ -256,7 +281,9 @@ function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
     changePctSinceSignal,
     todayChangePct: stats?.todayChangePct ?? null,
     volatilitySinceSignal: stats?.volatilitySinceSignal ?? null,
-    bollingerStatus: stats?.bollingerStatus ?? null,
+    bollingerSignal: stats?.bollingerSignal ?? null,
+    bollingerTrend: stats?.bollingerTrend ?? null,
+    bollingerScore: stats?.bollingerScore ?? null,
     bollingerDetail: stats?.bollingerDetail ?? null,
     todayChangeAmount: stats?.todayChangeAmount ?? null,
     maAligned: stats?.maAligned ?? null,
@@ -311,7 +338,7 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
     prisma.twDailyPrice.findMany({
       where: { stockId: { in: stockIds }, tradeDate: { gte: cutoff } },
       orderBy: [{ stockId: "asc" }, { tradeDate: "asc" }],
-      select: { stockId: true, tradeDate: true, close: true },
+      select: { stockId: true, tradeDate: true, open: true, high: true, low: true, close: true, volume: true },
     }),
     prisma.twInstitutionalTrading.findMany({
       where: { stockId: { in: stockIds }, tradeDate: { gte: cutoff } },
@@ -340,10 +367,20 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
     institutionalSeriesByStock.set(h.stockId, list);
   }
 
-  const seriesByStock = new Map<number, { tradeDate: Date; close: number }[]>();
+  const seriesByStock = new Map<
+    number,
+    { tradeDate: Date; open: number; high: number; low: number; close: number; volume: number }[]
+  >();
   for (const h of history) {
     const list = seriesByStock.get(h.stockId) ?? [];
-    list.push({ tradeDate: h.tradeDate, close: Number(h.close) });
+    list.push({
+      tradeDate: h.tradeDate,
+      open: Number(h.open),
+      high: Number(h.high),
+      low: Number(h.low),
+      close: Number(h.close),
+      volume: Number(h.volume),
+    });
     seriesByStock.set(h.stockId, list);
   }
   const latestInstitutionalByStock = new Map(institutionalHistory.map((h) => [h.stockId, h]));
@@ -382,7 +419,20 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
 
     const closes = series.map((s) => s.close);
     const sparkline = series.length >= 2 ? closes.slice(-SPARKLINE_POINTS) : null;
-    const { status: bollingerStatus, detail: bollingerDetail } = classifyBollinger(closes);
+    const bars: OhlcvBar[] = series.map((s) => ({
+      date: s.tradeDate.toISOString().slice(0, 10),
+      open: s.open,
+      high: s.high,
+      low: s.low,
+      close: s.close,
+      volume: s.volume,
+    }));
+    const {
+      signal: bollingerSignal,
+      trend: bollingerTrend,
+      score: bollingerScore,
+      detail: bollingerDetail,
+    } = classifyBollinger(bars);
 
     let maAligned: boolean | null = null;
     if (closes.length >= 20) {
@@ -441,7 +491,9 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
       todayChangeAmount,
       volatilitySinceSignal,
       sparkline,
-      bollingerStatus,
+      bollingerSignal,
+      bollingerTrend,
+      bollingerScore,
       bollingerDetail,
       maAligned,
       netBuySellAmountMillions,
