@@ -55,6 +55,8 @@ export interface EtfOverviewItem {
   latestClose: number | null;
   latestTradeDate: string | null;
   dayChangePct: number | null;
+  /** 最新一個交易日成交股數，原始單位是股（TWSE Trading_Volume 沒有換算），UI 顯示要自己 ÷1000 換算成張 */
+  latestVolume: number | null;
 }
 
 /** 只抓近30個日曆天的價格，不管單一ETF背後有沒有回填多年歷史——這裡只需要最新2筆算日漲跌，
@@ -78,7 +80,11 @@ export async function queryEtfOverview(): Promise<EtfOverviewItem[]> {
     select: { tradeDate: true },
   });
 
-  const buildItem = (s: (typeof stocks)[number], latest?: { tradeDate: Date; close: number }, prev?: { tradeDate: Date; close: number }): EtfOverviewItem => ({
+  const buildItem = (
+    s: (typeof stocks)[number],
+    latest?: { tradeDate: Date; close: number; volume: number },
+    prev?: { tradeDate: Date; close: number }
+  ): EtfOverviewItem => ({
     ticker: s.ticker,
     name: s.companyName,
     structureType: classifyStructureType(s.ticker),
@@ -86,6 +92,7 @@ export async function queryEtfOverview(): Promise<EtfOverviewItem[]> {
     latestClose: latest ? latest.close : null,
     latestTradeDate: latest ? latest.tradeDate.toISOString().slice(0, 10) : null,
     dayChangePct: latest && prev && prev.close !== 0 ? ((latest.close - prev.close) / prev.close) * 100 : null,
+    latestVolume: latest ? latest.volume : null,
   });
 
   if (!latestPriceRow) return stocks.map((s) => buildItem(s));
@@ -94,13 +101,13 @@ export async function queryEtfOverview(): Promise<EtfOverviewItem[]> {
   const recentPrices = await prisma.twDailyPrice.findMany({
     where: { stockId: { in: stockIds }, tradeDate: { gte: cutoff } },
     orderBy: [{ stockId: "asc" }, { tradeDate: "desc" }],
-    select: { stockId: true, tradeDate: true, close: true },
+    select: { stockId: true, tradeDate: true, close: true, volume: true },
   });
 
-  const latestTwoByStock = new Map<number, { tradeDate: Date; close: number }[]>();
+  const latestTwoByStock = new Map<number, { tradeDate: Date; close: number; volume: number }[]>();
   for (const p of recentPrices) {
     const list = latestTwoByStock.get(p.stockId) ?? [];
-    if (list.length < 2) list.push({ tradeDate: p.tradeDate, close: Number(p.close) });
+    if (list.length < 2) list.push({ tradeDate: p.tradeDate, close: Number(p.close), volume: Number(p.volume) });
     latestTwoByStock.set(p.stockId, list);
   }
 
