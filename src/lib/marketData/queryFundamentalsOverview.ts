@@ -58,3 +58,42 @@ export async function queryFundamentalsOverview(): Promise<FundamentalsOverview>
 
   return { asOfMonths: LOOKBACK_MONTHS, signalCounts, pendingCount, items };
 }
+
+export interface EarningsCallItem {
+  ticker: string;
+  companyName: string;
+  conferenceDate: string;
+  pdfUrl: string;
+  profitGrowthSummary: string | null;
+  outlookSummary: string | null;
+  riskSummary: string | null;
+  signal: "positive" | "neutral" | "negative" | null;
+}
+
+/** 給研究簡報（computeThemeNarrative.ts）用：指定ticker清單近N個月的法說會分析，
+ * 泛化自/tw/stock/[ticker]頁面原本內嵌的單股查詢（該頁面直接查prisma.earningsCallAnalysis
+ * .findMany({where:{stockId}})，沒有共用函式）。monthsBack預設跟queryFundamentalsOverview()
+ * 一樣3個月——法說會一季一次，抓太短窗口可能整個theme一篇都沒有。 */
+export async function queryEarningsCallAnalysesForTickers(tickers: string[], monthsBack = 3): Promise<EarningsCallItem[]> {
+  if (tickers.length === 0) return [];
+
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - monthsBack);
+
+  const rows = await prisma.earningsCallAnalysis.findMany({
+    where: { conferenceDate: { gte: cutoff }, stock: { ticker: { in: tickers } } },
+    orderBy: { conferenceDate: "desc" },
+    include: { stock: { select: { ticker: true, companyName: true } } },
+  });
+
+  return rows.map((r) => ({
+    ticker: r.stock.ticker,
+    companyName: r.stock.companyName,
+    conferenceDate: r.conferenceDate.toISOString().slice(0, 10),
+    pdfUrl: buildMopsPdfUrl(r.pdfFileName),
+    profitGrowthSummary: r.profitGrowthSummary,
+    outlookSummary: r.outlookSummary,
+    riskSummary: r.riskSummary,
+    signal: r.signal,
+  }));
+}

@@ -326,7 +326,15 @@ export function ChainExplorer() {
 
       {activeChain && (
         <div className="mt-4 flex flex-col gap-5">
-          <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">{activeChain.chainNameFull}</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">{activeChain.chainNameFull}</p>
+            <Link
+              href={`/tw/chains/${encodeURIComponent(activeChain.chainName)}`}
+              className="shrink-0 text-xs font-medium text-violet-600 hover:underline dark:text-violet-400"
+            >
+              看完整研究簡報 →
+            </Link>
+          </div>
           {sortedStages.map((stage) => (
             <SubCard key={stage.stageKey}>
               <StageHeading stageKey={stage.stageKey} label={stage.label} />

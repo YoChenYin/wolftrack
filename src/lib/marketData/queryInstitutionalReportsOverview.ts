@@ -83,3 +83,59 @@ export async function queryInstitutionalReportsOverview(): Promise<Institutional
 
   return { asOfDays: LOOKBACK_DAYS, pendingCount, items };
 }
+
+/** 給研究簡報（computeThemeNarrative.ts）用：只留跟指定ticker清單有關的法人報告提及，
+ * 窗口天數可調（預設90天，比queryInstitutionalReportsOverview()的30天寬——這裡是回顧
+ * 一個產業主題近期被怎麼談論，不是「今天的市場評論」，不用卡那麼近）。跟
+ * queryInstitutionalReportsOverview()共用同一個include/mapping寫法，差別只在where多加
+ * ticker過濾、且回傳前把mentionedStocks也篩掉不在清單裡的股票（一篇報告可能同時提到
+ * 上下游好幾檔，只留這個theme關心的那幾檔）。 */
+export async function queryInstitutionalReportMentionsForTickers(
+  tickers: string[],
+  daysBack = 90
+): Promise<InstitutionalReportOverviewItem[]> {
+  if (tickers.length === 0) return [];
+
+  const stocks = await prisma.stock.findMany({
+    where: { market: "TW", ticker: { in: tickers } },
+    select: { id: true },
+  });
+  const stockIds = stocks.map((s) => s.id);
+  if (stockIds.length === 0) return [];
+
+  const cutoff = new Date(Date.now() - daysBack * 86_400_000);
+  const tickerSet = new Set(tickers);
+
+  const rows = await prisma.institutionalReportArticle.findMany({
+    where: { publishDate: { gte: cutoff }, mentions: { some: { stockId: { in: stockIds } } } },
+    orderBy: { publishDate: "desc" },
+    include: { mentions: { include: { stock: { select: { ticker: true, companyName: true } } } } },
+  });
+
+  return rows.map((r) => ({
+    postId: r.postId,
+    title: r.title,
+    publishDate: r.publishDate.toISOString().slice(0, 10),
+    category: r.category,
+    sourceName: r.sourceName,
+    sourceUrl: r.sourceUrl,
+    industryTheme: r.industryTheme,
+    summary: r.summary,
+    signal: r.signal,
+    keyMetrics: r.keyMetrics as unknown as KeyMetric[] | null,
+    bullCoreLogic: r.bullCoreLogic,
+    bullTrigger: r.bullTrigger,
+    bearCoreLogic: r.bearCoreLogic,
+    bearBottleneck: r.bearBottleneck,
+    tags: r.tags as unknown as string[] | null,
+    mentionedStocks: r.mentions
+      .filter((m) => m.stock !== null && tickerSet.has(m.stock.ticker))
+      .map((m) => ({
+        ticker: m.stock!.ticker,
+        companyName: m.stock!.companyName,
+        sentiment: m.sentiment,
+        chainLayer: m.chainLayer,
+        role: m.role,
+      })),
+  }));
+}

@@ -27,7 +27,7 @@ function median(values: number[]): number | null {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
-function round2(n: number): number {
+export function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
@@ -114,7 +114,7 @@ export async function computeBacktestSummary(excludeEtf = true): Promise<Categor
 
 /** 樣本數低於這個門檻，不當作「已經有統計意義」——實測headShoulders只有243筆（vs其他
  * 分類動輒2萬~9萬筆），數字噪音太大，UI上寧可繼續顯示「效果未驗證」也不要秀出不穩定的數字 */
-const MIN_SAMPLE_SIZE_FOR_UI = 500;
+export const MIN_SAMPLE_SIZE_FOR_UI = 500;
 
 export interface BadgeStats {
   category: BacktestCategory;

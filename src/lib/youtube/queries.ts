@@ -85,12 +85,23 @@ export interface StockMentionOverviewItem {
  * 給首頁「網紅視角」總覽用：近N天內被提到的個股，跨頻道合併同一檔股票的重複提及，
  * 依「幾個不同頻道都提到」排序（跨頻道一致性比單一頻道講很多次更有參考價值）。
  * 只算已成功解析出stockId的提及；LLM判定不出對應股票的原始名稱不計入合併統計。
+ *
+ * tickers：可選過濾清單（研究簡報computeThemeNarrative.ts用，只看指定theme成分股的提及）；
+ * 不傳=首頁總覽原本的行為，全市場都算。
  */
-export async function fetchStockMentionOverview(daysBack = 14): Promise<StockMentionOverviewItem[]> {
+export async function fetchStockMentionOverview(daysBack = 14, tickers?: string[]): Promise<StockMentionOverviewItem[]> {
   const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000);
 
+  let stockIdFilter: { in: number[] } | { not: null } = { not: null };
+  if (tickers) {
+    if (tickers.length === 0) return [];
+    const stocks = await prisma.stock.findMany({ where: { market: "TW", ticker: { in: tickers } }, select: { id: true } });
+    if (stocks.length === 0) return [];
+    stockIdFilter = { in: stocks.map((s) => s.id) };
+  }
+
   const mentions = await prisma.youtubeStockMention.findMany({
-    where: { stockId: { not: null }, video: { publishedAt: { gte: since } } },
+    where: { stockId: stockIdFilter, video: { publishedAt: { gte: since } } },
     include: {
       stock: { select: { ticker: true, companyName: true } },
       video: { select: { channelId: true, publishedAt: true } },

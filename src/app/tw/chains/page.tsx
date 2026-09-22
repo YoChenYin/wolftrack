@@ -2,6 +2,7 @@ import { ChainExplorer } from "@/components/tw/ChainExplorer";
 import { ChainRotationChart } from "@/components/tw/ChainRotationChart";
 import { ThemeFlowChart } from "@/components/tw/ThemeFlowChart";
 import { ThemeHeatmapWithNavigation } from "@/components/tw/ThemeHeatmapWithNavigation";
+import { OrphanThemesCard } from "@/components/tw/OrphanThemesCard";
 import { TwSectionNav } from "@/components/tw/TwSectionNav";
 
 // 這個頁面直接查資料庫顯示每日更新的訊號，不能被當成靜態頁面在 build time 凍結一份快照
@@ -47,6 +48,7 @@ export default function TwChainsPage() {
           <ChainRotationChart />
           <ThemeFlowChart />
           <ThemeHeatmapWithNavigation />
+          <OrphanThemesCard />
         </div>
       </main>
     </div>
