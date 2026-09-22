@@ -1,4 +1,5 @@
 import { ChainExplorer } from "@/components/tw/ChainExplorer";
+import { ThemeCapitalRadarWithNavigation } from "@/components/tw/ThemeCapitalRadarWithNavigation";
 import { ChainRotationChart } from "@/components/tw/ChainRotationChart";
 import { ThemeFlowChart } from "@/components/tw/ThemeFlowChart";
 import { ThemeHeatmapWithNavigation } from "@/components/tw/ThemeHeatmapWithNavigation";
@@ -45,6 +46,7 @@ export default function TwChainsPage() {
 
         <div className="tw-reveal flex flex-col gap-4" style={{ animationDelay: "80ms" }}>
           <ChainExplorer />
+          <ThemeCapitalRadarWithNavigation />
           <ChainRotationChart />
           <ThemeFlowChart />
           <ThemeHeatmapWithNavigation />

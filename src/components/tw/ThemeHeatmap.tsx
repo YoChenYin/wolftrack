@@ -5,7 +5,9 @@ import { LayoutGrid } from "lucide-react";
 import { Card } from "../ui/Card";
 import { SectionHeader } from "../ui/SectionHeader";
 import { FetchError } from "../ui/FetchError";
+import { IconBadge } from "../ui/IconBadge";
 import { useJsonFetch } from "@/lib/useJsonFetch";
+import { classifyThemeMomentum, THEME_MOMENTUM_META } from "@/lib/valuation/themeMomentum";
 
 interface ThemeChainStage {
   chainName: string;
@@ -16,9 +18,11 @@ interface ThemeChainStage {
 interface ThemeHeatmapCell {
   themeName: string;
   category: string;
+  return1d: number | null;
   return5d: number | null;
   return10d: number | null;
   return20d: number | null;
+  concentration1d: number | null;
   concentration5d: number | null;
   concentration10d: number | null;
   concentration20d: number | null;
@@ -90,7 +94,7 @@ function ReturnCell({ return: r, concentration }: { return: number | null; conce
 
 export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: string) => void }) {
   const { data, error, retry } = useJsonFetch<{ cells: ThemeHeatmapCell[] }>("/api/theme-heatmap");
-  const [sortBy, setSortBy] = useState<"return5d" | "return10d" | "return20d">("return20d");
+  const [sortBy, setSortBy] = useState<"return1d" | "return5d" | "return10d" | "return20d">("return20d");
   const [chainFilter, setChainFilter] = useState<string | null>(null);
   const cells = data?.cells ?? null;
 
@@ -121,7 +125,7 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <SectionHeader icon={LayoutGrid} iconColor="violet" title="板塊熱圖" />
         <div className="flex flex-wrap gap-1 text-[11px]">
-          {(["return5d", "return10d", "return20d"] as const).map((key) => (
+          {(["return1d", "return5d", "return10d", "return20d"] as const).map((key) => (
             <button
               key={key}
               type="button"
@@ -132,7 +136,7 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
                   : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-white/10 dark:text-zinc-400 dark:hover:bg-white/15"
               }`}
             >
-              依{key === "return5d" ? "5日" : key === "return10d" ? "10日" : "20日"}排序
+              依{key === "return1d" ? "今日" : key === "return5d" ? "5日" : key === "return10d" ? "10日" : "20日"}排序
             </button>
           ))}
         </div>
@@ -174,20 +178,25 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
           <thead className="sticky top-0 bg-white dark:bg-zinc-900">
             <tr className="text-left text-zinc-400 dark:text-zinc-500">
               <th className="pb-1.5 font-normal">板塊</th>
+              <th className="w-20 pb-1.5 text-right font-normal">今日</th>
               <th className="w-20 pb-1.5 text-right font-normal">5日</th>
               <th className="w-20 pb-1.5 text-right font-normal">10日</th>
               <th className="w-20 pb-1.5 text-right font-normal">20日</th>
             </tr>
           </thead>
           <tbody>
-            {sorted.map((cell) => (
+            {sorted.map((cell) => {
+              const bucket = classifyThemeMomentum(cell);
+              const bucketMeta = bucket ? THEME_MOMENTUM_META[bucket] : null;
+              return (
               <tr
                 key={cell.themeName}
                 onClick={() => onSelectTheme(cell.themeName)}
                 className="cursor-pointer border-t border-zinc-50 hover:bg-zinc-50 dark:border-white/5 dark:hover:bg-white/5"
               >
                 <td className="py-1 pr-2 font-medium text-zinc-800 dark:text-zinc-200">
-                  {cell.themeName}
+                  {bucketMeta && <IconBadge icon={bucketMeta.icon} color={bucketMeta.color} size="sm" />}
+                  <span className={bucketMeta ? "ml-1.5" : ""}>{cell.themeName}</span>
                   {cell.sampleSize > 0 && (
                     <span className="ml-1 text-[10px] font-normal text-zinc-400 dark:text-zinc-500">
                       ({cell.sampleSize})
@@ -203,6 +212,9 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
                   ))}
                 </td>
                 <td className="py-1">
+                  <ReturnCell return={cell.return1d} concentration={cell.concentration1d} />
+                </td>
+                <td className="py-1">
                   <ReturnCell return={cell.return5d} concentration={cell.concentration5d} />
                 </td>
                 <td className="py-1">
@@ -212,7 +224,8 @@ export function ThemeHeatmap({ onSelectTheme }: { onSelectTheme: (themeName: str
                   <ReturnCell return={cell.return20d} concentration={cell.concentration20d} />
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

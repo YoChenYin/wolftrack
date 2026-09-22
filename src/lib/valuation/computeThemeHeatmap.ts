@@ -1,16 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { getGroupConfig } from "./groupConfig";
-import { calculateChipConcentration } from "@/lib/trend/tw/chipConcentration";
+import { calculateChipConcentration, concentrationForWindow } from "@/lib/trend/tw/chipConcentration";
 import type { InstitutionalDay } from "@/lib/trend/tw/chipScore";
 
 export interface ThemeHeatmapCell {
   themeName: string;
   category: string;
+  /** 2026-09-22新增：單一交易日（今天）報酬率，給「板塊資金雷達」（ThemeCapitalRadar.tsx）
+   * 判斷「今天是否還在延續本週的走勢」用，5/10/20日看不出今天這一天的方向 */
+  return1d: number | null;
   return5d: number | null;
   return10d: number | null;
   return20d: number | null;
   /** 2026-07-26新增：族群平均籌碼集中度（投信+外資買超佔量能比例），使用者的假設是「籌碼
    * 領先股價」——集中度轉強通常比報酬率更早出現，所以跟報酬率並列顯示，不是取代它 */
+  concentration1d: number | null;
   concentration5d: number | null;
   concentration10d: number | null;
   concentration20d: number | null;
@@ -93,10 +97,11 @@ export async function computeThemeHeatmap(): Promise<ThemeHeatmapCell[]> {
     return Math.round(((latest - past) / past) * 10000) / 100;
   }
 
-  function tickerReturns(ticker: string): { r5: number | null; r10: number | null; r20: number | null } {
+  function tickerReturns(ticker: string): { r1: number | null; r5: number | null; r10: number | null; r20: number | null } {
     const stockId = stockIdByTicker.get(ticker);
     const bars = stockId !== undefined ? barsByStockId.get(stockId) : undefined;
     return {
+      r1: returnOverDays(bars, 1),
       r5: returnOverDays(bars, 5),
       r10: returnOverDays(bars, 10),
       r20: returnOverDays(bars, 20),
@@ -104,12 +109,12 @@ export async function computeThemeHeatmap(): Promise<ThemeHeatmapCell[]> {
   }
 
   /** 沒有籌碼資料的股票回傳null（不當成0，避免拉低平均），跟報酬率的null語意一致 */
-  function tickerConcentration(ticker: string): { c5: number | null; c10: number | null; c20: number | null } {
+  function tickerConcentration(ticker: string): { c1: number | null; c5: number | null; c10: number | null; c20: number | null } {
     const stockId = stockIdByTicker.get(ticker);
     const days = stockId !== undefined ? institutionalDaysByStockId.get(stockId) : undefined;
-    if (!days || days.length === 0) return { c5: null, c10: null, c20: null };
+    if (!days || days.length === 0) return { c1: null, c5: null, c10: null, c20: null };
     const result = calculateChipConcentration(days);
-    return { c5: result.concentration5, c10: result.concentration10, c20: result.concentration20 };
+    return { c1: concentrationForWindow(days, 1), c5: result.concentration5, c10: result.concentration10, c20: result.concentration20 };
   }
 
   function avg(values: (number | null)[]): number | null {
@@ -126,9 +131,11 @@ export async function computeThemeHeatmap(): Promise<ThemeHeatmapCell[]> {
       cells.push({
         themeName: theme.theme_name,
         category,
+        return1d: avg(perMember.map((m) => m.r1)),
         return5d: avg(perMember.map((m) => m.r5)),
         return10d: avg(perMember.map((m) => m.r10)),
         return20d: avg(perMember.map((m) => m.r20)),
+        concentration1d: avg(perMemberConcentration.map((m) => m.c1)),
         concentration5d: avg(perMemberConcentration.map((m) => m.c5)),
         concentration10d: avg(perMemberConcentration.map((m) => m.c10)),
         concentration20d: avg(perMemberConcentration.map((m) => m.c20)),

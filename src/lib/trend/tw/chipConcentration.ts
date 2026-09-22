@@ -18,7 +18,7 @@ function sum(values: number[]): number {
  * Concentration(N) = (近N日外資買超張數 + 近N日投信買超張數) / 近N日總成交量（張） × 100%
  * ✅已確認公式（docs/wolftrack-tw-spec.md 3.6，取自 AlphaFlow TW 既有邏輯，以張數計算）。
  */
-function concentrationForWindow(days: InstitutionalDay[], windowDays: number): number {
+export function concentrationForWindow(days: InstitutionalDay[], windowDays: number): number {
   const window = days.slice(-windowDays);
   if (window.length === 0) return 0;
   const netSum = sum(window.map((d) => d.foreignNetBuyShares + d.investTrustNetBuyShares));

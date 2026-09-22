@@ -65,16 +65,20 @@ export function ThemeFlowChart() {
   const { dates, series } = data;
   const visibleSeries = series.filter((s) => !hiddenCategories.has(s.category));
 
-  // hover當下，哪個族群最強/最弱——用來在線圖跟下方明細都做出視覺強調，不是每條線一樣顯眼
+  // 沒在hover時預設看「今日」（最後一個交易日），滑過折線才是看歷史上其他天——
+  // 不用hover互動也能直接回答「今天最強/最弱是誰」
+  const effectiveIndex = hoverIndex ?? dates.length - 1;
+
+  // effectiveIndex當下，哪個族群最強/最弱——用來在線圖跟下方明細都做出視覺強調，不是每條線一樣顯眼
   let strongestCategory: string | null = null;
   let weakestCategory: string | null = null;
-  if (hoverIndex !== null) {
-    const atHover = visibleSeries
-      .map((s) => ({ category: s.category, value: s.values[hoverIndex] }))
+  {
+    const atIndex = visibleSeries
+      .map((s) => ({ category: s.category, value: s.values[effectiveIndex] }))
       .filter((s): s is { category: string; value: number } => s.value !== null);
-    if (atHover.length > 0) {
-      strongestCategory = atHover.reduce((a, b) => (b.value > a.value ? b : a)).category;
-      weakestCategory = atHover.reduce((a, b) => (b.value < a.value ? b : a)).category;
+    if (atIndex.length > 0) {
+      strongestCategory = atIndex.reduce((a, b) => (b.value > a.value ? b : a)).category;
+      weakestCategory = atIndex.reduce((a, b) => (b.value < a.value ? b : a)).category;
     }
   }
   const allValues = visibleSeries.flatMap((s) => s.values.filter((v): v is number => v !== null));
@@ -125,7 +129,7 @@ export function ThemeFlowChart() {
     <Card>
       <SectionHeader icon={Activity} iconColor="blue" title="板塊資金流動" />
       <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-500">
-        14 大分類近{dates.length}個交易日的族群平均累積報酬指數（起點=100），看資金往哪個板塊移動。點圖例可隱藏/顯示該線。
+        14 大分類近{dates.length}個交易日的族群平均累積報酬指數（起點=100），看資金往哪個板塊移動。預設顯示今日最強/最弱，滑過折線可看其他日期。點圖例可隱藏/顯示該線。
       </p>
 
       <div className="mt-3 overflow-x-auto">
@@ -175,22 +179,20 @@ export function ThemeFlowChart() {
                 d={toPath(s.values)}
                 fill="none"
                 stroke={CATEGORY_COLORS[s.category] ?? "#71717a"}
-                strokeWidth={hoverIndex === null ? 1.75 : isExtreme ? 2.75 : 1}
-                opacity={hoverIndex === null ? 0.85 : isExtreme ? 1 : 0.25}
+                strokeWidth={isExtreme ? 2.75 : 1}
+                opacity={isExtreme ? 1 : 0.25}
               />
             );
           })}
 
-          {hoverIndex !== null && (
-            <line
-              x1={xFor(hoverIndex)}
-              x2={xFor(hoverIndex)}
-              y1={PADDING.top}
-              y2={CHART_HEIGHT - PADDING.bottom}
-              stroke="light-dark(#d4d4d8, #3f3f46)"
-              strokeWidth={1}
-            />
-          )}
+          <line
+            x1={xFor(effectiveIndex)}
+            x2={xFor(effectiveIndex)}
+            y1={PADDING.top}
+            y2={CHART_HEIGHT - PADDING.bottom}
+            stroke="light-dark(#d4d4d8, #3f3f46)"
+            strokeWidth={1}
+          />
 
           {dates.map((_, i) => (
             <rect
@@ -219,13 +221,15 @@ export function ThemeFlowChart() {
         </svg>
       </div>
 
-      {hoverIndex !== null && (
-        <div className="mt-1 rounded bg-zinc-50 p-2 text-[11px] dark:bg-white/5">
-          <span className="font-medium text-zinc-600 dark:text-zinc-300">{dates[hoverIndex]}</span>
+      <div className="mt-1 rounded bg-zinc-50 p-2 text-[11px] dark:bg-white/5">
+          <span className="font-medium text-zinc-600 dark:text-zinc-300">
+            {dates[effectiveIndex]}
+            {hoverIndex === null && <span className="ml-1 font-normal text-zinc-400 dark:text-zinc-500">（今日）</span>}
+          </span>
           <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 sm:grid-cols-3">
             {series
               .filter((s) => !hiddenCategories.has(s.category))
-              .map((s) => ({ ...s, v: s.values[hoverIndex] }))
+              .map((s) => ({ ...s, v: s.values[effectiveIndex] }))
               .sort((a, b) => (b.v ?? -Infinity) - (a.v ?? -Infinity))
               .map(({ category, v }) => {
                 const isStrongest = category === strongestCategory;
@@ -251,8 +255,7 @@ export function ThemeFlowChart() {
                 );
               })}
           </div>
-        </div>
-      )}
+      </div>
 
       <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5">
         {series.map((s) => (
