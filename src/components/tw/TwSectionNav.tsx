@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ListFilter, Workflow, Presentation, Landmark, Newspaper, PieChart } from "lucide-react";
+import { ListFilter, Workflow, Presentation, Landmark, Newspaper, PieChart, ClipboardCheck } from "lucide-react";
 
 const TABS = [
   { href: "/tw", icon: ListFilter, label: "選股-TW" },
@@ -11,6 +11,7 @@ const TABS = [
   { href: "/tw/institutional-reports", icon: Landmark, label: "法人報告" },
   { href: "/tw/report", icon: Newspaper, label: "每日異動" },
   { href: "/tw/etf", icon: PieChart, label: "ETF" },
+  { href: "/tw/track-record", icon: ClipboardCheck, label: "績效驗證" },
 ];
 
 /**
@@ -24,6 +25,7 @@ const TABS = [
  * 2026-08-29再加第六個分頁「ETF」——原本413檔ETF混在主選股表裡用股票挑選的邏輯分類（法人
  * 買賣超反映套利不是選股訊號），改成獨立整理，見sectorTrendsQuery.ts的buildStockFilter()
  * 排除ETF的說明。
+ * 2026-09再加第七個分頁「績效驗證」——平台實際選股照固定進出場規則模擬的逐筆報酬，見trackRecord.ts。
  */
 export function TwSectionNav() {
   const pathname = usePathname();

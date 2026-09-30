@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { BACKTEST_HORIZONS, type BacktestCategory, type BacktestHorizon } from "./backtestWalkForward";
+import type { TacticalStatus } from "@/lib/trend/sectorTrendsQuery";
 
 export interface HorizonStats {
   horizon: BacktestHorizon;
@@ -117,11 +118,36 @@ export async function computeBacktestSummary(excludeEtf = true): Promise<Categor
 export const MIN_SAMPLE_SIZE_FOR_UI = 500;
 
 export interface BadgeStats {
-  category: BacktestCategory;
+  category: TacticalStatus;
   sampleSize: number;
   winRatePct: number;
+  /** 訊號觸發後20個交易日（約一個月）的平均報酬率，2026-09新增——原本這個badge只顯示
+   * excessReturnPct（超額報酬），但「平均月報酬有多少%」本身才是使用者規劃部位大小/
+   * 報酬目標時真正要看的絕對數字，超額報酬只回答「有沒有比大盤好」 */
+  avgReturnPct: number;
   excessReturnPct: number;
 }
+
+type BadgeStatsRow = { category: string; sample_size: bigint; win_rate_pct: number | null; avg_return_pct: number | null; avg_taiex_return_pct: number | null };
+
+function toBadgeStats(category: TacticalStatus, row: BadgeStatsRow): BadgeStats | null {
+  const sampleSize = Number(row.sample_size);
+  if (sampleSize < MIN_SAMPLE_SIZE_FOR_UI || row.avg_return_pct === null || row.avg_taiex_return_pct === null || row.win_rate_pct === null) {
+    return null;
+  }
+  return {
+    category,
+    sampleSize,
+    winRatePct: round2(row.win_rate_pct),
+    avgReturnPct: round2(row.avg_return_pct),
+    excessReturnPct: round2(row.avg_return_pct - row.avg_taiex_return_pct),
+  };
+}
+
+/** 這4個是tw_signal_backtest_events裡直接對應TacticalStatus的分類；headShoulders/nShape
+ * 不在這裡——UI上這兩種底部型態呈現成同一個「底部出現」(bottomPattern) tab，回測badge
+ * 也要合併算，不能只單獨曝露其中一個（見下面的bottomPattern查詢） */
+const CHIP_FLOW_CATEGORIES: TacticalStatus[] = ["trustTurnBuy", "combinedBuy", "trustTurnSell", "combinedSell"];
 
 /**
  * 給選股清單tab標題的badge用（取代靜態的「效果未驗證」）——只查20日這個單一horizon、
@@ -129,12 +155,10 @@ export interface BadgeStats {
  * 撈進Node.js記憶體逐筆處理，這個查詢每次頁面載入都會跑，要控制成本。
  * 樣本數<MIN_SAMPLE_SIZE_FOR_UI的分類不會出現在回傳結果裡，呼叫端fallback回靜態「效果未驗證」。
  */
-export async function getBacktestBadgeStats(): Promise<Map<BacktestCategory, BadgeStats>> {
-  const rows = await prisma.$queryRaw<
-    { category: BacktestCategory; sample_size: bigint; win_rate_pct: number | null; avg_return_pct: number | null; avg_taiex_return_pct: number | null }[]
-  >`
+export async function getBacktestBadgeStats(): Promise<Map<TacticalStatus, BadgeStats>> {
+  const rows = await prisma.$queryRaw<BadgeStatsRow[]>`
     SELECT
-      e.category,
+      e.category::text AS category,
       COUNT(*) FILTER (WHERE e.return_20d IS NOT NULL) AS sample_size,
       (COUNT(*) FILTER (WHERE e.return_20d > 0))::float * 100.0 / NULLIF(COUNT(*) FILTER (WHERE e.return_20d IS NOT NULL), 0) AS win_rate_pct,
       AVG(e.return_20d) AS avg_return_pct,
@@ -145,18 +169,26 @@ export async function getBacktestBadgeStats(): Promise<Map<BacktestCategory, Bad
     GROUP BY e.category
   `;
 
-  const result = new Map<BacktestCategory, BadgeStats>();
+  const result = new Map<TacticalStatus, BadgeStats>();
   for (const row of rows) {
-    const sampleSize = Number(row.sample_size);
-    if (sampleSize < MIN_SAMPLE_SIZE_FOR_UI || row.avg_return_pct === null || row.avg_taiex_return_pct === null || row.win_rate_pct === null) {
-      continue;
-    }
-    result.set(row.category, {
-      category: row.category,
-      sampleSize,
-      winRatePct: round2(row.win_rate_pct),
-      excessReturnPct: round2(row.avg_return_pct - row.avg_taiex_return_pct),
-    });
+    if (!CHIP_FLOW_CATEGORIES.includes(row.category as TacticalStatus)) continue;
+    const stats = toBadgeStats(row.category as TacticalStatus, row);
+    if (stats) result.set(stats.category, stats);
   }
+
+  const pooledBottomPattern = await prisma.$queryRaw<BadgeStatsRow[]>`
+    SELECT
+      'bottomPattern' AS category,
+      COUNT(*) FILTER (WHERE e.return_20d IS NOT NULL) AS sample_size,
+      (COUNT(*) FILTER (WHERE e.return_20d > 0))::float * 100.0 / NULLIF(COUNT(*) FILTER (WHERE e.return_20d IS NOT NULL), 0) AS win_rate_pct,
+      AVG(e.return_20d) AS avg_return_pct,
+      AVG(e.taiex_return_20d) AS avg_taiex_return_pct
+    FROM tw_signal_backtest_events e
+    JOIN stocks s ON s.id = e.stock_id
+    WHERE s.industry IS DISTINCT FROM 'ETF' AND e.category IN ('headShoulders', 'nShape')
+  `;
+  const bottomPatternStats = pooledBottomPattern[0] ? toBadgeStats("bottomPattern", pooledBottomPattern[0]) : null;
+  if (bottomPatternStats) result.set("bottomPattern", bottomPatternStats);
+
   return result;
 }
