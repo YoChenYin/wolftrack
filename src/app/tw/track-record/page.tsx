@@ -1,11 +1,19 @@
-import { ClipboardCheck, ScrollText } from "lucide-react";
+import { BarChart3, ClipboardCheck, ScrollText } from "lucide-react";
 import { Card, SubCard } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { TwSectionNav } from "@/components/tw/TwSectionNav";
 import { TrackRecordTable } from "@/components/tw/TrackRecordTable";
+import { ReturnBarChart, computeDomain, type ReturnBarRow } from "@/components/tw/TrackRecordReturnChart";
 import { twReturnColor } from "@/lib/tw/color";
 import { computeTrackRecord, summarizeTrades, TRACK_RECORD_START_DATE, type TrackRecordStats } from "@/lib/trend/tw/trackRecord";
-import { ENTRY_SIGNAL_LABEL, TRACK_RECORD_EXIT_RULE as RULE, type EntrySignal } from "@/lib/trend/tw/trackRecordMeta";
+import {
+  ENTRY_SIGNAL_LABEL,
+  TRACK_RECORD_EXIT_RULE as RULE,
+  exitSignalLabel,
+  type EntrySignal,
+  type ExitSignal,
+  type TrackRecordTrade,
+} from "@/lib/trend/tw/trackRecordMeta";
 
 // 每天新訊號/新收盤價都會改變持有中部位的報酬，不能在build time凍結（跟 /tw 首頁同樣理由）
 export const dynamic = "force-dynamic";
@@ -52,6 +60,19 @@ function BreakdownRow({ label, stats }: { label: string; stats: TrackRecordStats
   );
 }
 
+function toBarRow(key: string, label: string, trades: TrackRecordTrade[]): ReturnBarRow {
+  const stats = summarizeTrades(trades);
+  return {
+    key,
+    label,
+    count: stats.count,
+    avgReturnPct: stats.avgReturnPct,
+    medianReturnPct: stats.medianReturnPct,
+    winRatePct: stats.winRatePct,
+    avgHoldingDays: stats.avgHoldingDays,
+  };
+}
+
 export default async function TwTrackRecordPage() {
   const trades = await computeTrackRecord();
   const closed = trades.filter((t) => t.status === "closed");
@@ -62,6 +83,15 @@ export default async function TwTrackRecordPage() {
     signal: s,
     stats: summarizeTrades(closed.filter((t) => t.entrySignal === s)),
   }));
+
+  // 長條圖只看已出場交易；出場方式列出規則會用到的條件+實際出現過的（規則改版前的舊交易可能有別的出場方式）
+  const entryRows = (Object.keys(ENTRY_SIGNAL_LABEL) as EntrySignal[]).map((sig) =>
+    toBarRow(sig, ENTRY_SIGNAL_LABEL[sig], closed.filter((t) => t.entrySignal === sig))
+  );
+  const exitKeys = new Set<ExitSignal>(["trailingStop", "takeProfit", "maxHolding"]);
+  for (const t of closed) if (t.exitSignal) exitKeys.add(t.exitSignal);
+  const exitRows = [...exitKeys].map((sig) => toBarRow(sig, exitSignalLabel(sig, RULE), closed.filter((t) => t.exitSignal === sig)));
+  const chartDomain = computeDomain([...entryRows, ...exitRows]);
 
   return (
     <div
@@ -134,6 +164,17 @@ export default async function TwTrackRecordPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </Card>
+        </div>
+
+        <div className="tw-reveal" style={{ animationDelay: "120ms" }}>
+          <Card>
+            <SectionHeader icon={BarChart3} iconColor="amber" title="各進出場方式的平均報酬" />
+            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">只計已出場交易，兩張圖共用同一個刻度；滑鼠移到長條上看筆數、勝率、中位數</p>
+            <div className="mt-4 grid gap-8 md:grid-cols-2">
+              <ReturnBarChart title="依進場訊號" rows={entryRows} domain={chartDomain} />
+              <ReturnBarChart title="依出場方式" rows={exitRows} domain={chartDomain} />
             </div>
           </Card>
         </div>

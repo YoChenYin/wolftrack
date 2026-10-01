@@ -182,6 +182,7 @@ export interface TrackRecordStats {
   count: number;
   winRatePct: number | null;
   avgReturnPct: number | null;
+  medianReturnPct: number | null;
   avgExcessReturnPct: number | null;
   avgHoldingDays: number | null;
 }
@@ -191,12 +192,21 @@ function avg(values: number[]): number | null {
   return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 100) / 100;
 }
 
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const m = sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  return Math.round(m * 100) / 100;
+}
+
 export function summarizeTrades(trades: TrackRecordTrade[]): TrackRecordStats {
   const returns = trades.map((t) => t.returnPct).filter((v): v is number => v !== null);
   return {
     count: trades.length,
     winRatePct: returns.length > 0 ? Math.round((returns.filter((r) => r > 0).length / returns.length) * 1000) / 10 : null,
     avgReturnPct: avg(returns),
+    medianReturnPct: median(returns),
     avgExcessReturnPct: avg(trades.map((t) => t.excessReturnPct).filter((v): v is number => v !== null)),
     avgHoldingDays: avg(trades.map((t) => t.holdingDays).filter((v): v is number => v !== null)),
   };

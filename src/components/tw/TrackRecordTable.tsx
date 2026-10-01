@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import {
   ENTRY_SIGNAL_LABEL,
   TRACK_RECORD_EXIT_RULE,
@@ -15,6 +15,8 @@ import { twReturnColor } from "@/lib/tw/color";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 
 type StatusFilter = "all" | TradeStatus;
+type SortKey = "holdingDays" | "returnPct";
+type SortState = { key: SortKey; dir: "desc" | "asc" } | null;
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "全部" },
@@ -81,15 +83,47 @@ function SignalCell({ label, date, reason }: { label: string | null; date: strin
   );
 }
 
-/** 逐筆交易表：狀態/進場訊號兩組篩選，預設依進場訊號日期新到舊（伺服器端已排好） */
+/** 可排序欄位的表頭：點一下由大到小、再點由小到大、第三下回到預設排序 */
+function SortHeader({ label, sortKey, sort, onSort }: { label: string; sortKey: SortKey; sort: SortState; onSort: (s: SortState) => void }) {
+  const active = sort?.key === sortKey;
+  const Icon = !active ? ArrowUpDown : sort.dir === "desc" ? ArrowDown : ArrowUp;
+  const next: SortState = !active ? { key: sortKey, dir: "desc" } : sort.dir === "desc" ? { key: sortKey, dir: "asc" } : null;
+  return (
+    <th className="px-3 py-2 text-right font-medium" aria-sort={active ? (sort.dir === "desc" ? "descending" : "ascending") : "none"}>
+      <button
+        type="button"
+        onClick={() => onSort(next)}
+        className={`inline-flex items-center gap-1 transition-colors hover:text-zinc-700 dark:hover:text-zinc-200 ${
+          active ? "text-zinc-800 dark:text-zinc-100" : ""
+        }`}
+      >
+        {label}
+        <Icon className="h-3 w-3" strokeWidth={2.25} />
+      </button>
+    </th>
+  );
+}
+
+/** 逐筆交易表：狀態/進場訊號兩組篩選，預設依進場訊號日期新到舊（伺服器端已排好），
+ * 持有天數/報酬率可點表頭排序，沒有值的（待進場）一律排最後 */
 export function TrackRecordTable({ trades }: { trades: TrackRecordTrade[] }) {
   const [status, setStatus] = useState<StatusFilter>("all");
   const [signal, setSignal] = useState<EntrySignal | "all">("all");
+  const [sort, setSort] = useState<SortState>(null);
 
-  const filtered = useMemo(
-    () => trades.filter((t) => (status === "all" || t.status === status) && (signal === "all" || t.entrySignal === signal)),
-    [trades, status, signal]
-  );
+  const filtered = useMemo(() => {
+    const rows = trades.filter((t) => (status === "all" || t.status === status) && (signal === "all" || t.entrySignal === signal));
+    if (!sort) return rows;
+    const sign = sort.dir === "desc" ? -1 : 1;
+    return [...rows].sort((a, b) => {
+      const va = a[sort.key];
+      const vb = b[sort.key];
+      if (va === null && vb === null) return 0;
+      if (va === null) return 1;
+      if (vb === null) return -1;
+      return (va - vb) * sign;
+    });
+  }, [trades, status, signal, sort]);
 
   return (
     <div>
@@ -128,8 +162,8 @@ export function TrackRecordTable({ trades }: { trades: TrackRecordTrade[] }) {
                 <th className="px-1 py-2" aria-hidden />
                 <th className="px-3 py-2 font-medium">出場訊號</th>
                 <th className="px-3 py-2 text-right font-medium">出場日／賣出價</th>
-                <th className="px-3 py-2 text-right font-medium">持有</th>
-                <th className="px-3 py-2 text-right font-medium">報酬率</th>
+                <SortHeader label="持有" sortKey="holdingDays" sort={sort} onSort={setSort} />
+                <SortHeader label="報酬率" sortKey="returnPct" sort={sort} onSort={setSort} />
                 <th className="px-3 py-2 text-right font-medium">vs 大盤</th>
               </tr>
             </thead>
