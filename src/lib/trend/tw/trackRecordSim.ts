@@ -61,6 +61,69 @@ export function entrySignalOf(day: SimDay | undefined): EntrySignal | null {
   return day.hasBottomPattern ? "bottomPattern" : null;
 }
 
+/** 持有中部位的狀態，模擬交易跟使用者實際持倉（evaluatePosition）共用 */
+interface PositionState {
+  entryIndex: number;
+  entryPrice: number;
+  targetPrice: number | null;
+  stopPrice: number | null;
+  maxCloseSinceEntry: number;
+  trustSellStreak: number;
+}
+
+type ExitDecision =
+  /** 當天就成交（盤中停損/停利、持有期滿收盤） */
+  | { kind: "filled"; signal: ExitSignal; index: number; price: number; field: "close" | "intraday"; reason: string | null }
+  /** 收盤後才確認的訊號，隔天開盤成交 */
+  | { kind: "nextOpen"; signal: ExitSignal; reason: string | null };
+
+/**
+ * 第i天持有中部位要不要出場，順序：盤中停損→盤中停利→持有期滿→收盤後條件（反向訊號/
+ * 投信連賣/移動停利）。會更新pos的最高收盤/投信連賣天數，所以每天只能呼叫一次、要照順序。
+ */
+function checkExit(
+  pos: PositionState,
+  bars: SimBar[],
+  i: number,
+  ma: (number | null)[] | null,
+  day: SimDay | undefined,
+  trustNet: number | undefined,
+  rule: ExitRule
+): ExitDecision | null {
+  const bar = bars[i];
+  const heldDays = i - pos.entryIndex + 1;
+
+  // 保守起見同一天先檢查停損再檢查停利
+  if (pos.stopPrice !== null && bar.low <= pos.stopPrice) {
+    return { kind: "filled", signal: "stopLoss", index: i, price: Math.min(bar.open, pos.stopPrice), field: "intraday", reason: null };
+  }
+  if (pos.targetPrice !== null && pos.targetPrice > pos.entryPrice && bar.high >= pos.targetPrice) {
+    return { kind: "filled", signal: "takeProfit", index: i, price: Math.max(bar.open, pos.targetPrice), field: "intraday", reason: null };
+  }
+  if (heldDays >= rule.maxHoldingDays) {
+    return { kind: "filled", signal: "maxHolding", index: i, price: bar.close, field: "close", reason: null };
+  }
+
+  pos.maxCloseSinceEntry = Math.max(pos.maxCloseSinceEntry, bar.close);
+  pos.trustSellStreak = trustNet !== undefined && trustNet < 0 ? pos.trustSellStreak + 1 : 0;
+
+  if (rule.reverseSignal && day && SELL_STATUSES.has(day.status)) {
+    return { kind: "nextOpen", signal: day.status as ExitSignal, reason: day.triggerReason };
+  }
+  if (rule.trustSellStreak !== null && pos.trustSellStreak >= rule.trustSellStreak) {
+    return { kind: "nextOpen", signal: "trustSellStreak", reason: null };
+  }
+  if (
+    ma &&
+    ma[i] !== null &&
+    pos.maxCloseSinceEntry >= pos.entryPrice * (1 + rule.trailingActivatePct / 100) &&
+    bar.close < (ma[i] as number)
+  ) {
+    return { kind: "nextOpen", signal: "trailingStop", reason: null };
+  }
+  return null;
+}
+
 /**
  * bars：日期升序，可以包含startIndex之前的暖身資料（算均線用），交易只會從startIndex開始。
  * trustNetBuyByDate：投信每日淨買賣超（張或股都可以，只看正負號），trustSellStreak規則用。
@@ -76,74 +139,36 @@ export function simulateTrades(
   const ma = rule.trailingMa ? sma(bars.map((b) => b.close), rule.trailingMa) : null;
 
   let holding: SimTrade | null = null;
-  let maxCloseSinceEntry = 0;
-  let trustSellStreak = 0;
+  let pos: PositionState | null = null;
   let prevEntrySignal: EntrySignal | null = null;
-
-  const exitAt = (trade: SimTrade, index: number, price: number, field: SimTrade["exitField"], signal: ExitSignal, signalDate: string, reason: string | null) => {
-    trade.exitIndex = index;
-    trade.exitPrice = price;
-    trade.exitField = field;
-    trade.exitSignal = signal;
-    trade.exitSignalDate = signalDate;
-    trade.exitSignalReason = reason;
-  };
 
   for (let i = startIndex; i < bars.length; i++) {
     const bar = bars[i];
     const day = days.get(bar.date);
 
-    if (holding && i >= holding.entryIndex!) {
-      const entryPrice = holding.entryPrice!;
-      const heldDays = i - holding.entryIndex! + 1;
-      const stopPrice = rule.stopLossPct !== null ? entryPrice * (1 - rule.stopLossPct / 100) : null;
-      const target = rule.patternTakeProfit ? holding.targetPrice : null;
-
-      // 1. 盤中停損（保守起見同一天先檢查停損再檢查停利）
-      if (stopPrice !== null && bar.low <= stopPrice) {
-        exitAt(holding, i, Math.min(bar.open, stopPrice), "intraday", "stopLoss", bar.date, null);
+    if (holding && pos && i >= pos.entryIndex) {
+      const decision = checkExit(pos, bars, i, ma, day, trustNetBuyByDate.get(bar.date), rule);
+      if (decision?.kind === "filled") {
+        Object.assign(holding, {
+          exitIndex: decision.index,
+          exitPrice: decision.price,
+          exitField: decision.field,
+          exitSignal: decision.signal,
+          exitSignalDate: bar.date,
+          exitSignalReason: decision.reason,
+        });
         holding = null;
-      } else if (target !== null && target > entryPrice && bar.high >= target) {
-        // 2. 盤中觸及型態目標價
-        exitAt(holding, i, Math.max(bar.open, target), "intraday", "takeProfit", bar.date, null);
-        holding = null;
-      } else if (heldDays >= rule.maxHoldingDays) {
-        // 3. 持有期滿，當天收盤出場
-        exitAt(holding, i, bar.close, "close", "maxHolding", bar.date, null);
-        holding = null;
-      } else {
-        // 4. 收盤後才知道的條件，隔天開盤出場
-        maxCloseSinceEntry = Math.max(maxCloseSinceEntry, bar.close);
-        const trustNet = trustNetBuyByDate.get(bar.date);
-        trustSellStreak = trustNet !== undefined && trustNet < 0 ? trustSellStreak + 1 : 0;
-
-        let signal: ExitSignal | null = null;
-        let reason: string | null = null;
-        if (rule.reverseSignal && day && SELL_STATUSES.has(day.status)) {
-          signal = day.status as ExitSignal;
-          reason = day.triggerReason;
-        } else if (rule.trustSellStreak !== null && trustSellStreak >= rule.trustSellStreak) {
-          signal = "trustSellStreak";
-        } else if (
-          ma &&
-          ma[i] !== null &&
-          maxCloseSinceEntry >= entryPrice * (1 + rule.trailingActivatePct / 100) &&
-          bar.close < (ma[i] as number)
-        ) {
-          signal = "trailingStop";
+      } else if (decision?.kind === "nextOpen") {
+        holding.exitSignal = decision.signal;
+        holding.exitSignalDate = bar.date;
+        holding.exitSignalReason = decision.reason;
+        if (i + 1 < bars.length) {
+          holding.exitIndex = i + 1;
+          holding.exitPrice = bars[i + 1].open;
+          holding.exitField = "open";
+          holding = null;
         }
-
-        if (signal) {
-          if (i + 1 < bars.length) {
-            exitAt(holding, i + 1, bars[i + 1].open, "open", signal, bar.date, reason);
-            holding = null;
-          } else {
-            // 出場訊號出現在最新一天，隔天開盤才會成交
-            holding.exitSignal = signal;
-            holding.exitSignalDate = bar.date;
-            holding.exitSignalReason = reason;
-          }
-        }
+        // 出場訊號出現在最新一天：隔天開盤才會成交，先留在持有中
       }
     }
 
@@ -172,11 +197,107 @@ export function simulateTrades(
         trade.entryIndex = i + 1;
         trade.entryPrice = bars[i + 1].open;
         holding = trade;
-        maxCloseSinceEntry = 0;
-        trustSellStreak = 0;
+        pos = {
+          entryIndex: i + 1,
+          entryPrice: trade.entryPrice,
+          targetPrice: rule.patternTakeProfit ? trade.targetPrice : null,
+          stopPrice: rule.stopLossPct !== null ? trade.entryPrice * (1 - rule.stopLossPct / 100) : null,
+          maxCloseSinceEntry: 0,
+          trustSellStreak: 0,
+        };
       }
     }
   }
 
   return trades;
+}
+
+export interface PositionEvaluation {
+  /** 進場日之後的交易日數（含進場日），進場日的收盤資料還沒進來時是0 */
+  heldDays: number;
+  latestDate: string | null;
+  latestClose: number | null;
+  returnPct: number | null;
+  /** 移動停利是否已經啟動（持有期間最高收盤曾經獲利≥門檻） */
+  trailingActive: boolean;
+  /** 最新一天的均線值，移動停利啟動後收盤跌破它就出場 */
+  trailingMaValue: number | null;
+  /** 持有期間最高收盤價 */
+  maxClose: number | null;
+  /** 出場訊號：null＝續抱 */
+  exit: {
+    signal: ExitSignal;
+    signalDate: string;
+    /** filled＝當天已經成交（盤中觸價/期滿收盤）；nextOpen＝隔天開盤賣出（訊號在最新一天時還沒成交） */
+    timing: "filled" | "nextOpen";
+    /** 成交價（nextOpen且隔天資料已經進來時是隔天開盤價），還沒成交時是null */
+    price: number | null;
+    fillDate: string | null;
+  } | null;
+}
+
+/**
+ * 使用者實際持倉的出場追蹤（/tw/track-record「我的進場追蹤」）：跟模擬交易用同一套checkExit，
+ * 差別是進場日/進場價是使用者自己填的（盤中買進，所以進場日當天就算第1天），停損/停利價
+ * 也用使用者紀錄上的值（從底部型態訊號進場時會自動帶入型態目標價）。
+ */
+export function evaluatePosition(
+  bars: SimBar[],
+  entryDate: string,
+  entryPrice: number,
+  rule: ExitRule,
+  targetPrice: number | null,
+  stopPrice: number | null
+): PositionEvaluation {
+  const ma = rule.trailingMa ? sma(bars.map((b) => b.close), rule.trailingMa) : null;
+  const entryIndex = bars.findIndex((b) => b.date >= entryDate);
+  const empty: PositionEvaluation = {
+    heldDays: 0,
+    latestDate: bars.at(-1)?.date ?? null,
+    latestClose: bars.at(-1)?.close ?? null,
+    returnPct: null,
+    trailingActive: false,
+    trailingMaValue: null,
+    maxClose: null,
+    exit: null,
+  };
+  if (entryIndex === -1) return empty;
+
+  const pos: PositionState = { entryIndex, entryPrice, targetPrice, stopPrice, maxCloseSinceEntry: 0, trustSellStreak: 0 };
+  const noTrust = new Map<string, number>();
+  for (let i = entryIndex; i < bars.length; i++) {
+    const decision = checkExit(pos, bars, i, ma, undefined, noTrust.get(bars[i].date), rule);
+    if (!decision) continue;
+    const filled = decision.kind === "filled";
+    const fill = filled ? { index: decision.index, price: decision.price } : i + 1 < bars.length ? { index: i + 1, price: bars[i + 1].open } : null;
+    const exitPrice = fill?.price ?? bars[i].close;
+    return {
+      heldDays: (fill?.index ?? i) - entryIndex + 1,
+      latestDate: bars.at(-1)!.date,
+      latestClose: bars.at(-1)!.close,
+      returnPct: ((exitPrice - entryPrice) / entryPrice) * 100,
+      trailingActive: pos.maxCloseSinceEntry >= entryPrice * (1 + rule.trailingActivatePct / 100),
+      trailingMaValue: ma?.[i] ?? null,
+      maxClose: pos.maxCloseSinceEntry || null,
+      exit: {
+        signal: decision.signal,
+        signalDate: bars[i].date,
+        timing: filled ? "filled" : "nextOpen",
+        price: fill?.price ?? null,
+        fillDate: fill ? bars[fill.index].date : null,
+      },
+    };
+  }
+
+  const last = bars.length - 1;
+  return {
+    heldDays: last - entryIndex + 1,
+    latestDate: bars[last].date,
+    latestClose: bars[last].close,
+    returnPct: ((bars[last].close - entryPrice) / entryPrice) * 100,
+    trailingActive: pos.maxCloseSinceEntry >= entryPrice * (1 + rule.trailingActivatePct / 100),
+    trailingMaValue: ma?.[last] ?? null,
+    maxClose: pos.maxCloseSinceEntry || null,
+    exit: null,
+  };
 }

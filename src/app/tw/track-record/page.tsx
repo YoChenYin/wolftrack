@@ -1,9 +1,12 @@
-import { BarChart3, ClipboardCheck, ScrollText } from "lucide-react";
+import { BarChart3, ClipboardCheck, Crosshair, ScrollText } from "lucide-react";
 import { Card, SubCard } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { TwSectionNav } from "@/components/tw/TwSectionNav";
 import { TrackRecordTable } from "@/components/tw/TrackRecordTable";
 import { ReturnBarChart, computeDomain, type ReturnBarRow } from "@/components/tw/TrackRecordReturnChart";
+import { PositionTracker } from "@/components/tw/PositionTracker";
+import { getSessionUserId } from "@/lib/auth/dal";
+import { listSearchableStocks, listTrackedPositions } from "@/lib/trend/tw/positionTracking";
 import { twReturnColor } from "@/lib/tw/color";
 import { computeTrackRecord, summarizeTrades, TRACK_RECORD_START_DATE, type TrackRecordStats } from "@/lib/trend/tw/trackRecord";
 import {
@@ -39,13 +42,48 @@ function StatTile({ label, value, sub, colorValue }: { label: string; value: str
   );
 }
 
+/** 已出場的正/負報酬比例：數字+一條100%比例條（紅=正、綠=負，台股慣例），報酬剛好0的交易是中間的灰色 */
+function WinLossTile({ stats }: { stats: TrackRecordStats }) {
+  const win = stats.winRatePct;
+  const loss = stats.lossRatePct;
+  const flat = win !== null && loss !== null ? Math.max(0, 100 - win - loss) : 0;
+  return (
+    <SubCard>
+      <p className="text-[11px] text-zinc-400 dark:text-zinc-500">正報酬／負報酬</p>
+      <p className="mt-1 font-[family:var(--font-tw-mono)] text-2xl font-semibold text-zinc-900 dark:text-zinc-100">
+        {win !== null && loss !== null ? (
+          <>
+            <span className="text-red-600 dark:text-red-400">{win.toFixed(0)}%</span>
+            <span className="mx-1 text-base text-zinc-300 dark:text-zinc-600">/</span>
+            <span className="text-emerald-600 dark:text-emerald-400">{loss.toFixed(0)}%</span>
+          </>
+        ) : (
+          "—"
+        )}
+      </p>
+      {win !== null && loss !== null && (
+        <div className="mt-1.5 flex h-1.5 gap-0.5 overflow-hidden rounded-full" role="img" aria-label={`正報酬${win}%，負報酬${loss}%`}>
+          {win > 0 && <div className="bg-red-500 dark:bg-red-400" style={{ width: `${win}%` }} />}
+          {flat > 0 && <div className="bg-zinc-300 dark:bg-zinc-600" style={{ width: `${flat}%` }} />}
+          {loss > 0 && <div className="bg-emerald-500 dark:bg-emerald-400" style={{ width: `${loss}%` }} />}
+        </div>
+      )}
+      <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+        已出場 {stats.count} 筆{flat > 0 ? `，持平 ${flat.toFixed(0)}%` : ""}
+      </p>
+    </SubCard>
+  );
+}
+
 function BreakdownRow({ label, stats }: { label: string; stats: TrackRecordStats }) {
   return (
     <tr className="border-t border-zinc-100 dark:border-white/5">
       <td className="py-2 pr-3 font-medium text-zinc-700 dark:text-zinc-300">{label}</td>
       <td className="px-3 py-2 text-right font-[family:var(--font-tw-mono)] tabular-nums text-zinc-600 dark:text-zinc-400">{stats.count}</td>
       <td className="px-3 py-2 text-right font-[family:var(--font-tw-mono)] tabular-nums text-zinc-600 dark:text-zinc-400">
-        {stats.winRatePct !== null ? `${stats.winRatePct.toFixed(0)}%` : "—"}
+        {stats.winRatePct !== null && stats.lossRatePct !== null
+          ? `${stats.winRatePct.toFixed(0)}% / ${stats.lossRatePct.toFixed(0)}%`
+          : "—"}
       </td>
       <td className={`px-3 py-2 text-right font-[family:var(--font-tw-mono)] font-semibold tabular-nums ${twReturnColor(stats.avgReturnPct)}`}>
         {formatPct(stats.avgReturnPct)}
@@ -69,12 +107,17 @@ function toBarRow(key: string, label: string, trades: TrackRecordTrade[]): Retur
     avgReturnPct: stats.avgReturnPct,
     medianReturnPct: stats.medianReturnPct,
     winRatePct: stats.winRatePct,
+    lossRatePct: stats.lossRatePct,
     avgHoldingDays: stats.avgHoldingDays,
   };
 }
 
 export default async function TwTrackRecordPage() {
-  const trades = await computeTrackRecord();
+  const [{ trades, latestDate, todaySignals }, userId] = await Promise.all([computeTrackRecord(), getSessionUserId()]);
+  const [stocks, positions] = await Promise.all([
+    listSearchableStocks(latestDate),
+    userId ? listTrackedPositions(userId) : Promise.resolve([]),
+  ]);
   const closed = trades.filter((t) => t.status === "closed");
   const open = trades.filter((t) => t.status === "open");
   const closedStats = summarizeTrades(closed);
@@ -130,7 +173,7 @@ export default async function TwTrackRecordPage() {
             <SectionHeader icon={ClipboardCheck} iconColor="amber" title="績效總覽" />
             <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
               <StatTile label="已出場" value={`${closedStats.count}`} sub={`持有中 ${open.length} 筆`} />
-              <StatTile label="勝率" value={closedStats.winRatePct !== null ? `${closedStats.winRatePct.toFixed(0)}%` : "—"} sub="已出場報酬>0的比例" />
+              <WinLossTile stats={closedStats} />
               <StatTile label="平均報酬" value={formatPct(closedStats.avgReturnPct)} colorValue={closedStats.avgReturnPct} sub="每筆已實現報酬平均" />
               <StatTile
                 label="平均超額報酬"
@@ -152,7 +195,7 @@ export default async function TwTrackRecordPage() {
                   <tr className="text-left text-[11px] text-zinc-400 dark:text-zinc-500">
                     <th className="pb-1 pr-3 font-normal">進場訊號（已出場）</th>
                     <th className="px-3 pb-1 text-right font-normal">筆數</th>
-                    <th className="px-3 pb-1 text-right font-normal">勝率</th>
+                    <th className="px-3 pb-1 text-right font-normal">正／負報酬</th>
                     <th className="px-3 pb-1 text-right font-normal">平均報酬</th>
                     <th className="px-3 pb-1 text-right font-normal">超額報酬</th>
                     <th className="pb-1 pl-3 text-right font-normal">平均持有</th>
@@ -168,10 +211,22 @@ export default async function TwTrackRecordPage() {
           </Card>
         </div>
 
+        <div className="tw-reveal" style={{ animationDelay: "100ms" }}>
+          <Card>
+            <SectionHeader icon={Crosshair} iconColor="rose" title="我的進場追蹤" />
+            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+              挑今天要買的股票記錄進場，之後每天依上面同一套出場規則提醒你續抱還是該賣
+            </p>
+            <div className="mt-4">
+              <PositionTracker loggedIn={userId !== null} latestDate={latestDate} todaySignals={todaySignals} stocks={stocks} positions={positions} />
+            </div>
+          </Card>
+        </div>
+
         <div className="tw-reveal" style={{ animationDelay: "120ms" }}>
           <Card>
             <SectionHeader icon={BarChart3} iconColor="amber" title="各進出場方式的平均報酬" />
-            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">只計已出場交易，兩張圖共用同一個刻度；滑鼠移到長條上看筆數、勝率、中位數</p>
+            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">只計已出場交易，兩張圖共用同一個刻度；滑鼠移到長條上看筆數、正負報酬比例、中位數</p>
             <div className="mt-4 grid gap-8 md:grid-cols-2">
               <ReturnBarChart title="依進場訊號" rows={entryRows} domain={chartDomain} />
               <ReturnBarChart title="依出場方式" rows={exitRows} domain={chartDomain} />
@@ -183,7 +238,7 @@ export default async function TwTrackRecordPage() {
           <Card>
             <SectionHeader icon={ScrollText} iconColor="zinc" title="逐筆交易紀錄" />
             <div className="mt-4">
-              <TrackRecordTable trades={trades} />
+              <TrackRecordTable trades={trades} latestDate={latestDate} />
             </div>
           </Card>
         </div>

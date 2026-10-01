@@ -10,6 +10,9 @@ const VALID_SIDES = ["long", "short"] as const;
 const VALID_SIGNAL_SOURCES = [
   "twTrendEntry",
   "twTrendBuyDip",
+  "twTrustTurnBuy",
+  "twCombinedBuy",
+  "twBottomPattern",
   "twTrendReversal",
   "twTrendPullback",
   "twTrendBullish",
@@ -73,6 +76,54 @@ export async function createTradeEntry(formData: FormData): Promise<void> {
   revalidatePath("/trade-log");
 }
 
+/** 台北時間的今天（UTC+8，沒有日光節約） */
+function taipeiToday(): string {
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/**
+ * /tw/track-record「我今天進場」：從今日進場訊號或搜尋結果記一筆台股做多部位，進場日固定是
+ * 台北時間今天，之後在同一頁用績效驗證的出場規則追蹤（見positionTracking.ts）。
+ * 底部型態訊號會把型態目標價帶進停利價，讓「達目標價停利」這條規則也能套用到使用者的持倉。
+ */
+export async function recordTrackedEntry(formData: FormData): Promise<void> {
+  const userId = await requireUserId();
+
+  const ticker = requireString(formData, "ticker").toUpperCase();
+  const stock = await prisma.stock.findUnique({ where: { market_ticker: { market: "TW", ticker } }, select: { id: true } });
+  if (!stock) throw new Error(`找不到台股 ${ticker}`);
+
+  const entryPrice = requireDecimalString(formData, "entryPrice");
+  if (Number(entryPrice) <= 0) throw new Error("進場價必須大於0");
+  const quantity = requireDecimalString(formData, "quantity");
+  if (Number(quantity) <= 0) throw new Error("股數必須大於0");
+
+  const signalSourceRaw = optionalString(formData, "signalSource");
+  if (signalSourceRaw && !VALID_SIGNAL_SOURCES.includes(signalSourceRaw as (typeof VALID_SIGNAL_SOURCES)[number])) {
+    throw new Error("signalSource 不合法");
+  }
+  const takeProfitPrice = optionalString(formData, "takeProfitPrice");
+  if (takeProfitPrice !== null && !Number.isFinite(Number(takeProfitPrice))) throw new Error("停利價必須是數字");
+
+  await prisma.tradeLogEntry.create({
+    data: {
+      userId,
+      market: "TW",
+      ticker,
+      side: "long",
+      signalSource: (signalSourceRaw ?? "manual") as (typeof VALID_SIGNAL_SOURCES)[number],
+      entryDate: new Date(taipeiToday()),
+      entryPrice,
+      quantity,
+      takeProfitPrice: takeProfitPrice ?? undefined,
+      notes: "從績效驗證頁記錄進場",
+    },
+  });
+
+  revalidatePath("/tw/track-record");
+  revalidatePath("/trade-log");
+}
+
 export async function closeTradeEntry(formData: FormData): Promise<void> {
   const userId = await requireUserId();
   const id = BigInt(requireString(formData, "id"));
@@ -94,6 +145,7 @@ export async function closeTradeEntry(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/trade-log");
+  revalidatePath("/tw/track-record");
 }
 
 export async function cancelTradeEntry(formData: FormData): Promise<void> {

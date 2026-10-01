@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { TRACK_RECORD_EXIT_RULE, type TrackRecordTrade } from "./trackRecordMeta";
+import { TRACK_RECORD_EXIT_RULE, type EntrySignal, type TrackRecordTrade } from "./trackRecordMeta";
 import { entrySignalOf, simulateTrades, type SimBar, type SimDay, type SimTrade } from "./trackRecordSim";
 
 /**
@@ -116,7 +116,26 @@ async function loadTrustNetBuy(stockIds: number[]): Promise<Map<number, Map<stri
   return result;
 }
 
-export async function computeTrackRecord(): Promise<TrackRecordTrade[]> {
+export interface TodaySignal {
+  ticker: string;
+  companyName: string;
+  entrySignal: EntrySignal;
+  reason: string | null;
+  /** 底部型態訊號的量測目標價，記錄進場時自動帶入當停利價 */
+  targetPrice: number | null;
+  latestClose: number | null;
+}
+
+export interface TrackRecordResult {
+  trades: TrackRecordTrade[];
+  /** 最新一個有收盤資料的交易日（以加權指數為準） */
+  latestDate: string | null;
+  /** 最新交易日「新出現」進場訊號的股票——不管模擬交易當下是不是已經持有，這是給使用者今天
+   * 決定要不要進場用的清單，跟逐筆交易表（模擬持有中時會忽略新訊號）不同 */
+  todaySignals: TodaySignal[];
+}
+
+export async function computeTrackRecord(): Promise<TrackRecordResult> {
   const signalRows = await prisma.dailyTrendSignal.findMany({
     where: {
       tradeDate: { gte: new Date(TRACK_RECORD_START_DATE) },
@@ -155,7 +174,7 @@ export async function computeTrackRecord(): Promise<TrackRecordTrade[]> {
   const candidateIds = [...signalsByStock.entries()]
     .filter(([, s]) => [...s.days.values()].some((d) => entrySignalOf(d) !== null))
     .map(([id]) => id);
-  if (candidateIds.length === 0) return [];
+  if (candidateIds.length === 0) return { trades: [], latestDate: null, todaySignals: [] };
 
   const taiexStock = await prisma.stock.findUnique({ where: { market_ticker: { market: "TW", ticker: "TAIEX" } }, select: { id: true } });
   const [barsByStock, trustNetByStock] = await Promise.all([
@@ -164,7 +183,12 @@ export async function computeTrackRecord(): Promise<TrackRecordTrade[]> {
   ]);
   const taiexByDate = new Map((taiexStock ? barsByStock.get(taiexStock.id) ?? [] : []).map((b) => [b.date, b]));
 
+  const taiexDates = [...taiexByDate.keys()].sort();
+  const latestDate = taiexDates.at(-1) ?? null;
+  const prevDate = taiexDates.at(-2) ?? null;
+
   const trades: TrackRecordTrade[] = [];
+  const todaySignals: TodaySignal[] = [];
   for (const id of candidateIds) {
     const s = signalsByStock.get(id)!;
     const bars = barsByStock.get(id);
@@ -173,14 +197,33 @@ export async function computeTrackRecord(): Promise<TrackRecordTrade[]> {
     if (startIndex === -1) continue;
     const sims = simulateTrades(bars, s.days, trustNetByStock.get(id) ?? new Map(), TRACK_RECORD_EXIT_RULE, startIndex);
     trades.push(...sims.map((sim) => toTrade(s.ticker, s.companyName, sim, bars, taiexByDate)));
+
+    const today = latestDate ? s.days.get(latestDate) : undefined;
+    const todaySignal = entrySignalOf(today);
+    if (today && todaySignal && todaySignal !== entrySignalOf(prevDate ? s.days.get(prevDate) : undefined)) {
+      todaySignals.push({
+        ticker: s.ticker,
+        companyName: s.companyName,
+        entrySignal: todaySignal,
+        reason: todaySignal === "bottomPattern" ? today.bottomPatternDescription : today.triggerReason,
+        targetPrice: todaySignal === "bottomPattern" ? today.bottomPatternTargetPrice : null,
+        latestClose: bars.at(-1)?.date === latestDate ? bars.at(-1)!.close : null,
+      });
+    }
   }
 
-  return trades.sort((a, b) => b.entrySignalDate.localeCompare(a.entrySignalDate) || a.ticker.localeCompare(b.ticker));
+  return {
+    trades: trades.sort((a, b) => b.entrySignalDate.localeCompare(a.entrySignalDate) || a.ticker.localeCompare(b.ticker)),
+    latestDate,
+    todaySignals: todaySignals.sort((a, b) => a.ticker.localeCompare(b.ticker)),
+  };
 }
 
 export interface TrackRecordStats {
   count: number;
   winRatePct: number | null;
+  /** 報酬<0的比例；勝率+負報酬比例<100%時，差額是報酬剛好0的交易 */
+  lossRatePct: number | null;
   avgReturnPct: number | null;
   medianReturnPct: number | null;
   avgExcessReturnPct: number | null;
@@ -205,6 +248,7 @@ export function summarizeTrades(trades: TrackRecordTrade[]): TrackRecordStats {
   return {
     count: trades.length,
     winRatePct: returns.length > 0 ? Math.round((returns.filter((r) => r > 0).length / returns.length) * 1000) / 10 : null,
+    lossRatePct: returns.length > 0 ? Math.round((returns.filter((r) => r < 0).length / returns.length) * 1000) / 10 : null,
     avgReturnPct: avg(returns),
     medianReturnPct: median(returns),
     avgExcessReturnPct: avg(trades.map((t) => t.excessReturnPct).filter((v): v is number => v !== null)),

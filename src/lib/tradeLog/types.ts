@@ -1,6 +1,9 @@
 export const SIGNAL_SOURCE_LABELS: Record<string, string> = {
   twTrendEntry: "台股趨勢／進場",
   twTrendBuyDip: "台股趨勢／逢低布局",
+  twTrustTurnBuy: "台股選股／投信轉買",
+  twCombinedBuy: "台股選股／投信外資合買",
+  twBottomPattern: "台股選股／底部出現",
   twTrendReversal: "台股趨勢／反轉雷達",
   twTrendPullback: "台股趨勢／蓄勢待發",
   twTrendBullish: "台股趨勢／趨勢穩健",

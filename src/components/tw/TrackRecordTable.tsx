@@ -14,12 +14,13 @@ import {
 import { twReturnColor } from "@/lib/tw/color";
 import { stripCompanySuffix } from "@/lib/formatCompanyName";
 
-type StatusFilter = "all" | TradeStatus;
+type StatusFilter = "all" | "today" | TradeStatus;
 type SortKey = "holdingDays" | "returnPct";
 type SortState = { key: SortKey; dir: "desc" | "asc" } | null;
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "全部" },
+  { value: "today", label: "今日訊號" },
   { value: "closed", label: "已出場" },
   { value: "open", label: "持有中" },
   { value: "pendingEntry", label: "待進場" },
@@ -105,14 +106,17 @@ function SortHeader({ label, sortKey, sort, onSort }: { label: string; sortKey: 
 }
 
 /** 逐筆交易表：狀態/進場訊號兩組篩選，預設依進場訊號日期新到舊（伺服器端已排好），
- * 持有天數/報酬率可點表頭排序，沒有值的（待進場）一律排最後 */
-export function TrackRecordTable({ trades }: { trades: TrackRecordTrade[] }) {
+ * 持有天數/報酬率可點表頭排序，沒有值的（待進場）一律排最後。「今日訊號」＝最新交易日觸發
+ * 進場訊號的模擬交易（模擬已經持有的股票再出訊號不會開新單，完整的今日訊號清單在進場追蹤區塊） */
+export function TrackRecordTable({ trades, latestDate }: { trades: TrackRecordTrade[]; latestDate: string | null }) {
   const [status, setStatus] = useState<StatusFilter>("all");
   const [signal, setSignal] = useState<EntrySignal | "all">("all");
   const [sort, setSort] = useState<SortState>(null);
 
   const filtered = useMemo(() => {
-    const rows = trades.filter((t) => (status === "all" || t.status === status) && (signal === "all" || t.entrySignal === signal));
+    const matchStatus = (t: TrackRecordTrade) =>
+      status === "all" || (status === "today" ? t.entrySignalDate === latestDate : t.status === status);
+    const rows = trades.filter((t) => matchStatus(t) && (signal === "all" || t.entrySignal === signal));
     if (!sort) return rows;
     const sign = sort.dir === "desc" ? -1 : 1;
     return [...rows].sort((a, b) => {
@@ -123,7 +127,7 @@ export function TrackRecordTable({ trades }: { trades: TrackRecordTrade[] }) {
       if (vb === null) return -1;
       return (va - vb) * sign;
     });
-  }, [trades, status, signal, sort]);
+  }, [trades, status, signal, sort, latestDate]);
 
   return (
     <div>

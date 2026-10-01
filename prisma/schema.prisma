@@ -907,6 +907,11 @@ enum TradeStatus {
 enum TradeSignalSource {
   twTrendEntry
   twTrendBuyDip
+  /// 2026-10-01新增：從/tw/track-record「我今天進場」記錄時，標記是哪個現行進場訊號
+  /// （2026-08-17版籌碼流策略+底部型態），逢低布局沿用上面既有的twTrendBuyDip
+  twTrustTurnBuy
+  twCombinedBuy
+  twBottomPattern
   twTrendReversal
   twTrendPullback
   twTrendBullish

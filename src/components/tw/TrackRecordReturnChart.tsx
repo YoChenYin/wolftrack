@@ -5,6 +5,7 @@ export interface ReturnBarRow {
   avgReturnPct: number | null;
   medianReturnPct: number | null;
   winRatePct: number | null;
+  lossRatePct: number | null;
   avgHoldingDays: number | null;
 }
 
@@ -108,8 +109,10 @@ export function ReturnBarChart({ title, rows, domain }: { title: string; rows: R
                   <dd className="text-right">{formatPct(r.avgReturnPct)}</dd>
                   <dt className="text-zinc-400">中位數</dt>
                   <dd className="text-right">{formatPct(r.medianReturnPct)}</dd>
-                  <dt className="text-zinc-400">勝率</dt>
-                  <dd className="text-right">{r.winRatePct !== null ? `${r.winRatePct.toFixed(0)}%` : "—"}</dd>
+                  <dt className="text-zinc-400">正／負報酬</dt>
+                  <dd className="text-right">
+                    {r.winRatePct !== null && r.lossRatePct !== null ? `${r.winRatePct.toFixed(0)}% / ${r.lossRatePct.toFixed(0)}%` : "—"}
+                  </dd>
                   <dt className="text-zinc-400">平均持有</dt>
                   <dd className="text-right">{r.avgHoldingDays !== null ? `${r.avgHoldingDays.toFixed(1)} 日` : "—"}</dd>
                 </dl>
