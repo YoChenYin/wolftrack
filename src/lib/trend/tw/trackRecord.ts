@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import type { TrendStatus } from "@/generated/prisma/enums";
-import { MAX_HOLDING_DAYS, type EntrySignal, type ExitSignal, type TrackRecordTrade } from "./trackRecordMeta";
+import { TRACK_RECORD_EXIT_RULE, type TrackRecordTrade } from "./trackRecordMeta";
+import { entrySignalOf, simulateTrades, type SimBar, type SimDay, type SimTrade } from "./trackRecordSim";
 
 /**
  * 2026-09新增：選股績效驗證（/tw/track-record）——不是回測，是把平台「真的每天寫進
@@ -8,14 +8,10 @@ import { MAX_HOLDING_DAYS, type EntrySignal, type ExitSignal, type TrackRecordTr
  * 照著網站的訊號進出，實際會賺賠多少。跟TwSignalBacktestEvent（用現行規則回溯重跑歷史）
  * 是不同性質的東西：這裡只用上線後實際產生過的訊號，資料少但沒有「事後套規則」的疑慮。
  *
- * 進出場規則：
- * - 進場訊號：投信轉買/投信外資合買/逢低布局，或底部型態（頭肩底/N字底）新出現。只看
- *   「新出現」那天（前一個交易日不是同一個多方訊號），連續多天的合買/持續成形的底部型態
- *   只算一次，出場後要等下一次新訊號才會再進場。
- * - 出場訊號：同一檔出現投信轉賣/投信外資合賣，或持有滿MAX_HOLDING_DAYS個交易日強制出場。
- * - 成交價：訊號是收盤後批次算出來的，當天收盤價其實買不到，進場/反向訊號出場一律用
- *   「訊號隔一個交易日的開盤價」；持有期滿是事先知道的，用第N個交易日的收盤價出場。
- * - 持有中的部位用最新收盤價算未實現報酬。
+ * 進場：投信轉買/投信外資合買/逢低布局，或底部型態（頭肩底/N字底）新出現的那天，隔天開盤買進。
+ * 只看「新出現」那天，連續多天的同一訊號只算一次，出場後要等下一次新訊號才會再進場。
+ * 出場：見trackRecordMeta.ts的TRACK_RECORD_EXIT_RULE（2026-10-01改成移動停利+型態目標價+
+ * 最長持有期，選擇依據見scripts/compare-track-record-exits.ts），模擬邏輯在trackRecordSim.ts。
  *
  * 已知限制：tw_daily_price是原始價格沒有除權息還原（見backtestWalkForward.ts說明），
  * 除息日股價下跌會被算成虧損；不含手續費/證交稅。
@@ -23,28 +19,8 @@ import { MAX_HOLDING_DAYS, type EntrySignal, type ExitSignal, type TrackRecordTr
 
 /** 2026-08-17籌碼流策略改版（見classifyChipFlow.ts），這天之前寫入的是舊版分類，不列入 */
 export const TRACK_RECORD_START_DATE = "2026-08-17";
-
-const BUY_STATUSES = new Set<TrendStatus>(["trustTurnBuy", "combinedBuy", "buyDip"]);
-const SELL_STATUSES = new Set<TrendStatus>(["trustTurnSell", "combinedSell"]);
-
-interface SignalDay {
-  status: TrendStatus;
-  triggerReason: string | null;
-  hasBottomPattern: boolean;
-  bottomPatternDescription: string | null;
-}
-
-interface Bar {
-  date: string;
-  open: number;
-  close: number;
-}
-
-function entrySignalOf(day: SignalDay | undefined): EntrySignal | null {
-  if (!day || SELL_STATUSES.has(day.status)) return null;
-  if (BUY_STATUSES.has(day.status)) return day.status as EntrySignal;
-  return day.hasBottomPattern ? "bottomPattern" : null;
-}
+/** 移動停利要算均線，價格從起始日往前多抓一段當暖身（日曆天，涵蓋均線天數+連假） */
+const PRICE_WARMUP_CALENDAR_DAYS = 45;
 
 function pctChange(from: number, to: number): number | null {
   if (from === 0) return null;
@@ -55,140 +31,87 @@ function toDateString(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** 大盤比較基準用同一組日期+同一種價格（開盤/收盤）算，跟個股的成交方式一致 */
-function taiexReturn(
-  taiexByDate: Map<string, Bar>,
-  fromDate: string,
-  fromField: "open" | "close",
-  toDate: string,
-  toField: "open" | "close"
-): number | null {
-  const from = taiexByDate.get(fromDate);
-  const to = taiexByDate.get(toDate);
-  if (!from || !to) return null;
-  return pctChange(from[fromField], to[toField]);
-}
-
-function simulateStock(
-  ticker: string,
-  companyName: string,
-  bars: Bar[],
-  signalsByDate: Map<string, SignalDay>,
-  taiexByDate: Map<string, Bar>
-): TrackRecordTrade[] {
-  const trades: TrackRecordTrade[] = [];
-  let holding: TrackRecordTrade | null = null;
-  let entryIdx = -1;
-  let prevEntrySignal: EntrySignal | null = null;
-
-  const closeTrade = (
-    trade: TrackRecordTrade,
-    exitIdx: number,
-    field: "open" | "close",
-    exitSignal: ExitSignal,
-    exitSignalDate: string,
-    exitSignalReason: string | null
-  ) => {
-    const exitBar = bars[exitIdx];
-    trade.status = "closed";
-    trade.exitSignal = exitSignal;
-    trade.exitSignalDate = exitSignalDate;
-    trade.exitSignalReason = exitSignalReason;
-    trade.exitDate = exitBar.date;
-    trade.exitPrice = exitBar[field];
-    trade.returnPct = pctChange(trade.entryPrice!, exitBar[field]);
-    trade.taiexReturnPct = taiexReturn(taiexByDate, trade.entryDate!, "open", exitBar.date, field);
-    trade.holdingDays = exitIdx - entryIdx + (field === "close" ? 1 : 0);
+function toTrade(ticker: string, companyName: string, sim: SimTrade, bars: SimBar[], taiexByDate: Map<string, SimBar>): TrackRecordTrade {
+  const trade: TrackRecordTrade = {
+    ticker,
+    companyName,
+    status: sim.entryIndex === null ? "pendingEntry" : sim.exitIndex === null ? "open" : "closed",
+    entrySignal: sim.entrySignal,
+    entrySignalDate: sim.entrySignalDate,
+    entrySignalReason: sim.entrySignalReason,
+    entryDate: sim.entryIndex !== null ? bars[sim.entryIndex].date : null,
+    entryPrice: sim.entryPrice,
+    exitSignal: sim.exitSignal,
+    exitSignalDate: sim.exitSignalDate,
+    exitSignalReason: sim.exitSignalReason,
+    exitDate: sim.exitIndex !== null ? bars[sim.exitIndex].date : null,
+    exitPrice: sim.exitPrice,
+    exitPriceType: sim.exitField,
+    markPrice: null,
+    markDate: null,
+    returnPct: null,
+    taiexReturnPct: null,
+    excessReturnPct: null,
+    holdingDays: null,
   };
+  if (sim.entryIndex === null || sim.entryPrice === null) return trade;
 
-  for (let i = 0; i < bars.length; i++) {
-    const bar = bars[i];
-    const day = signalsByDate.get(bar.date);
-
-    if (holding) {
-      const heldDays = i - entryIdx + 1;
-      if (heldDays >= MAX_HOLDING_DAYS) {
-        closeTrade(holding, i, "close", "maxHolding", bar.date, null);
-        holding = null;
-      } else if (day && SELL_STATUSES.has(day.status)) {
-        const exitSignal = day.status as ExitSignal;
-        if (i + 1 < bars.length) {
-          closeTrade(holding, i + 1, "open", exitSignal, bar.date, day.triggerReason);
-          holding = null;
-        } else {
-          // 反向訊號出現在最新一天，隔天開盤才會出場——先標記出場訊號，報酬仍以最新收盤價計
-          holding.exitSignal = exitSignal;
-          holding.exitSignalDate = bar.date;
-          holding.exitSignalReason = day.triggerReason;
-        }
-      }
-    }
-
-    const entrySignal = entrySignalOf(day);
-    const isNewSignal = entrySignal !== null && entrySignal !== prevEntrySignal;
-    prevEntrySignal = entrySignal;
-
-    if (!holding && isNewSignal && day) {
-      const trade: TrackRecordTrade = {
-        ticker,
-        companyName,
-        status: "pendingEntry",
-        entrySignal,
-        entrySignalDate: bar.date,
-        entrySignalReason: entrySignal === "bottomPattern" ? day.bottomPatternDescription : day.triggerReason,
-        entryDate: null,
-        entryPrice: null,
-        exitSignal: null,
-        exitSignalDate: null,
-        exitSignalReason: null,
-        exitDate: null,
-        exitPrice: null,
-        markPrice: null,
-        markDate: null,
-        returnPct: null,
-        taiexReturnPct: null,
-        excessReturnPct: null,
-        holdingDays: null,
-      };
-      trades.push(trade);
-      if (i + 1 < bars.length) {
-        trade.status = "open";
-        trade.entryDate = bars[i + 1].date;
-        trade.entryPrice = bars[i + 1].open;
-        entryIdx = i + 1;
-        holding = trade;
-      }
-    }
+  // 已出場用出場價，持有中用最新收盤價；大盤基準用同一段期間（進場日開盤→出場日/最新日收盤）
+  const endIndex = sim.exitIndex ?? bars.length - 1;
+  const endPrice = sim.exitPrice ?? bars[endIndex].close;
+  if (sim.exitIndex === null) {
+    trade.markPrice = endPrice;
+    trade.markDate = bars[endIndex].date;
   }
-
-  if (holding) {
-    const last = bars[bars.length - 1];
-    holding.markPrice = last.close;
-    holding.markDate = last.date;
-    holding.returnPct = pctChange(holding.entryPrice!, last.close);
-    holding.taiexReturnPct = taiexReturn(taiexByDate, holding.entryDate!, "open", last.date, "close");
-    holding.holdingDays = bars.length - entryIdx;
+  trade.returnPct = pctChange(sim.entryPrice, endPrice);
+  const taiexIn = taiexByDate.get(bars[sim.entryIndex].date);
+  const taiexOut = taiexByDate.get(bars[endIndex].date);
+  if (taiexIn && taiexOut) {
+    const endField = sim.exitField === "open" ? "open" : "close";
+    trade.taiexReturnPct = pctChange(taiexIn.open, taiexOut[endField]);
   }
-
-  for (const t of trades) {
-    if (t.returnPct !== null && t.taiexReturnPct !== null) {
-      t.excessReturnPct = Math.round((t.returnPct - t.taiexReturnPct) * 100) / 100;
-    }
+  if (trade.returnPct !== null && trade.taiexReturnPct !== null) {
+    trade.excessReturnPct = Math.round((trade.returnPct - trade.taiexReturnPct) * 100) / 100;
   }
-  return trades;
+  trade.holdingDays = endIndex - sim.entryIndex + (sim.exitField === "open" ? 0 : 1);
+  return trade;
 }
 
-async function loadBars(stockIds: number[]): Promise<Map<number, Bar[]>> {
+async function loadBars(stockIds: number[]): Promise<Map<number, SimBar[]>> {
+  const from = new Date(TRACK_RECORD_START_DATE);
+  from.setUTCDate(from.getUTCDate() - PRICE_WARMUP_CALENDAR_DAYS);
   const rows = await prisma.twDailyPrice.findMany({
-    where: { stockId: { in: stockIds }, tradeDate: { gte: new Date(TRACK_RECORD_START_DATE) } },
-    select: { stockId: true, tradeDate: true, open: true, close: true },
+    where: { stockId: { in: stockIds }, tradeDate: { gte: from } },
+    select: { stockId: true, tradeDate: true, open: true, high: true, low: true, close: true },
     orderBy: [{ stockId: "asc" }, { tradeDate: "asc" }],
   });
-  const result = new Map<number, Bar[]>();
+  const result = new Map<number, SimBar[]>();
   for (const r of rows) {
     const bars = result.get(r.stockId) ?? [];
-    bars.push({ date: toDateString(r.tradeDate), open: Number(r.open), close: Number(r.close) });
+    bars.push({
+      date: toDateString(r.tradeDate),
+      open: Number(r.open),
+      high: Number(r.high),
+      low: Number(r.low),
+      close: Number(r.close),
+    });
     result.set(r.stockId, bars);
+  }
+  return result;
+}
+
+/** 只有規則用到「投信連賣N日」時才需要撈法人資料 */
+async function loadTrustNetBuy(stockIds: number[]): Promise<Map<number, Map<string, number>>> {
+  const result = new Map<number, Map<string, number>>();
+  if (TRACK_RECORD_EXIT_RULE.trustSellStreak === null) return result;
+  const rows = await prisma.twInstitutionalTrading.findMany({
+    where: { stockId: { in: stockIds }, tradeDate: { gte: new Date(TRACK_RECORD_START_DATE) } },
+    select: { stockId: true, tradeDate: true, investTrustNetBuyShares: true },
+  });
+  for (const r of rows) {
+    const m = result.get(r.stockId) ?? new Map<string, number>();
+    m.set(toDateString(r.tradeDate), Number(r.investTrustNetBuyShares));
+    result.set(r.stockId, m);
   }
   return result;
 }
@@ -198,7 +121,10 @@ export async function computeTrackRecord(): Promise<TrackRecordTrade[]> {
     where: {
       tradeDate: { gte: new Date(TRACK_RECORD_START_DATE) },
       stock: { market: "TW", NOT: { industry: { contains: "ETF" } } },
-      OR: [{ status: { in: [...BUY_STATUSES, ...SELL_STATUSES] } }, { bottomPatternStage: { not: null } }],
+      OR: [
+        { status: { in: ["trustTurnBuy", "combinedBuy", "buyDip", "trustTurnSell", "combinedSell"] } },
+        { bottomPatternStage: { not: null } },
+      ],
     },
     select: {
       stockId: true,
@@ -207,11 +133,12 @@ export async function computeTrackRecord(): Promise<TrackRecordTrade[]> {
       triggerReason: true,
       bottomPatternStage: true,
       bottomPatternDescription: true,
+      bottomPatternTargetPrice: true,
       stock: { select: { ticker: true, companyName: true } },
     },
   });
 
-  const signalsByStock = new Map<number, { ticker: string; companyName: string; days: Map<string, SignalDay> }>();
+  const signalsByStock = new Map<number, { ticker: string; companyName: string; days: Map<string, SimDay> }>();
   for (const r of signalRows) {
     const entry = signalsByStock.get(r.stockId) ?? { ticker: r.stock.ticker, companyName: r.stock.companyName, days: new Map() };
     entry.days.set(toDateString(r.tradeDate), {
@@ -219,6 +146,7 @@ export async function computeTrackRecord(): Promise<TrackRecordTrade[]> {
       triggerReason: r.triggerReason,
       hasBottomPattern: r.bottomPatternStage !== null,
       bottomPatternDescription: r.bottomPatternDescription,
+      bottomPatternTargetPrice: r.bottomPatternTargetPrice !== null ? Number(r.bottomPatternTargetPrice) : null,
     });
     signalsByStock.set(r.stockId, entry);
   }
@@ -230,7 +158,10 @@ export async function computeTrackRecord(): Promise<TrackRecordTrade[]> {
   if (candidateIds.length === 0) return [];
 
   const taiexStock = await prisma.stock.findUnique({ where: { market_ticker: { market: "TW", ticker: "TAIEX" } }, select: { id: true } });
-  const barsByStock = await loadBars(taiexStock ? [...candidateIds, taiexStock.id] : candidateIds);
+  const [barsByStock, trustNetByStock] = await Promise.all([
+    loadBars(taiexStock ? [...candidateIds, taiexStock.id] : candidateIds),
+    loadTrustNetBuy(candidateIds),
+  ]);
   const taiexByDate = new Map((taiexStock ? barsByStock.get(taiexStock.id) ?? [] : []).map((b) => [b.date, b]));
 
   const trades: TrackRecordTrade[] = [];
@@ -238,7 +169,10 @@ export async function computeTrackRecord(): Promise<TrackRecordTrade[]> {
     const s = signalsByStock.get(id)!;
     const bars = barsByStock.get(id);
     if (!bars || bars.length === 0) continue;
-    trades.push(...simulateStock(s.ticker, s.companyName, bars, s.days, taiexByDate));
+    const startIndex = bars.findIndex((b) => b.date >= TRACK_RECORD_START_DATE);
+    if (startIndex === -1) continue;
+    const sims = simulateTrades(bars, s.days, trustNetByStock.get(id) ?? new Map(), TRACK_RECORD_EXIT_RULE, startIndex);
+    trades.push(...sims.map((sim) => toTrade(s.ticker, s.companyName, sim, bars, taiexByDate)));
   }
 
   return trades.sort((a, b) => b.entrySignalDate.localeCompare(a.entrySignalDate) || a.ticker.localeCompare(b.ticker));

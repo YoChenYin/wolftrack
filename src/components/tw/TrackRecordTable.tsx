@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import {
   ENTRY_SIGNAL_LABEL,
-  EXIT_SIGNAL_LABEL,
+  TRACK_RECORD_EXIT_RULE,
+  exitSignalLabel,
   type EntrySignal,
   type TrackRecordTrade,
   type TradeStatus,
@@ -154,8 +155,8 @@ export function TrackRecordTable({ trades }: { trades: TrackRecordTrade[] }) {
                   <td className="px-3 py-2.5">
                     {t.exitSignal ? (
                       <SignalCell
-                        label={EXIT_SIGNAL_LABEL[t.exitSignal]}
-                        date={t.exitSignal === "maxHolding" ? null : t.exitSignalDate}
+                        label={exitSignalLabel(t.exitSignal, TRACK_RECORD_EXIT_RULE)}
+                        date={t.exitPriceType === "open" || t.status !== "closed" ? t.exitSignalDate : null}
                         reason={t.exitSignalReason}
                       />
                     ) : (
@@ -172,7 +173,7 @@ export function TrackRecordTable({ trades }: { trades: TrackRecordTrade[] }) {
                       <>
                         <p className="text-zinc-800 dark:text-zinc-200">{formatPrice(t.exitPrice)}</p>
                         <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
-                          {formatDate(t.exitDate)} {t.exitSignal === "maxHolding" ? "收盤" : "開盤"}
+                          {formatDate(t.exitDate)} {t.exitPriceType === "open" ? "開盤" : t.exitPriceType === "close" ? "收盤" : "盤中"}
                         </p>
                       </>
                     ) : t.markPrice !== null ? (

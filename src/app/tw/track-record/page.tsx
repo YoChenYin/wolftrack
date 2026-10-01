@@ -5,7 +5,7 @@ import { TwSectionNav } from "@/components/tw/TwSectionNav";
 import { TrackRecordTable } from "@/components/tw/TrackRecordTable";
 import { twReturnColor } from "@/lib/tw/color";
 import { computeTrackRecord, summarizeTrades, TRACK_RECORD_START_DATE, type TrackRecordStats } from "@/lib/trend/tw/trackRecord";
-import { ENTRY_SIGNAL_LABEL, MAX_HOLDING_DAYS, type EntrySignal } from "@/lib/trend/tw/trackRecordMeta";
+import { ENTRY_SIGNAL_LABEL, TRACK_RECORD_EXIT_RULE as RULE, type EntrySignal } from "@/lib/trend/tw/trackRecordMeta";
 
 // 每天新訊號/新收盤價都會改變持有中部位的報酬，不能在build time凍結（跟 /tw 首頁同樣理由）
 export const dynamic = "force-dynamic";
@@ -152,8 +152,14 @@ export default async function TwTrackRecordPage() {
             <p className="font-medium text-zinc-700 dark:text-zinc-300">規則說明</p>
             <ul className="mt-1.5 list-disc space-y-1 pl-4">
               <li>進場：投信轉買／投信外資合買／逢低布局，或底部型態（頭肩底／N字底）新出現的那天。連續多天的同一訊號只算一次，持有中出現的新訊號不加碼。</li>
-              <li>出場：同一檔出現投信轉賣／投信外資合賣，或持有滿 {MAX_HOLDING_DAYS} 個交易日，先到者出場。</li>
-              <li>成交價：訊號是收盤後才算出來，進場與反向訊號出場都用「訊號隔天開盤價」；持有期滿用第 {MAX_HOLDING_DAYS} 日收盤價。滑鼠停在訊號上可看當天觸發原因。</li>
+              <li>
+                出場（先到者為準）：①移動停利——持有期間收盤曾經獲利達 {RULE.trailingActivatePct}% 以上，之後收盤跌破 {RULE.trailingMa}{" "}
+                日均線，隔天開盤賣出；②底部型態進場的部位，盤中觸及型態量測目標價即停利；③持有滿 {RULE.maxHoldingDays} 個交易日，當天收盤賣出。
+              </li>
+              <li>
+                為什麼這樣設計：用歷史資料比較過多組出場規則（見 scripts/compare-track-record-exits.ts）。投信轉賣／合賣是單日翻轉，太容易把還在漲的部位洗出場；6～15% 的停損在台股的波動下常被盤中掃掉後又漲回，前後兩段樣本都明顯拉低報酬。這組規則在比較中勝率與報酬最穩定，但歷史樣本以 2024–2026 多頭為主，空頭時期的驗證有限，且沒有停損代表單筆最大虧損沒有上限。
+              </li>
+              <li>成交價：進場與收盤後才確認的出場都用「隔天開盤價」，型態停利用盤中觸價（跳空時用開盤價），持有期滿用當天收盤價。滑鼠停在訊號上可看當天觸發原因。</li>
               <li>持有中部位以最新收盤價計算未實現報酬，不列入上方已出場統計。</li>
               <li>限制：股價未做除權息還原（除息日下跌會算成虧損），未扣手續費與證交稅（來回約 0.585%）。歷史績效不代表未來表現，也不是投資建議。</li>
             </ul>
