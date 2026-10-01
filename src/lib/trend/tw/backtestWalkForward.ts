@@ -95,7 +95,7 @@ export function walkForwardBacktest(bars: OhlcvBar[], institutionalDays: Institu
     }
 
     const windowStart = Math.max(0, i + 1 - BOTTOM_PATTERN_WINDOW);
-    const bottomResult = detectBottomPattern(bars.slice(windowStart, i + 1).map((b) => b.close));
+    const bottomResult = detectBottomPattern(bars.slice(windowStart, i + 1));
     const stage = bottomResult?.stage ?? null;
     if (stage === "confirmed" && prevBottomStage !== "confirmed") {
       events.push({

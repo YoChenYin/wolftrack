@@ -19,6 +19,15 @@ import { findSwingPoints, type SwingPoint } from "./swingPoints";
  *
  * 這是主觀的圖形辨識，不是精確科學——下面所有百分比容忍度都是這次實作時的判斷，不是backtest
  * 出來的最佳參數，未來如果實測誤判率太高，這些常數都可以再調。
+ *
+ * 2026-09-30：對照Bulkowski（Encyclopedia of Chart Patterns）/StockCharts/台灣N字底教學修正
+ * 突破確認方式，原本「收盤價高於突破價1分錢就算確認」太寬鬆：
+ * - 時間過濾：要連續2天收盤站上突破價才算確認，單日站上只算「即將突破」，過濾假突破
+ * - 量能過濾：突破那2天至少有一天成交量≥突破前20日均量×1.5倍，沒量的突破不算數
+ * - 頭肩底頸線改成斜線（原本取兩個頸線點平均）：頸線往下斜時用斜線在當天的位置，往上斜時
+ *   用右側頸線點（Bulkowski的定義），避免上斜頸線被平均值拉低、太早確認
+ * - 確認狀態只維持CONFIRMED_VALID_DAYS個交易日，之後不再輸出——原本只要還在頸線上方就一直
+ *   是「確認」，股價漲離頸線很遠了還掛在「底部出現」
  */
 
 const LOOKBACK_TRADING_DAYS = 120;
@@ -43,6 +52,18 @@ const FRESHNESS_TRADING_DAYS = 40;
  * 正常拉回都會符合，不是真正意義上「跌了一段之後在打底」。這是實測278檔真實股票掃描後加的
  * （沒有這個檢查時命中率高達19-22%，明顯太高，不像是有意義的訊號） */
 const MIN_PRIOR_DECLINE_PCT = 12;
+/** 突破後要連續幾天收盤站上突破價才算確認（第1天只算即將突破） */
+const BREAKOUT_CONFIRM_CLOSES = 2;
+/** 突破確認那幾天，至少一天成交量要達到突破前20日均量的這個倍數 */
+const BREAKOUT_VOLUME_MULTIPLE = 1.5;
+const VOLUME_AVG_DAYS = 20;
+/** 確認後幾個交易日內還算「底部出現」，超過代表已經是突破後的走勢，不是打底訊號了 */
+const CONFIRMED_VALID_DAYS = 5;
+
+export interface PatternBar {
+  close: number;
+  volume: number;
+}
 
 export interface BottomPatternResult {
   patternType: "headShoulders" | "nShape";
@@ -86,7 +107,49 @@ function hasMeaningfulPriorDecline(swings: SwingPoint[], patternStartIndex: numb
   return ((priorHigh.price - patternStartPrice) / priorHigh.price) * 100 >= MIN_PRIOR_DECLINE_PCT;
 }
 
-function detectNShape(swings: SwingPoint[], latestIndex: number, latestClose: number): BottomPatternResult | null {
+type BreakoutCheck =
+  | { kind: "none" }
+  | { kind: "firstDay" }
+  | { kind: "confirmed"; confirmIndex: number }
+  | { kind: "failed" };
+
+/**
+ * 從型態最後一個轉折點之後往後找第一次收盤站上突破價的那天，檢查時間+量能過濾：
+ * - 還沒站上過：none
+ * - 最新一天是第一次站上（還差一天確認）：firstDay
+ * - 連續BREAKOUT_CONFIRM_CLOSES天站上且量能達標：confirmed
+ * - 站上後隔天就跌回，或量能不足：failed（這次突破不算數，型態不再輸出）
+ * levelAt(i)：第i天的突破價，頭肩底斜頸線每天不同，N字底是固定值
+ */
+function checkBreakout(bars: PatternBar[], afterIndex: number, levelAt: (i: number) => number): BreakoutCheck {
+  const latestIndex = bars.length - 1;
+  let first = -1;
+  for (let i = afterIndex + 1; i <= latestIndex; i++) {
+    if (bars[i].close > levelAt(i)) {
+      first = i;
+      break;
+    }
+  }
+  if (first === -1) return { kind: "none" };
+
+  const confirmIndex = first + BREAKOUT_CONFIRM_CLOSES - 1;
+  if (confirmIndex > latestIndex) return { kind: "firstDay" };
+  for (let i = first; i <= confirmIndex; i++) {
+    if (bars[i].close <= levelAt(i)) return { kind: "failed" };
+  }
+
+  const prior = bars.slice(Math.max(0, first - VOLUME_AVG_DAYS), first);
+  if (prior.length < VOLUME_AVG_DAYS) return { kind: "failed" };
+  const avgVolume = prior.reduce((sum, b) => sum + b.volume, 0) / prior.length;
+  const maxBreakoutVolume = Math.max(...bars.slice(first, confirmIndex + 1).map((b) => b.volume));
+  if (avgVolume <= 0 || maxBreakoutVolume < avgVolume * BREAKOUT_VOLUME_MULTIPLE) return { kind: "failed" };
+
+  return { kind: "confirmed", confirmIndex };
+}
+
+function detectNShape(swings: SwingPoint[], bars: PatternBar[]): BottomPatternResult | null {
+  const latestIndex = bars.length - 1;
+  const latestClose = bars[latestIndex].close;
   const end = findMostRecentSequence(swings, ["low", "high", "low"]);
   if (end === -1) return null;
   if (!hasMeaningfulPriorDecline(swings, end - 2)) return null;
@@ -98,14 +161,26 @@ function detectNShape(swings: SwingPoint[], latestIndex: number, latestClose: nu
 
   const breakoutLevel = reboundHigh.price;
   const targetPrice = breakoutLevel + (breakoutLevel - firstLeg.price);
+  const breakout = checkBreakout(bars, secondLeg.index, () => breakoutLevel);
 
-  if (latestClose > breakoutLevel) {
+  if (breakout.kind === "failed") return null;
+  if (breakout.kind === "confirmed") {
+    if (latestIndex - breakout.confirmIndex >= CONFIRMED_VALID_DAYS) return null;
     return {
       patternType: "nShape",
       stage: "confirmed",
       breakoutLevel,
       targetPrice,
-      description: `N字底反轉：股價已站上反彈高點${breakoutLevel.toFixed(2)}元，型態確認，量測目標價約${targetPrice.toFixed(2)}元`,
+      description: `N字底反轉：連續${BREAKOUT_CONFIRM_CLOSES}日收盤站上反彈高點${breakoutLevel.toFixed(2)}元且量增，型態確認，量測目標價約${targetPrice.toFixed(2)}元`,
+    };
+  }
+  if (breakout.kind === "firstDay") {
+    return {
+      patternType: "nShape",
+      stage: "nearBreakout",
+      breakoutLevel,
+      targetPrice,
+      description: `N字底反轉：今日首度收盤站上反彈高點${breakoutLevel.toFixed(2)}元，需再一日站穩且量增才算確認`,
     };
   }
   const distPct = ((breakoutLevel - latestClose) / breakoutLevel) * 100;
@@ -119,7 +194,9 @@ function detectNShape(swings: SwingPoint[], latestIndex: number, latestClose: nu
   };
 }
 
-function detectHeadShoulders(swings: SwingPoint[], latestIndex: number, latestClose: number): BottomPatternResult | null {
+function detectHeadShoulders(swings: SwingPoint[], bars: PatternBar[]): BottomPatternResult | null {
+  const latestIndex = bars.length - 1;
+  const latestClose = bars[latestIndex].close;
   const end = findMostRecentSequence(swings, ["low", "high", "low", "high", "low"]);
   if (end === -1) return null;
   if (!hasMeaningfulPriorDecline(swings, end - 4)) return null;
@@ -127,20 +204,39 @@ function detectHeadShoulders(swings: SwingPoint[], latestIndex: number, latestCl
   if (head.price >= leftShoulder.price * (1 - MIN_HEAD_DEPTH_PCT / 100)) return null; // 頭部不夠深
   if (head.price >= rightShoulder.price * (1 - MIN_HEAD_DEPTH_PCT / 100)) return null;
   if (pctDiff(leftShoulder.price, rightShoulder.price) > SHOULDER_TOLERANCE_PCT) return null; // 左右肩不夠對稱
-  if (pctDiff(neck1.price, neck2.price) > NECKLINE_TOLERANCE_PCT) return null; // 頸線兩點不夠水平
+  if (pctDiff(neck1.price, neck2.price) > NECKLINE_TOLERANCE_PCT) return null; // 頸線斜率太陡
   if (latestIndex - rightShoulder.index > FRESHNESS_TRADING_DAYS) return null; // 型態太舊
   if (latestClose < head.price) return null; // 已經跌破頭部，宣告失敗
 
-  const neckline = (neck1.price + neck2.price) / 2;
-  const targetPrice = neckline + (neckline - head.price);
+  // Bulkowski：頸線往下斜時用斜線本身，往上斜時用右側頸線點（水平），避免上斜頸線太早確認
+  const slope = (neck2.price - neck1.price) / (neck2.index - neck1.index);
+  const necklineAt = (i: number) => (slope >= 0 ? neck2.price : neck1.price + slope * (i - neck1.index));
+  const depth = neck1.price + slope * (head.index - neck1.index) - head.price;
 
-  if (latestClose > neckline) {
+  const breakout = checkBreakout(bars, rightShoulder.index, necklineAt);
+  if (breakout.kind === "failed") return null;
+  if (breakout.kind === "confirmed") {
+    if (latestIndex - breakout.confirmIndex >= CONFIRMED_VALID_DAYS) return null;
+    const breakoutLevel = necklineAt(breakout.confirmIndex);
+    const targetPrice = breakoutLevel + depth;
     return {
       patternType: "headShoulders",
       stage: "confirmed",
+      breakoutLevel,
+      targetPrice,
+      description: `頭肩底反轉：連續${BREAKOUT_CONFIRM_CLOSES}日收盤站上頸線${breakoutLevel.toFixed(2)}元且量增，型態確認，量測目標價約${targetPrice.toFixed(2)}元`,
+    };
+  }
+
+  const neckline = necklineAt(latestIndex);
+  const targetPrice = neckline + depth;
+  if (breakout.kind === "firstDay") {
+    return {
+      patternType: "headShoulders",
+      stage: "nearBreakout",
       breakoutLevel: neckline,
       targetPrice,
-      description: `頭肩底反轉：股價已站上頸線${neckline.toFixed(2)}元，型態確認，量測目標價約${targetPrice.toFixed(2)}元`,
+      description: `頭肩底反轉：今日首度收盤站上頸線${neckline.toFixed(2)}元，需再一日站穩且量增才算確認`,
     };
   }
   const distPct = ((neckline - latestClose) / neckline) * 100;
@@ -155,18 +251,16 @@ function detectHeadShoulders(swings: SwingPoint[], latestIndex: number, latestCl
 }
 
 /**
- * closes：日期升序排列的收盤價序列（還原股價後的值，跟其他TW指標算法一致），最後一個元素是
- * 「今天」。兩種型態都嘗試偵測，如果同時符合就回傳目標價/突破位階段更高（confirmed優先於
- * nearBreakout）的那個，同階段則回傳頭肩底（型態主體較完整，訊號可信度相對高）。
+ * bars：日期升序排列的收盤價+成交量序列，最後一個元素是「今天」。兩種型態都嘗試偵測，
+ * 如果同時符合就回傳階段更高（confirmed優先於nearBreakout）的那個，同階段則回傳頭肩底
+ * （型態主體較完整，訊號可信度相對高）。
  */
-export function detectBottomPattern(closes: number[]): BottomPatternResult | null {
-  const windowed = closes.slice(-LOOKBACK_TRADING_DAYS);
-  const swings = findSwingPoints(windowed);
-  const latestIndex = windowed.length - 1;
-  const latestClose = windowed[latestIndex];
+export function detectBottomPattern(bars: PatternBar[]): BottomPatternResult | null {
+  const windowed = bars.slice(-LOOKBACK_TRADING_DAYS);
+  const swings = findSwingPoints(windowed.map((b) => b.close));
 
-  const headShoulders = detectHeadShoulders(swings, latestIndex, latestClose);
-  const nShape = detectNShape(swings, latestIndex, latestClose);
+  const headShoulders = detectHeadShoulders(swings, windowed);
+  const nShape = detectNShape(swings, windowed);
 
   if (headShoulders && nShape) {
     if (headShoulders.stage === nShape.stage) return headShoulders;

@@ -91,8 +91,8 @@ export function calculateTwTrendSignalAtIndex(
   const status = isLimitMove ? "limitMove" : classification.status;
 
   // 底部型態偵測獨立於上面的籌碼流分類（見detectBottomPattern.ts），漲跌停日不特別排除——
-  // 型態辨識只看收盤價序列，跟當天是否漲跌停無關
-  const bottomPattern = detectBottomPattern(bars.slice(0, targetIndex + 1).map((b) => b.close));
+  // 型態辨識只看收盤價+成交量序列，跟當天是否漲跌停無關
+  const bottomPattern = detectBottomPattern(bars.slice(0, targetIndex + 1));
 
   return {
     tradeDate: bar.date,

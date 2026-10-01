@@ -87,7 +87,7 @@ export function walkForwardTechnicalRuleBacktest(bars: OhlcvBar[], taiexBars: Oh
     const macdNeg = m !== null && m < 0;
 
     const windowStart = Math.max(0, i + 1 - BOTTOM_PATTERN_WINDOW);
-    const bottomResult = detectBottomPattern(closes.slice(windowStart, i + 1));
+    const bottomResult = detectBottomPattern(bars.slice(windowStart, i + 1));
     const bottomConfirmed = bottomResult?.stage === "confirmed";
 
     const push = (ruleType: TechnicalRuleType) =>
