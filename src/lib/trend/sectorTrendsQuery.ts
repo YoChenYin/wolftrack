@@ -6,6 +6,7 @@ import { sma } from "@/lib/trend/indicators";
 import { calculateSupportResistance } from "@/lib/trend/tw/supportResistance";
 import { calculateInstitutionalCostBasis } from "@/lib/trend/tw/institutionalCostBasis";
 import { analyzeLatestBollingerDay } from "@/lib/trend/bollinger/analyze";
+import { computeRevenueMomentum, momentumAsOf } from "@/lib/trend/tw/revenueMomentum";
 import type { BollingerSignalType, BollingerTrend } from "@/lib/trend/bollinger/types";
 import type { OhlcvBar } from "@/lib/trend/types";
 
@@ -60,6 +61,18 @@ export const MAX_LIMIT = 50;
 /** 籌碼領先是觀察名單性質，給比主要三欄更寬的預設筆數 */
 export const CHIP_LEADING_LIMIT = 20;
 
+/** 選股表上的營收動能標記（見revenueMomentum.ts），只放UI需要的欄位 */
+export interface RevenueMomentumBadge {
+  /** 最新已公布的營收月份，YYYY-MM */
+  month: string;
+  yoy3Pct: number | null;
+  yoy12Pct: number | null;
+  accelerating: boolean;
+  decelerating: boolean;
+  allTimeHigh: boolean;
+  sameMonthHigh: boolean;
+}
+
 export interface SectorTrendItem {
   ticker: string;
   companyName: string;
@@ -91,6 +104,8 @@ export interface SectorTrendItem {
   revenueYoyGrowthPct: number | null;
   /** 該筆月營收所屬月份，YYYY-MM，方便顯示「這是幾月的資料」 */
   revenueMonth: string | null;
+  /** 2026-10-14新增：營收動能（加速/減速/歷史新高/同期新高），TW限定，null=營收歷史不足或資料過舊 */
+  revenueMomentum: RevenueMomentumBadge | null;
   /** 近20個交易日收盤價，給表格內的迷你走勢圖用；沿用computeVolatilityStats已經抓好的90日歷史，不多打一次查詢 */
   sparkline: number[] | null;
   /**
@@ -207,6 +222,7 @@ interface VolatilityStats {
   priceStatus: "aboveResistance" | "belowSupport" | "withinRange" | null;
   foreignCostBasis: number | null;
   trustCostBasis: number | null;
+  revenueMomentum: RevenueMomentumBadge | null;
 }
 
 const BOLLINGER_TREND_LABEL_ZH: Record<BollingerTrend, string> = {
@@ -296,6 +312,7 @@ function toItem(row: SignalRow, stats?: VolatilityStats): SectorTrendItem {
     chipConcentration20: row.chipConcentration20 !== null && row.chipConcentration20 !== undefined ? Number(row.chipConcentration20) : null,
     revenueYoyGrowthPct: latestRevenue?.yoyGrowthPct !== undefined && latestRevenue?.yoyGrowthPct !== null ? Number(latestRevenue.yoyGrowthPct) : null,
     revenueMonth: latestRevenue ? latestRevenue.revenueMonth.toISOString().slice(0, 7) : null,
+    revenueMomentum: stats?.revenueMomentum ?? null,
     sparkline: stats?.sparkline ?? null,
     support: stats?.support ?? null,
     resistance: stats?.resistance ?? null,
@@ -334,7 +351,7 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
 
   const stockIds = [...new Set(rows.map((r) => r.stockId))];
   const cutoff = new Date(Date.now() - VOLATILITY_LOOKBACK_DAYS * 86_400_000);
-  const [history, institutionalHistory, institutionalDailyHistory] = await Promise.all([
+  const [history, institutionalHistory, institutionalDailyHistory, revenueHistory] = await Promise.all([
     prisma.twDailyPrice.findMany({
       where: { stockId: { in: stockIds }, tradeDate: { gte: cutoff } },
       orderBy: [{ stockId: "asc" }, { tradeDate: "asc" }],
@@ -354,7 +371,40 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
       orderBy: [{ stockId: "asc" }, { tradeDate: "asc" }],
       select: { stockId: true, tradeDate: true, foreignNetBuyShares: true, investTrustNetBuyShares: true },
     }),
+    // 2026-10-14新增：營收動能要完整歷史（「歷史新高」要跟全部過去月份比、近12月年增率要24個月），
+    // 只查最終要顯示的這一小批股票，跟上面幾個查詢同一個考量
+    prisma.twMonthlyRevenue.findMany({
+      where: { stockId: { in: stockIds } },
+      orderBy: [{ stockId: "asc" }, { revenueMonth: "asc" }],
+      select: { stockId: true, revenueMonth: true, revenue: true },
+    }),
   ]);
+
+  const revenueMomentumByStock = new Map<number, RevenueMomentumBadge | null>();
+  {
+    const seriesByStock = new Map<number, { month: string; revenue: number }[]>();
+    for (const r of revenueHistory) {
+      const list = seriesByStock.get(r.stockId) ?? [];
+      list.push({ month: r.revenueMonth.toISOString().slice(0, 10), revenue: Number(r.revenue) });
+      seriesByStock.set(r.stockId, list);
+    }
+    const today = new Date(Date.now() + 8 * 3_600_000).toISOString().slice(0, 10);
+    for (const [stockId, series] of seriesByStock) {
+      const m = momentumAsOf(computeRevenueMomentum(series), today);
+      revenueMomentumByStock.set(
+        stockId,
+        m && {
+          month: m.month.slice(0, 7),
+          yoy3Pct: m.yoy3Pct,
+          yoy12Pct: m.yoy12Pct,
+          accelerating: m.accelerating,
+          decelerating: m.decelerating,
+          allTimeHigh: m.allTimeHigh,
+          sameMonthHigh: m.sameMonthHigh,
+        }
+      );
+    }
+  }
 
   const institutionalSeriesByStock = new Map<number, { tradeDate: Date; foreignNetBuyShares: number; investTrustNetBuyShares: number }[]>();
   for (const h of institutionalDailyHistory) {
@@ -505,6 +555,7 @@ async function computeVolatilityStats(rows: SignalRow[]): Promise<Map<number, Vo
       priceStatus: supportResistance?.priceStatus ?? null,
       foreignCostBasis,
       trustCostBasis,
+      revenueMomentum: revenueMomentumByStock.get(stockId) ?? null,
     });
   }
   return result;

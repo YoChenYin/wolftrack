@@ -2,6 +2,8 @@ import { queryFundamentalsOverview } from "@/lib/marketData/queryFundamentalsOve
 import { FundamentalsSummary } from "@/components/fundamentals/FundamentalsSummary";
 import { FundamentalsList } from "@/components/fundamentals/FundamentalsList";
 import { TwSectionNav } from "@/components/tw/TwSectionNav";
+import { RevenueSurpriseBoard } from "@/components/fundamentals/RevenueSurpriseBoard";
+import { computeRevenueSurpriseBoard } from "@/lib/trend/tw/revenueSurprise";
 
 // 這個頁面直接查資料庫，不能被當成靜態頁面在 build time 凍結一份快照
 export const dynamic = "force-dynamic";
@@ -9,7 +11,7 @@ export const dynamic = "force-dynamic";
 /** 2026-08-19：從頂層 /fundamentals 搬過來，內容本來就是TW限定（龍頭+二軍法說會），
  * 移到TwSectionNav底下當第三個分頁比放在MarketNav頂層更合理。 */
 export default async function TwFundamentalsPage() {
-  const overview = await queryFundamentalsOverview();
+  const [overview, surpriseBoard] = await Promise.all([queryFundamentalsOverview(), computeRevenueSurpriseBoard()]);
 
   return (
     <div
@@ -42,6 +44,10 @@ export default async function TwFundamentalsPage() {
             <TwSectionNav />
           </div>
         </header>
+
+        <div className="tw-reveal" style={{ animationDelay: "40ms" }}>
+          <RevenueSurpriseBoard board={surpriseBoard} />
+        </div>
 
         <div className="tw-reveal" style={{ animationDelay: "60ms" }}>
           <FundamentalsSummary overview={overview} />

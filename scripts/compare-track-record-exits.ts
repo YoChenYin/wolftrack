@@ -11,17 +11,11 @@
  */
 import "dotenv/config";
 import { prisma } from "../src/lib/prisma";
-import { computeChipFlowIndicators, classifyChipFlow } from "../src/lib/trend/tw/classifyChipFlow";
-import { detectBottomPattern } from "../src/lib/trend/tw/detectBottomPattern";
-import { isLimitMoveDay } from "../src/lib/trend/tw/limitMove";
-import { simulateTrades, type SimBar, type SimDay } from "../src/lib/trend/tw/trackRecordSim";
+import { buildSignalDays, loadInstitutionalDays as loadInstitutional, loadPriceBars as loadBars, SIGNAL_WARMUP_DAYS as WARMUP_DAYS } from "../src/lib/trend/tw/historicalSignals";
+import { simulateTrades, type SimBar } from "../src/lib/trend/tw/trackRecordSim";
 import type { ExitRule } from "../src/lib/trend/tw/trackRecordMeta";
-import type { InstitutionalDay } from "../src/lib/trend/tw/chipScore";
-import type { OhlcvBar } from "../src/lib/trend/types";
 import { sma } from "../src/lib/trend/indicators";
 
-const WARMUP_DAYS = 210;
-const BOTTOM_PATTERN_WINDOW = 130;
 /** 交易成本：手續費0.1425%×2 + 證交稅0.3%，來回約0.585% */
 const ROUND_TRIP_COST_PCT = 0.585;
 
@@ -35,48 +29,6 @@ interface TradeResult {
   exitSignal: string;
   returnPct: number;
   holdingDays: number;
-}
-
-async function loadBars(stockId: number): Promise<OhlcvBar[]> {
-  const rows = await prisma.twDailyPrice.findMany({ where: { stockId }, orderBy: { tradeDate: "asc" } });
-  return rows.map((r) => ({
-    date: r.tradeDate.toISOString().slice(0, 10),
-    open: Number(r.open),
-    high: Number(r.high),
-    low: Number(r.low),
-    close: Number(r.close),
-    volume: Number(r.volume),
-  }));
-}
-
-async function loadInstitutional(stockId: number): Promise<InstitutionalDay[]> {
-  const rows = await prisma.twInstitutionalTrading.findMany({ where: { stockId }, orderBy: { tradeDate: "asc" } });
-  return rows.map((r) => ({
-    date: r.tradeDate.toISOString().slice(0, 10),
-    foreignNetBuyShares: Number(r.foreignNetBuyShares),
-    investTrustNetBuyShares: Number(r.investTrustNetBuyShares),
-    dealerNetBuyShares: Number(r.dealerNetBuyShares),
-    totalVolumeShares: Number(r.totalVolumeShares),
-  }));
-}
-
-/** 每天跑一次正式環境的分類邏輯，產生跟daily_trend_signals同樣形狀的訊號 */
-function buildSignalDays(bars: OhlcvBar[], institutional: InstitutionalDay[]): Map<string, SimDay> {
-  const indicators = computeChipFlowIndicators(bars);
-  const days = new Map<string, SimDay>();
-  for (let i = WARMUP_DAYS; i < bars.length; i++) {
-    const isLimitMove = isLimitMoveDay(bars, i);
-    const chip = classifyChipFlow(bars, indicators, i, institutional, isLimitMove);
-    const bottom = detectBottomPattern(bars.slice(Math.max(0, i + 1 - BOTTOM_PATTERN_WINDOW), i + 1));
-    days.set(bars[i].date, {
-      status: isLimitMove ? "limitMove" : chip.status,
-      triggerReason: chip.triggerReason,
-      hasBottomPattern: bottom !== null,
-      bottomPatternDescription: bottom?.description ?? null,
-      bottomPatternTargetPrice: bottom?.targetPrice ?? null,
-    });
-  }
-  return days;
 }
 
 function ruleLabel(r: ExitRule): string {

@@ -10,7 +10,7 @@ import {
   Landmark,
   Waves,
 } from "lucide-react";
-import type { SectorTrendItem, TacticalStatus } from "@/lib/trend/sectorTrendsQuery";
+import type { RevenueMomentumBadge, SectorTrendItem, TacticalStatus } from "@/lib/trend/sectorTrendsQuery";
 import type { BadgeStats } from "@/lib/trend/tw/backtestSummary";
 import { TACTICAL_STATUS_META } from "@/lib/trend/tacticalStatusMeta";
 import { getBollingerBadgeMeta } from "@/lib/trend/bollingerBadgeMeta";
@@ -154,6 +154,37 @@ function MaAlignedIcon({ aligned }: { aligned: boolean | null }) {
   return (
     <span className="inline-flex items-center gap-0.5 text-red-600 dark:text-red-400" title="MA5>MA10>MA20多頭排列">
       <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.25} />
+    </span>
+  );
+}
+
+function formatSignedPct(v: number | null): string {
+  return v === null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
+}
+
+/**
+ * 2026-10-14新增：營收動能標記（見revenueMomentum.ts）。只挑一個最強的狀態顯示（歷史新高 >
+ * 營收加速 > 同期新高；減速另外標），其餘細節放title。顏色照台股慣例：正面=紅、負面=綠。
+ * 依據scripts/backtest-revenue-chip.ts：單看營收公布，營收加速/歷史新高之後40日超額報酬在train/test
+ * 都高於持平/減速；疊加在進場訊號上只有溫和加分（投信轉買最明顯，底部型態反而沒有），所以只當資訊
+ * 標記，不當過濾條件。結論細節見docs/progress-status.md 2.35。
+ */
+function RevenueMomentumTag({ m }: { m: RevenueMomentumBadge | null }) {
+  if (!m) return null;
+  const label = m.allTimeHigh ? "營收創新高" : m.accelerating ? "營收加速" : m.sameMonthHigh ? "營收同期新高" : m.decelerating ? "營收減速" : null;
+  if (!label) return null;
+  const positive = label !== "營收減速";
+  const flags = [m.allTimeHigh && "歷史新高", m.accelerating && "加速", m.sameMonthHigh && "同期新高", m.decelerating && "減速"].filter(Boolean).join("、");
+  return (
+    <span
+      title={`${m.month} 月營收：近3月年增 ${formatSignedPct(m.yoy3Pct)}、近12月年增 ${formatSignedPct(m.yoy12Pct)}（${flags}）。加速＝近3月年增率為正且高於近12月5個百分點以上，減速反之`}
+      className={`mt-0.5 inline-flex rounded px-1.5 py-px text-[10px] font-medium ${
+        positive
+          ? "bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300"
+          : "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"
+      }`}
+    >
+      {label}
     </span>
   );
 }
@@ -332,6 +363,7 @@ export function TrendTable({
                         <div className="truncate font-semibold text-zinc-900 dark:text-zinc-100">{stripCompanySuffix(item.companyName)}</div>
                         <div className="text-xs text-zinc-400 dark:text-zinc-500">{item.ticker}</div>
                       </Link>
+                      <RevenueMomentumTag m={item.revenueMomentum} />
                     </td>
                     <td className="max-w-[160px] px-3 py-2.5 text-xs text-zinc-500 dark:text-zinc-400">
                       <IndustryCell sector={item.sector} themes={item.themes} />
@@ -394,7 +426,9 @@ export function TrendTable({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate font-semibold text-zinc-900 dark:text-zinc-100">{stripCompanySuffix(item.companyName)}</div>
-                    <div className="text-xs text-zinc-400 dark:text-zinc-500">{item.ticker}</div>
+                    <div className="text-xs text-zinc-400 dark:text-zinc-500">
+                      {item.ticker} <RevenueMomentumTag m={item.revenueMomentum} />
+                    </div>
                     <div className="mt-0.5 truncate text-[11px] text-zinc-400 dark:text-zinc-500">
                       {item.sector.nameZh ?? item.sector.name}
                       {item.themes.length > 0 && <> · {item.themes.map((t) => t.nameZh ?? t.code).join("、")}</>}

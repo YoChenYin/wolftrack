@@ -129,11 +129,18 @@ async function backfillInstitutional(stockId: number, ticker: string, earliestEx
   return false;
 }
 
-async function backfillRevenue(stockId: number, ticker: string, earliestExisting: string | null): Promise<boolean> {
+export async function backfillRevenue(stockId: number, ticker: string, earliestExisting: string | null): Promise<boolean> {
   const endDate = earliestExisting ? addDays(earliestExisting, -1) : todayIso();
   if (endDate < TARGET_START_DATE) return true;
 
-  const rows = await fetchFinMindMonthlyRevenue(ticker, TARGET_START_DATE, endDate);
+  // 2026-10-14：FinMind的revenue單位是「元」，每月排程用的TWSE/TPEx OpenAPI（monthlyRevenueClient.ts）
+  // 是「千元」，原本直接寫入造成同一張表兩種單位混在一起（實測2330同一個月FinMind=416,975,163,000、
+  // OpenAPI=416,975,163），跨月份比較/加總營收金額會差1000倍。統一換算成千元；已經寫進去的舊資料
+  // 由migration 20261014120000_normalize_revenue_units_to_thousands換算
+  const rows = (await fetchFinMindMonthlyRevenue(ticker, TARGET_START_DATE, endDate)).map((r) => ({
+    ...r,
+    revenue: Math.round(r.revenue / 1000),
+  }));
   if (rows.length === 0) return true; // ETF等沒有營收資料的標的，這裡自然結束，不會一直重試
 
   // 算年增率/月增率要相鄰月份，所以連同已有資料一起抓出來排序後算
