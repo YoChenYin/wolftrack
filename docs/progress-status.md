@@ -725,7 +725,7 @@ GitHub 排程的台股 17:00 更新實測會晚 5~8 小時開始，價格整晚�
 
 零 LLM 成本的量化基本面，全部用營收金額自己算，不用 `yoy_growth_pct` 欄位。
 
-- **單位統一**：`tw_monthly_revenue` 單位混用——FinMind 回補寫「元」、每月 OpenAPI 排程寫「千元」（實測 2330 同一個月 FinMind=416,975,163,000、OpenAPI=416,975,163）。回補程式改寫千元，migration `20261014120000_normalize_revenue_units_to_thousands` 把舊資料換算回千元（以 `cumulative_revenue IS NULL` 且金額為 1000 的倍數辨識，OpenAPI 一定會寫 `cumulative_revenue`）。**production 套用前要先備份 `tw_monthly_revenue`，套用前後各跑一次 `scripts/check-revenue-units.ts`**。
+- **單位統一**：`tw_monthly_revenue` 單位混用——FinMind 回補寫「元」、每月 OpenAPI 排程寫「千元」（實測 2330 同一個月 FinMind=416,975,163,000、OpenAPI=416,975,163）。回補程式改寫千元，migration `20261014120000_normalize_revenue_units_to_thousands` 把舊資料換算回千元（以 `cumulative_revenue IS NULL` 且金額為 1000 的倍數辨識，OpenAPI 一定會寫 `cumulative_revenue`）。production 套用時，前一個 migration `20261014115900_backup_monthly_revenue_before_unit_fix` 會先把原始資料複製到 `tw_monthly_revenue_backup_20261014`（還原 SQL 寫在該 migration 註解裡）。確認 production 正常後要 DROP 這張備份表——**注意**：它不在 `schema.prisma` 裡，下次 `prisma migrate dev` 會偵測到 drift 並產生 DROP，要確認時機再接受。
   - 本機套用後檢查（2026-10-23）：32,560 筆裡剩 16 筆「疑似元」——都是千元金額剛好是 1000 的倍數（機率約千分之一，符合預期，不是殘留）；相鄰月份差 100 倍以上 57 筆，主要是 FinMind 單月單位錯誤（×0.001 後下個月 ×1000），由 `sanitizeRevenueSeries()` 在讀取時修正，另外是金控（2881/2882）營收本來就可能為負。
 - **`revenueMomentum.ts`**：單月年增、近 3 月合計年增、加速／減速、歷史新高、同月新高、`surprisePct`（預期營收＝去年同月 × 公布前 3 個月年增倍數）。時間點規則：某月營收從「次月 11 日」起才算已知，回測與正式環境共用，避免偷看未來。
 - **選股表**：`sectorTrendsQuery.ts` 新增 `revenueMomentum` 徽章欄位，`TrendTable.tsx` 顯示（只當資訊標記，不當過濾條件，理由見下方回測）。
