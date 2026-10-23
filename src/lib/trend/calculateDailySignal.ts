@@ -88,7 +88,7 @@ export function calculateTrendSignalAtIndex(
 /**
  * 便利函式：輸入某檔股票的完整歷史 OHLCV（依日期由舊到新排序），
  * 輸出「最新一天」的 Core Score 與三段分類結果。
- * benchmarkBars（如 SPY）若提供，須與 bars 涵蓋同一段日期範圍（結尾為同一天）才能正確算相對強度。
+ * benchmarkBars（如 SPY）若提供，用日期對到個股最新一天；benchmark 沒有那一天就不算相對強度。
  */
 export function calculateTrendSignal(bars: OhlcvBar[], benchmarkBars?: OhlcvBar[]): DailySignal {
   const series = computeIndicatorSeries(bars);
@@ -96,9 +96,10 @@ export function calculateTrendSignal(bars: OhlcvBar[], benchmarkBars?: OhlcvBar[
 
   let benchmarkSeries: IndicatorSeries | undefined;
   let benchmarkTargetIndex: number | undefined;
-  if (benchmarkBars && benchmarkBars.length > 0) {
+  const matchIndex = benchmarkBars?.findIndex((b) => b.date === bars[targetIndex].date) ?? -1;
+  if (benchmarkBars && matchIndex >= 0) {
     benchmarkSeries = computeIndicatorSeries(benchmarkBars);
-    benchmarkTargetIndex = benchmarkBars.length - 1;
+    benchmarkTargetIndex = matchIndex;
   }
 
   return calculateTrendSignalAtIndex(bars, series, targetIndex, benchmarkSeries, benchmarkTargetIndex);

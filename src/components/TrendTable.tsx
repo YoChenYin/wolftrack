@@ -250,6 +250,9 @@ function BacktestStatsBadge({ status, stats }: { status: TacticalStatus; stats: 
    * 使用者規劃部位/報酬目標時要看的是絕對數字，超額報酬只回答「有沒有比大盤好」，
    * 兩者都重要但絕對數字要放在最顯眼的位置，超額報酬/勝率的細節留在tooltip */
   const avgReturnLabel = `平均${stats.avgReturnPct >= 0 ? "+" : ""}${stats.avgReturnPct.toFixed(1)}%`;
+  // 賣方訊號的命中＝之後跑輸大盤；winRatePct是「報酬>0」的比例，對賣方訊號是反過來的意思，不能沿用
+  const hitRatePct = isSellSide ? stats.underperformRatePct : stats.winRatePct;
+  const hitRateLabel = isSellSide ? "跑輸大盤" : "勝率";
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
@@ -259,12 +262,12 @@ function BacktestStatsBadge({ status, stats }: { status: TacticalStatus; stats: 
       }`}
       title={`用真實production資料回溯回測（樣本數N=${stats.sampleSize}）：訊號出現後20個交易日（約一個月），平均報酬${
         stats.avgReturnPct >= 0 ? "+" : ""
-      }${stats.avgReturnPct.toFixed(1)}%，${stats.winRatePct}%的機率${isSellSide ? "股價比大盤同期表現差" : "報酬是正的"}，平均${
+      }${stats.avgReturnPct.toFixed(1)}%，${hitRatePct.toFixed(0)}%的機率${isSellSide ? "股價比大盤同期表現差" : "報酬是正的"}，平均${
         isSellSide ? "跑輸" : "跑贏"
       }大盤(TAIEX)同期${Math.abs(stats.excessReturnPct).toFixed(1)}%。這是統計出來的歷史平均值，實際分布落差很大（多數樣本的中位數報酬遠低於平均值），不代表保證獲利，也不是投資建議。`}
     >
       <CircleAlert className="h-3 w-3" strokeWidth={2.25} />
-      {avgReturnLabel}・{stats.winRatePct.toFixed(0)}%勝率
+      {avgReturnLabel}・{hitRatePct.toFixed(0)}%{hitRateLabel}
     </span>
   );
 }

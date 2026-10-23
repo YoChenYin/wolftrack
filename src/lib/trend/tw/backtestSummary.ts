@@ -126,13 +126,28 @@ export interface BadgeStats {
    * 報酬目標時真正要看的絕對數字，超額報酬只回答「有沒有比大盤好」 */
   avgReturnPct: number;
   excessReturnPct: number;
+  /** 報酬低於大盤同期的比例——賣方訊號的「命中率」要看這個，不是winRatePct（報酬>0的比例） */
+  underperformRatePct: number;
 }
 
-type BadgeStatsRow = { category: string; sample_size: bigint; win_rate_pct: number | null; avg_return_pct: number | null; avg_taiex_return_pct: number | null };
+type BadgeStatsRow = {
+  category: string;
+  sample_size: bigint;
+  win_rate_pct: number | null;
+  underperform_rate_pct: number | null;
+  avg_return_pct: number | null;
+  avg_taiex_return_pct: number | null;
+};
 
 function toBadgeStats(category: TacticalStatus, row: BadgeStatsRow): BadgeStats | null {
   const sampleSize = Number(row.sample_size);
-  if (sampleSize < MIN_SAMPLE_SIZE_FOR_UI || row.avg_return_pct === null || row.avg_taiex_return_pct === null || row.win_rate_pct === null) {
+  if (
+    sampleSize < MIN_SAMPLE_SIZE_FOR_UI ||
+    row.avg_return_pct === null ||
+    row.avg_taiex_return_pct === null ||
+    row.win_rate_pct === null ||
+    row.underperform_rate_pct === null
+  ) {
     return null;
   }
   return {
@@ -141,6 +156,7 @@ function toBadgeStats(category: TacticalStatus, row: BadgeStatsRow): BadgeStats 
     winRatePct: round2(row.win_rate_pct),
     avgReturnPct: round2(row.avg_return_pct),
     excessReturnPct: round2(row.avg_return_pct - row.avg_taiex_return_pct),
+    underperformRatePct: round2(row.underperform_rate_pct),
   };
 }
 
@@ -161,6 +177,8 @@ export async function getBacktestBadgeStats(): Promise<Map<TacticalStatus, Badge
       e.category::text AS category,
       COUNT(*) FILTER (WHERE e.return_20d IS NOT NULL) AS sample_size,
       (COUNT(*) FILTER (WHERE e.return_20d > 0))::float * 100.0 / NULLIF(COUNT(*) FILTER (WHERE e.return_20d IS NOT NULL), 0) AS win_rate_pct,
+      (COUNT(*) FILTER (WHERE e.return_20d < e.taiex_return_20d))::float * 100.0
+        / NULLIF(COUNT(*) FILTER (WHERE e.return_20d IS NOT NULL AND e.taiex_return_20d IS NOT NULL), 0) AS underperform_rate_pct,
       AVG(e.return_20d) AS avg_return_pct,
       AVG(e.taiex_return_20d) AS avg_taiex_return_pct
     FROM tw_signal_backtest_events e
@@ -181,6 +199,8 @@ export async function getBacktestBadgeStats(): Promise<Map<TacticalStatus, Badge
       'bottomPattern' AS category,
       COUNT(*) FILTER (WHERE e.return_20d IS NOT NULL) AS sample_size,
       (COUNT(*) FILTER (WHERE e.return_20d > 0))::float * 100.0 / NULLIF(COUNT(*) FILTER (WHERE e.return_20d IS NOT NULL), 0) AS win_rate_pct,
+      (COUNT(*) FILTER (WHERE e.return_20d < e.taiex_return_20d))::float * 100.0
+        / NULLIF(COUNT(*) FILTER (WHERE e.return_20d IS NOT NULL AND e.taiex_return_20d IS NOT NULL), 0) AS underperform_rate_pct,
       AVG(e.return_20d) AS avg_return_pct,
       AVG(e.taiex_return_20d) AS avg_taiex_return_pct
     FROM tw_signal_backtest_events e

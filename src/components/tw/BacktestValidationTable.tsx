@@ -27,9 +27,11 @@ function formatPct(value: number | null): string {
 function ValidationCell({
   theme,
   market,
+  isSellSide,
 }: {
   theme: { sampleSize: number; excessReturnPct: number | null; winRatePct: number | null } | undefined;
   market: { excessReturnPct: number | null } | undefined;
+  isSellSide: boolean;
 }) {
   if (!theme || theme.sampleSize < MIN_SAMPLE_SIZE_FOR_UI) {
     return (
@@ -44,7 +46,9 @@ function ValidationCell({
         {formatPct(theme.excessReturnPct)}
       </p>
       <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
-        勝率{theme.winRatePct !== null ? `${theme.winRatePct.toFixed(0)}%` : "—"}・大盤基準{formatPct(market?.excessReturnPct ?? null)}
+        {/* winRatePct是「報酬>0」的比例；賣方訊號叫勝率會被讀成「賣對了」，改標上漲比例 */}
+        {isSellSide ? "上漲比例" : "勝率"}
+        {theme.winRatePct !== null ? `${theme.winRatePct.toFixed(0)}%` : "—"}・大盤基準{formatPct(market?.excessReturnPct ?? null)}
       </p>
     </td>
   );
@@ -98,6 +102,7 @@ export function BacktestValidationTable({
                     key={h}
                     theme={c.horizons.find((x) => x.horizon === h)}
                     market={marketByCategory.get(c.category)?.horizons.find((x) => x.horizon === h)}
+                    isSellSide={c.category === "trustTurnSell" || c.category === "combinedSell"}
                   />
                 ))}
               </tr>

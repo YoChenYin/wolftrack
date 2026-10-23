@@ -59,6 +59,7 @@ export async function runUsDailyBatch(tickerFilter?: string[]): Promise<UsDailyB
     throw new Error(`無法取得 benchmark (${BENCHMARK_TICKER}) 資料，中止批次計算。`);
   }
   const benchmarkSeries: IndicatorSeries = computeIndicatorSeries(benchmarkBars);
+  const benchmarkDateIndex = new Map(benchmarkBars.map((b, i) => [b.date, i]));
 
   let written = 0;
   let skippedNone = 0;
@@ -79,10 +80,10 @@ export async function runUsDailyBatch(tickerFilter?: string[]): Promise<UsDailyB
     const series = computeIndicatorSeries(bars);
     const targetIndex = bars.length - 1;
 
-    // benchmark 和個股各自的交易日序列理論上尾端會對齊在同一天，用陣列長度差換算對應 index。
-    // TODO: 改用日期比對，而不是用長度差推算（遇到單一股票停牌等邊界情況會失準）。
-    const benchmarkTargetIndex = benchmarkBars.length - bars.length + targetIndex;
-    const hasBenchmark = benchmarkTargetIndex >= 0 && benchmarkTargetIndex < benchmarkBars.length;
+    // 用日期對到 benchmark 的同一天（比照台股版 runTwDailyBatch.ts）；原本用陣列長度差推算，
+    // 個股停牌或資料缺日時會對到錯的日期
+    const benchmarkTargetIndex = benchmarkDateIndex.get(bars[targetIndex].date);
+    const hasBenchmark = benchmarkTargetIndex !== undefined;
 
     const signal = calculateTrendSignalAtIndex(
       bars,
